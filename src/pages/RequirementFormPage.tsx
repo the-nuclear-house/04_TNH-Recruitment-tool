@@ -20,8 +20,10 @@ const industryOptions = [
   { value: 'healthcare', label: 'Healthcare' },
   { value: 'government', label: 'Government' },
   { value: 'aerospace', label: 'Aerospace' },
+  { value: 'nuclear', label: 'Nuclear' },
   { value: 'telecoms', label: 'Telecoms' },
   { value: 'energy', label: 'Energy' },
+  { value: 'transport', label: 'Transport' },
   { value: 'retail', label: 'Retail' },
   { value: 'technology', label: 'Technology' },
   { value: 'other', label: 'Other' },
@@ -33,6 +35,30 @@ const statusOptions = [
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
   { value: 'cancelled', label: 'Cancelled' },
+];
+
+const clearanceOptions = [
+  { value: 'none', label: 'None Required' },
+  { value: 'bpss', label: 'BPSS' },
+  { value: 'ctc', label: 'CTC' },
+  { value: 'sc', label: 'SC' },
+  { value: 'esc', label: 'eSC' },
+  { value: 'dv', label: 'DV' },
+  { value: 'edv', label: 'eDV' },
+  { value: 'doe_q', label: 'DOE Q (US)' },
+  { value: 'doe_l', label: 'DOE L (US)' },
+];
+
+const disciplineOptions = [
+  { value: 'electrical', label: 'Electrical Engineering' },
+  { value: 'mechanical', label: 'Mechanical Engineering' },
+  { value: 'civil', label: 'Civil Engineering' },
+  { value: 'software', label: 'Software Engineering' },
+  { value: 'systems', label: 'Systems Engineering' },
+  { value: 'nuclear', label: 'Nuclear Engineering' },
+  { value: 'chemical', label: 'Chemical Engineering' },
+  { value: 'structural', label: 'Structural Engineering' },
+  { value: 'other', label: 'Other' },
 ];
 
 const managerOptions = [
@@ -57,10 +83,12 @@ export function RequirementFormPage() {
     industry: '',
     location: '',
     fte_count: '1',
-    budget_min: '',
-    budget_max: '',
+    day_rate_min: '',
+    day_rate_max: '',
     description: '',
     status: 'opportunity',
+    clearance_required: 'none',
+    engineering_discipline: 'software',
     manager_id: '',
   });
 
@@ -182,18 +210,33 @@ export function RequirementFormPage() {
               placeholder="Number of positions"
             />
             <Input
-              label="Budget Min (£)"
+              label="Day Rate Min (£)"
               type="number"
-              value={formData.budget_min}
-              onChange={(e) => handleChange('budget_min', e.target.value)}
-              placeholder="e.g., 80000"
+              value={formData.day_rate_min}
+              onChange={(e) => handleChange('day_rate_min', e.target.value)}
+              placeholder="e.g., 450"
             />
             <Input
-              label="Budget Max (£)"
+              label="Day Rate Max (£)"
               type="number"
-              value={formData.budget_max}
-              onChange={(e) => handleChange('budget_max', e.target.value)}
-              placeholder="e.g., 100000"
+              value={formData.day_rate_max}
+              onChange={(e) => handleChange('day_rate_max', e.target.value)}
+              placeholder="e.g., 550"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <Select
+              label="Engineering Discipline *"
+              options={disciplineOptions}
+              value={formData.engineering_discipline}
+              onChange={(e) => handleChange('engineering_discipline', e.target.value)}
+            />
+            <Select
+              label="Clearance Required"
+              options={clearanceOptions}
+              value={formData.clearance_required}
+              onChange={(e) => handleChange('clearance_required', e.target.value)}
             />
           </div>
 
@@ -250,7 +293,7 @@ export function RequirementFormPage() {
             )}
 
             <p className="text-sm text-brand-grey-400">
-              Add technical skills, certifications, or clearance requirements (e.g., Python, AWS, Security Clearance SC)
+              Add specific technical skills, certifications, or tools required for this role
             </p>
           </div>
         </Card>
