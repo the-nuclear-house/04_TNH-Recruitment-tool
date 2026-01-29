@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Upload, FileText } from 'lucide-react';
+import { Plus, X, Upload, FileText, Filter, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -25,7 +25,6 @@ export function CandidatesPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [candidates, setCandidates] = useState<DbCandidate[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -33,6 +32,22 @@ export function CandidatesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const permissions = usePermissions();
   const toast = useToast();
+
+  // Column filters (multi-select)
+  const [skillsFilter, setSkillsFilter] = useState<string[]>([]);
+  const [locationsFilter, setLocationsFilter] = useState<string[]>([]);
+  const [experienceFilter, setExperienceFilter] = useState<string>(''); // 'any', '0-2', '3-5', '5-10', '10+'
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  
+  // Filter dropdowns open state
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+  
+  // AI Search state
+  const [isAISearchOpen, setIsAISearchOpen] = useState(false);
+  const [aiQuery, setAiQuery] = useState('');
+  const [isAISearching, setIsAISearching] = useState(false);
+  const [aiSearchExplanation, setAiSearchExplanation] = useState('');
 
   // Form state - only fields we can get from CV
   const [formData, setFormData] = useState({
@@ -50,6 +65,17 @@ export function CandidatesPage() {
   const [companyInput, setCompanyInput] = useState('');
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+        setOpenFilter(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleFormChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -189,19 +215,288 @@ export function CandidatesPage() {
     }
   };
 
+  // Get unique values for filters
+  const allSkills = [...new Set(candidates.flatMap(c => c.skills || []))].sort();
+  const allLocations = [...new Set(candidates.map(c => c.location).filter(Boolean))].sort() as string[];
+  const allStatuses = [...new Set(candidates.map(c => c.status))];
+
+  // Filter candidates
   const filteredCandidates = candidates.filter(c => {
+    // Search filter
     const matchesSearch = !searchQuery || 
       `${c.first_name} ${c.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.skills?.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus = !statusFilter || c.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    
+    // Skills filter (must have ALL selected skills)
+    const matchesSkills = skillsFilter.length === 0 || 
+      skillsFilter.every(skill => c.skills?.includes(skill));
+    
+    // Location filter (must match ONE of selected locations)
+    const matchesLocation = locationsFilter.length === 0 || 
+      locationsFilter.includes(c.location || '');
+    
+    // Experience filter
+    let matchesExperience = true;
+    if (experienceFilter) {
+      const exp = c.years_experience || 0;
+      switch (experienceFilter) {
+        case '0-2': matchesExperience = exp >= 0 && exp <= 2; break;
+        case '3-5': matchesExperience = exp >= 3 && exp <= 5; break;
+        case '5-10': matchesExperience = exp > 5 && exp <= 10; break;
+        case '10+': matchesExperience = exp > 10; break;
+      }
+    }
+    
+    // Status filter
+    const matchesStatus = statusFilter.length === 0 || 
+      statusFilter.includes(c.status);
+    
+    return matchesSearch && matchesSkills && matchesLocation && matchesExperience && matchesStatus;
   });
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setSkillsFilter([]);
+    setLocationsFilter([]);
+    setExperienceFilter('');
+    setStatusFilter([]);
+    setAiSearchExplanation('');
+  };
+
+  const hasActiveFilters = searchQuery || skillsFilter.length > 0 || locationsFilter.length > 0 || experienceFilter || statusFilter.length > 0;
+
+  // AI Search handler
+  const handleAISearch = async () => {
+    if (!aiQuery.trim()) return;
+    
+    setIsAISearching(true);
+    
+    try {
+      // Build context about available data
+      const context = {
+        availableSkills: allSkills,
+        availableLocations: allLocations,
+        availableStatuses: allStatuses.map(s => statusLabels[s as CandidateStatus] || s),
+        experienceRanges: ['0-2', '3-5', '5-10', '10+'],
+      };
+      
+      // Call Claude API to parse the query
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [
+            {
+              role: 'user',
+              content: `You are a search assistant for a recruitment system. Parse the following natural language query and extract filter criteria.
+
+Available data:
+- Skills: ${context.availableSkills.join(', ')}
+- Locations: ${context.availableLocations.join(', ')}
+- Statuses: ${context.availableStatuses.join(', ')}
+- Experience ranges: 0-2 years, 3-5 years, 5-10 years, 10+ years
+
+User query: "${aiQuery}"
+
+Respond with ONLY a JSON object (no markdown, no explanation before or after) in this exact format:
+{
+  "skills": ["skill1", "skill2"],
+  "locations": ["location1"],
+  "experience": "5-10",
+  "statuses": ["status1"],
+  "searchText": "any text search",
+  "explanation": "Human readable explanation of what filters were applied"
+}
+
+Only include fields that are relevant to the query. Use empty arrays [] for filters not mentioned.
+Match skills and locations to the closest available options (case-insensitive).
+For experience, pick the most appropriate range.
+For statuses, match to the closest available status.`
+            }
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      const content = data.content?.[0]?.text || '{}';
+      
+      // Parse the response
+      let parsed;
+      try {
+        // Clean up potential markdown formatting
+        const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        parsed = JSON.parse(cleanContent);
+      } catch (e) {
+        console.error('Failed to parse AI response:', content);
+        toast.error('AI Search Error', 'Could not understand the query. Please try rephrasing.');
+        return;
+      }
+      
+      // Apply filters
+      clearAllFilters();
+      
+      if (parsed.skills?.length > 0) {
+        // Match to available skills (case-insensitive)
+        const matchedSkills = parsed.skills
+          .map((s: string) => allSkills.find(as => as.toLowerCase() === s.toLowerCase()))
+          .filter(Boolean);
+        setSkillsFilter(matchedSkills);
+      }
+      
+      if (parsed.locations?.length > 0) {
+        // Match to available locations (case-insensitive)
+        const matchedLocations = parsed.locations
+          .map((l: string) => allLocations.find(al => al.toLowerCase().includes(l.toLowerCase())))
+          .filter(Boolean);
+        setLocationsFilter(matchedLocations);
+      }
+      
+      if (parsed.experience) {
+        setExperienceFilter(parsed.experience);
+      }
+      
+      if (parsed.statuses?.length > 0) {
+        // Convert status labels back to values
+        const matchedStatuses = parsed.statuses
+          .map((label: string) => {
+            const entry = Object.entries(statusLabels).find(
+              ([, v]) => v.toLowerCase() === label.toLowerCase()
+            );
+            return entry ? entry[0] : null;
+          })
+          .filter(Boolean);
+        setStatusFilter(matchedStatuses);
+      }
+      
+      if (parsed.searchText) {
+        setSearchQuery(parsed.searchText);
+      }
+      
+      setAiSearchExplanation(parsed.explanation || 'Filters applied based on your query');
+      setIsAISearchOpen(false);
+      setAiQuery('');
+      
+      toast.success('AI Search Applied', parsed.explanation || 'Filters have been set');
+      
+    } catch (error) {
+      console.error('AI Search error:', error);
+      toast.error('AI Search Error', 'Something went wrong. Please try again.');
+    } finally {
+      setIsAISearching(false);
+    }
+  };
+
+  // Column filter dropdown component
+  const ColumnFilter = ({ 
+    column, 
+    options, 
+    selected, 
+    onChange,
+    type = 'multi'
+  }: { 
+    column: string; 
+    options: string[]; 
+    selected: string[] | string;
+    onChange: (value: any) => void;
+    type?: 'multi' | 'single';
+  }) => {
+    const isOpen = openFilter === column;
+    const hasFilter = type === 'multi' ? (selected as string[]).length > 0 : !!selected;
+    
+    return (
+      <div className="relative">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenFilter(isOpen ? null : column);
+          }}
+          className={`flex items-center gap-1 text-xs font-medium uppercase tracking-wider ${
+            hasFilter ? 'text-brand-cyan' : 'text-brand-grey-400 hover:text-brand-slate-700'
+          }`}
+        >
+          {column}
+          {hasFilter && <span className="bg-brand-cyan text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
+            {type === 'multi' ? (selected as string[]).length : '1'}
+          </span>}
+          <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+        
+        {isOpen && (
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-brand-grey-200 z-20 min-w-[180px] max-h-[300px] overflow-y-auto">
+            {type === 'multi' ? (
+              <>
+                <div className="p-2 border-b border-brand-grey-100">
+                  <button
+                    onClick={() => onChange([])}
+                    className="text-xs text-brand-grey-400 hover:text-brand-cyan"
+                  >
+                    Clear all
+                  </button>
+                </div>
+                {options.map(option => (
+                  <label 
+                    key={option} 
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-brand-grey-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(selected as string[]).includes(option)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          onChange([...(selected as string[]), option]);
+                        } else {
+                          onChange((selected as string[]).filter(s => s !== option));
+                        }
+                      }}
+                      className="rounded border-brand-grey-300 text-brand-cyan focus:ring-brand-cyan"
+                    />
+                    <span className="text-sm text-brand-slate-700">{option}</span>
+                  </label>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="p-2 border-b border-brand-grey-100">
+                  <button
+                    onClick={() => onChange('')}
+                    className="text-xs text-brand-grey-400 hover:text-brand-cyan"
+                  >
+                    Clear
+                  </button>
+                </div>
+                {options.map(option => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      onChange(option);
+                      setOpenFilter(null);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-grey-50 ${
+                      selected === option ? 'bg-brand-cyan/10 text-brand-cyan' : 'text-brand-slate-700'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen">
       <Header 
         title="Candidates"
-        subtitle={`${candidates.length} candidates in database`}
+        subtitle={`${filteredCandidates.length} of ${candidates.length} candidates`}
         actions={
           permissions.canAddCandidates ? (
             <Button 
@@ -215,33 +510,51 @@ export function CandidatesPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
-        {/* Filters */}
+      <div className="p-6 space-y-6" ref={filterRef}>
+        {/* Search Bar */}
         <Card>
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <div className="flex-1 min-w-[200px]">
               <Input
                 isSearch
-                placeholder="Search candidates..."
+                placeholder="Search by name, email, or skills..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Select
-              options={[
-                { value: '', label: 'All statuses' },
-                { value: 'new', label: 'New' },
-                { value: 'phone_qualification', label: 'Phone Qualification' },
-                { value: 'technical_interview', label: 'Technical Interview' },
-                { value: 'director_interview', label: 'Director Interview' },
-                { value: 'offer', label: 'Offer' },
-                { value: 'hired', label: 'Hired' },
-              ]}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              placeholder="Filter by status"
-            />
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsAISearchOpen(true)}
+              leftIcon={<Sparkles className="h-4 w-4" />}
+            >
+              AI Search
+            </Button>
+            {hasActiveFilters && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={clearAllFilters}
+                leftIcon={<X className="h-4 w-4" />}
+              >
+                Clear Filters
+              </Button>
+            )}
           </div>
+          
+          {/* AI Search Explanation */}
+          {aiSearchExplanation && (
+            <div className="mt-3 flex items-center gap-2 p-3 bg-brand-cyan/10 rounded-lg text-sm">
+              <Sparkles className="h-4 w-4 text-brand-cyan flex-shrink-0" />
+              <span className="text-brand-slate-700">{aiSearchExplanation}</span>
+              <button 
+                onClick={() => setAiSearchExplanation('')}
+                className="ml-auto text-brand-grey-400 hover:text-brand-slate-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </Card>
 
         {/* Candidates Table */}
@@ -265,13 +578,58 @@ export function CandidatesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Candidate</th>
-                  <th>Skills</th>
-                  <th>Location</th>
-                  <th>Experience</th>
-                  <th>Min Salary</th>
-                  <th>Status</th>
-                  <th>Added</th>
+                  <th className="text-xs font-medium uppercase tracking-wider text-brand-grey-400">
+                    Candidate
+                  </th>
+                  <th>
+                    <ColumnFilter
+                      column="Skills"
+                      options={allSkills}
+                      selected={skillsFilter}
+                      onChange={setSkillsFilter}
+                      type="multi"
+                    />
+                  </th>
+                  <th>
+                    <ColumnFilter
+                      column="Location"
+                      options={allLocations}
+                      selected={locationsFilter}
+                      onChange={setLocationsFilter}
+                      type="multi"
+                    />
+                  </th>
+                  <th>
+                    <ColumnFilter
+                      column="Experience"
+                      options={['0-2 yrs', '3-5 yrs', '5-10 yrs', '10+ yrs']}
+                      selected={experienceFilter ? `${experienceFilter} yrs` : ''}
+                      onChange={(v: string) => setExperienceFilter(v.replace(' yrs', ''))}
+                      type="single"
+                    />
+                  </th>
+                  <th className="text-xs font-medium uppercase tracking-wider text-brand-grey-400">
+                    Min Salary
+                  </th>
+                  <th>
+                    <ColumnFilter
+                      column="Status"
+                      options={allStatuses.map(s => statusLabels[s as CandidateStatus] || s)}
+                      selected={statusFilter.map(s => statusLabels[s as CandidateStatus] || s)}
+                      onChange={(labels: string[]) => {
+                        // Convert labels back to status values
+                        const statusValues = labels.map(label => {
+                          const entry = Object.entries(statusLabels).find(([, v]) => v === label);
+                          return entry ? entry[0] : label;
+                        });
+                        setStatusFilter(statusValues);
+                      }}
+                      type="multi"
+                    />
+                  </th>
+                  <th className="text-xs font-medium uppercase tracking-wider text-brand-grey-400">
+                    Added
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -326,6 +684,64 @@ export function CandidatesPage() {
           </div>
         )}
       </div>
+
+      {/* AI Search Modal */}
+      <Modal
+        isOpen={isAISearchOpen}
+        onClose={() => {
+          setIsAISearchOpen(false);
+          setAiQuery('');
+        }}
+        title="AI Search"
+        description="Describe what you're looking for in natural language"
+        size="md"
+      >
+        <div className="space-y-4">
+          <Textarea
+            placeholder="e.g. Find Java developers in London with more than 5 years experience..."
+            value={aiQuery}
+            onChange={(e) => setAiQuery(e.target.value)}
+            rows={3}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleAISearch();
+              }
+            }}
+          />
+          
+          <div className="text-sm text-brand-grey-400">
+            <p className="font-medium mb-2">Try queries like:</p>
+            <ul className="space-y-1 text-xs">
+              <li>"Python developers with SC clearance"</li>
+              <li>"Candidates in Manchester with 3-5 years experience"</li>
+              <li>"Senior engineers who know React and TypeScript"</li>
+              <li>"New candidates from London"</li>
+            </ul>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                setIsAISearchOpen(false);
+                setAiQuery('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleAISearch}
+              isLoading={isAISearching}
+              disabled={!aiQuery.trim()}
+              leftIcon={isAISearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            >
+              {isAISearching ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Add Candidate Modal */}
       <Modal

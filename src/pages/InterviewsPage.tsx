@@ -5,7 +5,7 @@ import {
   Clock, 
   User, 
   Phone, 
-  Briefcase, 
+  Settings, 
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -31,7 +31,7 @@ type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_
 
 const stageConfig: Record<InterviewStage, { label: string; icon: typeof Phone; colour: string }> = {
   phone_qualification: { label: 'Phone', icon: Phone, colour: 'bg-blue-100 text-blue-700' },
-  technical_interview: { label: 'Technical', icon: Briefcase, colour: 'bg-purple-100 text-purple-700' },
+  technical_interview: { label: 'Technical', icon: Settings, colour: 'bg-purple-100 text-purple-700' },
   director_interview: { label: 'Director', icon: User, colour: 'bg-amber-100 text-amber-700' },
 };
 

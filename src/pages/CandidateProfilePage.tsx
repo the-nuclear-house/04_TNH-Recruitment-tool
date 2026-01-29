@@ -24,6 +24,7 @@ import {
   Send,
   Edit,
   Download,
+  Settings,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -64,7 +65,7 @@ const stageConfig: Record<InterviewStage, {
   },
   technical_interview: { 
     label: 'Technical Interview', 
-    icon: Briefcase, 
+    icon: Settings, 
     colour: 'text-purple-700',
     bgColour: 'bg-purple-100',
   },
