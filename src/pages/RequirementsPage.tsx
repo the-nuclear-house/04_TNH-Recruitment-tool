@@ -214,12 +214,12 @@ const mockRequirements: Requirement[] = [
   },
 ];
 
-const statusConfig: Record<RequirementStatus, { label: string; colour: string; bgColour: string; borderColour: string }> = {
-  active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100', borderColour: 'border-l-green-500' },
-  opportunity: { label: 'Opportunity', colour: 'text-cyan-700', bgColour: 'bg-cyan-100', borderColour: 'border-l-brand-cyan' },
-  won: { label: 'Won', colour: 'text-amber-700', bgColour: 'bg-amber-100', borderColour: 'border-l-brand-gold' },
-  lost: { label: 'Lost', colour: 'text-slate-500', bgColour: 'bg-slate-100', borderColour: 'border-l-slate-400' },
-  cancelled: { label: 'Cancelled', colour: 'text-red-700', bgColour: 'bg-red-100', borderColour: 'border-l-red-500' },
+const statusConfig: Record<RequirementStatus, { label: string; colour: string; bgColour: string; borderColour: string; cardStyle: string }> = {
+  active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100', borderColour: 'border-l-green-500', cardStyle: 'bg-green-50' },
+  opportunity: { label: 'Opportunity', colour: 'text-amber-700', bgColour: 'bg-amber-100', borderColour: 'border-l-amber-500', cardStyle: '' },
+  won: { label: 'Won', colour: 'text-green-600', bgColour: 'bg-green-50', borderColour: 'border-l-green-300', cardStyle: '' },
+  lost: { label: 'Lost', colour: 'text-red-700', bgColour: 'bg-red-100', borderColour: 'border-l-red-500', cardStyle: '' },
+  cancelled: { label: 'Cancelled', colour: 'text-slate-500', bgColour: 'bg-slate-100', borderColour: 'border-l-slate-400', cardStyle: '' },
 };
 
 const clearanceLabels: Record<SecurityClearance, string> = {
@@ -438,6 +438,7 @@ export function RequirementsPage() {
         actions={
           permissions.canCreateRequirements ? (
             <Button
+              variant="success"
               leftIcon={<Plus className="h-4 w-4" />}
               onClick={() => navigate('/requirements/new')}
             >
@@ -451,38 +452,37 @@ export function RequirementsPage() {
         {/* Dashboard Card */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-4">
-              <CardTitle>FTEs Overview</CardTitle>
-              {/* Toggle buttons */}
-              <div className="flex rounded-lg border border-brand-grey-200 overflow-hidden">
-                <button
-                  onClick={() => { setDashboardView('manager'); setSelectedCustomer(null); }}
-                  className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
-                    dashboardView === 'manager' 
-                      ? 'bg-brand-cyan text-white' 
-                      : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
-                  }`}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  By Manager
-                </button>
-                <button
-                  onClick={() => { setDashboardView('customer'); setSelectedManager(null); }}
-                  className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
-                    dashboardView === 'customer' 
-                      ? 'bg-brand-cyan text-white' 
-                      : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
-                  }`}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                  By Customer
-                </button>
-              </div>
-            </div>
+            <CardTitle>FTEs Overview</CardTitle>
             <span className="text-sm text-brand-grey-400">
               Active & Opportunity only
             </span>
           </CardHeader>
+
+          {/* Toggle buttons - below title */}
+          <div className="flex rounded-lg border border-brand-grey-200 overflow-hidden w-fit mb-6">
+            <button
+              onClick={() => { setDashboardView('manager'); setSelectedCustomer(null); }}
+              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                dashboardView === 'manager' 
+                  ? 'bg-brand-cyan text-white' 
+                  : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" />
+              By Manager
+            </button>
+            <button
+              onClick={() => { setDashboardView('customer'); setSelectedManager(null); }}
+              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                dashboardView === 'customer' 
+                  ? 'bg-brand-cyan text-white' 
+                  : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              By Customer
+            </button>
+          </div>
 
           {dashboardView === 'manager' ? (
             <BarChart
@@ -581,7 +581,7 @@ export function RequirementsPage() {
                 key={requirement.id}
                 hover
                 padding="none"
-                className={`cursor-pointer overflow-hidden border-l-4 ${statusConfig[requirement.status].borderColour}`}
+                className={`cursor-pointer overflow-hidden border-l-4 ${statusConfig[requirement.status].borderColour} ${statusConfig[requirement.status].cardStyle}`}
                 onClick={() => navigate(`/requirements/${requirement.id}`)}
               >
                 <div className="p-5">

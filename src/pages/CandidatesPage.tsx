@@ -132,6 +132,7 @@ export function CandidatesPage() {
         actions={
           permissions.canAddCandidates ? (
             <Button 
+              variant="success"
               leftIcon={<Plus className="h-4 w-4" />}
               onClick={() => navigate('/candidates/new')}
             >

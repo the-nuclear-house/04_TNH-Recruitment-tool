@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger' | 'success';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
@@ -32,6 +32,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       accent: 'bg-brand-cyan text-white hover:bg-cyan-600 focus:ring-brand-cyan',
       ghost: 'bg-transparent text-brand-slate-700 hover:bg-brand-grey-100 focus:ring-brand-slate-700',
       danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-600',
+      success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-600',
     };
     
     const sizes = {

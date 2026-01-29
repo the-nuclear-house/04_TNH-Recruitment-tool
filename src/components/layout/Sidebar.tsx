@@ -25,7 +25,6 @@ export function Sidebar() {
   // Build navigation based on permissions
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, show: true },
-    { name: 'Search', href: '/search', icon: Search, show: permissions.canViewCandidates },
     { name: 'Candidates', href: '/candidates', icon: Users, show: permissions.canViewCandidates },
     { name: 'Requirements', href: '/requirements', icon: Briefcase, show: permissions.canViewRequirements },
     { name: 'Interviews', href: '/interviews', icon: Calendar, show: permissions.canViewInterviews },

@@ -10,6 +10,7 @@ import {
   Calendar,
   Clock,
   User,
+  ChevronDown,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -19,12 +20,16 @@ import {
   Button,
   Badge,
   Avatar,
+  Select,
 } from '@/components/ui';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useToast } from '@/lib/stores/ui-store';
 
 // Types
 type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';
+type SecurityClearance = 'none' | 'bpss' | 'ctc' | 'sc' | 'esc' | 'dv' | 'edv' | 'doe_q' | 'doe_l';
+type EngineeringDiscipline = 'electrical' | 'mechanical' | 'civil' | 'software' | 'systems' | 'nuclear' | 'chemical' | 'structural' | 'other';
 
 interface Requirement {
   id: string;
@@ -32,11 +37,13 @@ interface Requirement {
   industry: string;
   location: string;
   fte_count: number;
-  budget_min: number | null;
-  budget_max: number | null;
+  day_rate_min: number | null;
+  day_rate_max: number | null;
   skills: string[];
   description: string | null;
   status: RequirementStatus;
+  clearance_required: SecurityClearance;
+  engineering_discipline: EngineeringDiscipline;
   manager_id: string;
   manager_name: string;
   created_by_id: string;
@@ -52,11 +59,13 @@ const mockRequirement: Requirement = {
   industry: 'Defence',
   location: 'London',
   fte_count: 3,
-  budget_min: 80000,
-  budget_max: 100000,
+  day_rate_min: 450,
+  day_rate_max: 550,
   skills: ['Python', 'AWS', 'Kubernetes', 'Security Clearance SC', 'Microservices', 'Docker'],
   description: 'Looking for senior backend engineers to work on mission-critical defence systems. The role involves designing and implementing secure, scalable backend services for classified projects. Candidates must be eligible for SC clearance and have strong experience with cloud infrastructure.',
   status: 'active',
+  clearance_required: 'sc',
+  engineering_discipline: 'software',
   manager_id: 'user-manager-001',
   manager_name: 'James Wilson',
   created_by_id: 'user-director-001',
@@ -71,24 +80,45 @@ const mockLinkedCandidates = [
   { id: '2', name: 'James Wilson', status: 'technical_interview', match_score: 85 },
 ];
 
-const statusLabels: Record<RequirementStatus, string> = {
-  active: 'Active',
-  opportunity: 'Opportunity',
-  cancelled: 'Cancelled',
-  lost: 'Lost',
-  won: 'Won',
+const statusConfig: Record<RequirementStatus, { label: string; colour: string; bgColour: string }> = {
+  active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
+  opportunity: { label: 'Opportunity', colour: 'text-amber-700', bgColour: 'bg-amber-100' },
+  won: { label: 'Won', colour: 'text-green-600', bgColour: 'bg-green-50' },
+  lost: { label: 'Lost', colour: 'text-red-700', bgColour: 'bg-red-100' },
+  cancelled: { label: 'Cancelled', colour: 'text-slate-500', bgColour: 'bg-slate-100' },
 };
 
-function getStatusBadgeVariant(status: RequirementStatus): 'green' | 'cyan' | 'orange' | 'gold' | 'grey' | 'red' {
-  switch (status) {
-    case 'active': return 'green';
-    case 'opportunity': return 'cyan';
-    case 'won': return 'gold';
-    case 'lost': return 'grey';
-    case 'cancelled': return 'red';
-    default: return 'grey';
-  }
-}
+const statusOptions = [
+  { value: 'opportunity', label: 'Opportunity' },
+  { value: 'active', label: 'Active' },
+  { value: 'won', label: 'Won' },
+  { value: 'lost', label: 'Lost' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const clearanceLabels: Record<SecurityClearance, string> = {
+  none: 'None',
+  bpss: 'BPSS',
+  ctc: 'CTC',
+  sc: 'SC',
+  esc: 'eSC',
+  dv: 'DV',
+  edv: 'eDV',
+  doe_q: 'DOE Q',
+  doe_l: 'DOE L',
+};
+
+const disciplineLabels: Record<EngineeringDiscipline, string> = {
+  electrical: 'Electrical',
+  mechanical: 'Mechanical',
+  civil: 'Civil',
+  software: 'Software',
+  systems: 'Systems',
+  nuclear: 'Nuclear',
+  chemical: 'Chemical',
+  structural: 'Structural',
+  other: 'Other',
+};
 
 function getDaysOpen(createdAt: string): number {
   const created = new Date(createdAt);
@@ -107,13 +137,19 @@ export function RequirementDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const permissions = usePermissions();
+  const toast = useToast();
 
   // In real app, fetch by id
-  const requirement = mockRequirement;
+  const [requirement, setRequirement] = useState(mockRequirement);
   const daysOpen = getDaysOpen(requirement.created_at);
 
+  const handleStatusChange = (newStatus: string) => {
+    setRequirement(prev => ({ ...prev, status: newStatus as RequirementStatus }));
+    toast.success('Status Updated', `Requirement status changed to ${statusConfig[newStatus as RequirementStatus].label}`);
+  };
+
   return (
-    <div className="min-h-screen bg-brand-grey-100">
+    <div className={`min-h-screen ${requirement.status === 'active' ? 'bg-green-50' : 'bg-brand-grey-100'}`}>
       <Header
         title="Requirement Details"
         actions={
@@ -127,10 +163,11 @@ export function RequirementDetailPage() {
             </Button>
             {permissions.canEditRequirements && (
               <Button
+                variant="secondary"
                 leftIcon={<Edit className="h-4 w-4" />}
                 onClick={() => navigate(`/requirements/${id}/edit`)}
               >
-                Edit Requirement
+                Edit Details
               </Button>
             )}
           </div>
@@ -139,16 +176,29 @@ export function RequirementDetailPage() {
 
       <div className="p-6 max-w-6xl mx-auto space-y-6">
         {/* Header Card */}
-        <Card>
+        <Card className={requirement.status === 'active' ? 'bg-green-50 border-green-200' : requirement.status === 'won' ? 'bg-green-50/50' : ''}>
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold text-brand-slate-900">
                   {requirement.customer}
                 </h1>
-                <Badge variant={getStatusBadgeVariant(requirement.status)}>
-                  {statusLabels[requirement.status]}
-                </Badge>
+                {/* Quick Status Change */}
+                {permissions.canEditRequirements ? (
+                  <select
+                    value={requirement.status}
+                    onChange={(e) => handleStatusChange(e.target.value)}
+                    className={`px-3 py-1 rounded-full text-sm font-medium border-0 cursor-pointer ${statusConfig[requirement.status].bgColour} ${statusConfig[requirement.status].colour}`}
+                  >
+                    {statusOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusConfig[requirement.status].bgColour} ${statusConfig[requirement.status].colour}`}>
+                    {statusConfig[requirement.status].label}
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
@@ -164,19 +214,27 @@ export function RequirementDetailPage() {
                   <Users className="h-4 w-4" />
                   {requirement.fte_count} FTE{requirement.fte_count !== 1 ? 's' : ''}
                 </span>
-                {requirement.budget_min && requirement.budget_max && (
+                {requirement.day_rate_min && requirement.day_rate_max && (
                   <span className="flex items-center gap-1">
                     <PoundSterling className="h-4 w-4" />
-                    {formatCurrency(requirement.budget_min)} - {formatCurrency(requirement.budget_max)}
+                    £{requirement.day_rate_min} - £{requirement.day_rate_max}/day
                   </span>
                 )}
+                {requirement.clearance_required !== 'none' && (
+                  <Badge variant="orange">
+                    {clearanceLabels[requirement.clearance_required]} Required
+                  </Badge>
+                )}
+                <Badge variant="grey">
+                  {disciplineLabels[requirement.engineering_discipline]}
+                </Badge>
               </div>
             </div>
 
             <div className="flex flex-col items-end gap-2">
               {['active', 'opportunity'].includes(requirement.status) && (
                 <div className="text-right">
-                  <span className="text-2xl font-bold text-brand-orange">{daysOpen}</span>
+                  <span className="text-2xl font-bold text-amber-600">{daysOpen}</span>
                   <span className="text-sm text-brand-grey-400 ml-1">days open</span>
                 </div>
               )}
