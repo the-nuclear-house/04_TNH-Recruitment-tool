@@ -13,13 +13,14 @@ import {
   PoundSterling,
   Linkedin,
   FileText,
-  MessageSquare,
   Clock,
   CheckCircle,
   XCircle,
   User,
   ChevronDown,
   ChevronUp,
+  Plus,
+  Building2,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -30,12 +31,28 @@ import {
   Badge,
   getStatusVariant,
   Avatar,
+  Modal,
+  Input,
+  Select,
+  Textarea,
 } from '@/components/ui';
 import { formatDate, formatCurrency, statusLabels } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useToast } from '@/lib/stores/ui-store';
 import type { Candidate, Interview } from '@/types';
 
+type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
+
+interface InterviewWithDetails extends Interview {
+  interviewer_name: string;
+}
+
 // Mock candidate data
-const mockCandidate: Candidate & { interviews: (Interview & { interviewer_name: string })[] } = {
+const mockCandidate: Candidate & { 
+  interviews: InterviewWithDetails[];
+  previous_companies: string[];
+  cv_url: string | null;
+} = {
   id: '1',
   first_name: 'Sarah',
   last_name: 'Chen',
@@ -47,149 +64,101 @@ const mockCandidate: Candidate & { interviews: (Interview & { interviewer_name: 
   current_company: 'TechCorp Ltd',
   years_experience: 8,
   degree: 'MSc Computer Science, Imperial College London',
-  summary: 'Full-stack developer with 8 years of experience specialising in cloud architecture and microservices. Strong background in Python and JavaScript ecosystems. Led multiple teams delivering enterprise-scale applications for financial services clients.',
-  skills: ['Python', 'AWS', 'Kubernetes', 'React', 'TypeScript', 'PostgreSQL', 'Docker', 'Terraform', 'Node.js', 'GraphQL'],
-  right_to_work: 'british_citizen',
-  security_vetting: 'sc',
-  open_to_relocate: true,
-  relocation_preferences: 'Manchester, Edinburgh, Remote',
-  current_salary: 85000,
+  summary: 'Full-stack developer with 8 years of experience specialising in cloud architecture and microservices. Strong background in Python and JavaScript ecosystems.',
+  skills: ['Python', 'TypeScript', 'React', 'AWS', 'Kubernetes', 'PostgreSQL', 'Node.js'],
+  previous_companies: ['Google', 'Deloitte', 'Accenture'],
   salary_expectation_min: 95000,
   salary_expectation_max: 110000,
-  salary_currency: 'GBP',
-  sector_flexibility: 'Defence, Finance, Healthcare',
-  scope_flexibility: 'Backend, Full-stack, Architecture',
+  right_to_work: 'british_citizen',
+  security_vetting: 'sc',
   status: 'director_interview',
   source: 'LinkedIn',
-  created_by: 'user-1',
   created_at: '2025-01-10T09:00:00Z',
-  updated_at: '2025-01-22T14:30:00Z',
+  updated_at: '2025-01-20T14:30:00Z',
+  cv_url: '/uploads/sarah-chen-cv.pdf',
   interviews: [
     {
       id: 'int-1',
-      application_id: 'app-1',
+      candidate_id: '1',
       stage: 'phone_qualification',
-      interviewer_id: 'user-recruiter-001',
-      interviewer_name: 'Emma Clarke',
       scheduled_at: '2025-01-12T10:00:00Z',
       completed_at: '2025-01-12T10:30:00Z',
-      duration_minutes: 30,
+      interviewer_id: 'user-recruiter-001',
+      interviewer_name: 'Emma Clarke',
       outcome: 'pass',
-      general_comments: 'Excellent communication skills. Very clear about career goals and expectations. Enthusiastic about the opportunity.',
-      years_experience_confirmed: 8,
-      degree_confirmed: 'MSc Computer Science',
-      right_to_work_confirmed: 'british_citizen',
-      security_vetting_confirmed: 'sc',
-      current_salary_confirmed: 85000,
-      salary_expectation_confirmed: '£95k-£110k',
-      salary_proposed: '£100k base + benefits',
-      open_to_relocate_confirmed: true,
-      relocation_notes: 'Prefers London but open to Manchester',
       communication_score: 5,
-      communication_notes: 'Articulate and confident',
-      professionalism_score: 5,
-      professionalism_notes: 'Very professional throughout',
-      enthusiasm_score: 4,
-      enthusiasm_notes: 'Genuinely interested in the role',
+      professionalism_score: 4,
+      enthusiasm_score: 5,
       cultural_fit_score: 4,
-      cultural_fit_notes: 'Would fit well with team culture',
       technical_depth_score: null,
-      technical_depth_notes: null,
       problem_solving_score: null,
-      problem_solving_notes: null,
-      technical_background: null,
-      skills_summary: null,
-      sector_flexibility_notes: 'Open to defence and finance',
-      scope_flexibility_notes: 'Prefers backend but can do full-stack',
-      recommendation: 'Strongly recommend progressing to technical interview',
-      created_at: '2025-01-12T10:30:00Z',
-      updated_at: '2025-01-12T10:30:00Z',
+      general_comments: 'Excellent communication skills. Very articulate and professional. Clearly passionate about technology.',
+      recommendation: 'Strong candidate, recommend for technical interview.',
+      created_at: '2025-01-11T09:00:00Z',
+      updated_at: '2025-01-12T11:00:00Z',
     },
     {
       id: 'int-2',
-      application_id: 'app-1',
+      candidate_id: '1',
       stage: 'technical_interview',
+      scheduled_at: '2025-01-18T14:00:00Z',
+      completed_at: '2025-01-18T15:30:00Z',
       interviewer_id: 'user-interviewer-001',
       interviewer_name: 'Michael Chen',
-      scheduled_at: '2025-01-15T14:00:00Z',
-      completed_at: '2025-01-15T15:00:00Z',
-      duration_minutes: 60,
       outcome: 'pass',
-      general_comments: 'Strong technical candidate with deep knowledge of cloud architecture. Solved the coding challenge efficiently and explained thought process clearly.',
-      years_experience_confirmed: null,
-      degree_confirmed: null,
-      right_to_work_confirmed: null,
-      security_vetting_confirmed: null,
-      current_salary_confirmed: null,
-      salary_expectation_confirmed: null,
-      salary_proposed: null,
-      open_to_relocate_confirmed: null,
-      relocation_notes: null,
       communication_score: 4,
-      communication_notes: 'Explains technical concepts well',
       professionalism_score: 5,
-      professionalism_notes: 'Well prepared for the interview',
       enthusiasm_score: 4,
-      enthusiasm_notes: 'Asked good questions about the tech stack',
-      cultural_fit_score: 4,
-      cultural_fit_notes: 'Collaborative approach to problem solving',
+      cultural_fit_score: 5,
       technical_depth_score: 5,
-      technical_depth_notes: 'Excellent understanding of distributed systems',
       problem_solving_score: 4,
-      problem_solving_notes: 'Methodical approach, considered edge cases',
-      technical_background: 'Strong in Python, AWS, Kubernetes. Has led architecture decisions on previous projects.',
-      skills_summary: 'Cloud architecture, microservices, API design, database optimisation',
-      sector_flexibility_notes: null,
-      scope_flexibility_notes: null,
-      recommendation: 'Recommend for director interview. Strong technical fit.',
-      created_at: '2025-01-15T15:00:00Z',
-      updated_at: '2025-01-15T15:00:00Z',
-    },
-    {
-      id: 'int-3',
-      application_id: 'app-1',
-      stage: 'director_interview',
-      interviewer_id: 'user-director-001',
-      interviewer_name: 'Sarah Thompson',
-      scheduled_at: '2025-01-22T11:00:00Z',
-      completed_at: null,
-      duration_minutes: 30,
-      outcome: 'pending',
-      general_comments: null,
-      years_experience_confirmed: null,
-      degree_confirmed: null,
-      right_to_work_confirmed: null,
-      security_vetting_confirmed: null,
-      current_salary_confirmed: null,
-      salary_expectation_confirmed: null,
-      salary_proposed: null,
-      open_to_relocate_confirmed: null,
-      relocation_notes: null,
-      communication_score: null,
-      communication_notes: null,
-      professionalism_score: null,
-      professionalism_notes: null,
-      enthusiasm_score: null,
-      enthusiasm_notes: null,
-      cultural_fit_score: null,
-      cultural_fit_notes: null,
-      technical_depth_score: null,
-      technical_depth_notes: null,
-      problem_solving_score: null,
-      problem_solving_notes: null,
-      technical_background: null,
-      skills_summary: null,
-      sector_flexibility_notes: null,
-      scope_flexibility_notes: null,
-      recommendation: null,
-      created_at: '2025-01-20T09:00:00Z',
-      updated_at: '2025-01-20T09:00:00Z',
+      general_comments: 'Strong technical skills. Solved the coding challenge efficiently. Good system design knowledge.',
+      recommendation: 'Recommend for director interview. Would be a great fit for the BAE Systems project.',
+      created_at: '2025-01-15T09:00:00Z',
+      updated_at: '2025-01-18T16:00:00Z',
     },
   ],
 };
 
-// Helper function to calculate average soft skills score
-function calculateSoftSkillsAverage(interview: Interview): number | null {
+const stageConfig: Record<InterviewStage, { 
+  label: string; 
+  icon: typeof Phone;
+  colour: string;
+  bgColour: string;
+  order: number;
+}> = {
+  phone_qualification: { 
+    label: 'Phone Qualification', 
+    icon: Phone, 
+    colour: 'text-blue-700',
+    bgColour: 'bg-blue-100',
+    order: 1,
+  },
+  technical_interview: { 
+    label: 'Technical Interview', 
+    icon: Briefcase, 
+    colour: 'text-purple-700',
+    bgColour: 'bg-purple-100',
+    order: 2,
+  },
+  director_interview: { 
+    label: 'Director Interview', 
+    icon: User, 
+    colour: 'text-amber-700',
+    bgColour: 'bg-amber-100',
+    order: 3,
+  },
+};
+
+const interviewerOptions = [
+  { value: '', label: 'Select Interviewer' },
+  { value: 'user-recruiter-001', label: 'Emma Clarke (Recruiter)' },
+  { value: 'user-interviewer-001', label: 'Michael Chen (Technical)' },
+  { value: 'user-manager-001', label: 'James Wilson (Manager)' },
+  { value: 'user-director-001', label: 'Sarah Thompson (Director)' },
+];
+
+function calculateSoftSkillsAverage(interview: InterviewWithDetails): number | null {
   const scores = [
     interview.communication_score,
     interview.professionalism_score,
@@ -201,8 +170,7 @@ function calculateSoftSkillsAverage(interview: Interview): number | null {
   return Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
 }
 
-// Helper function to calculate average technical score
-function calculateTechnicalAverage(interview: Interview): number | null {
+function calculateTechnicalAverage(interview: InterviewWithDetails): number | null {
   const scores = [
     interview.technical_depth_score,
     interview.problem_solving_score,
@@ -212,29 +180,62 @@ function calculateTechnicalAverage(interview: Interview): number | null {
   return Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
 }
 
-const stageIcons = {
-  phone_qualification: Phone,
-  technical_interview: Briefcase,
-  director_interview: User,
-};
-
-const stageLabels = {
-  phone_qualification: 'Phone Qualification',
-  technical_interview: 'Technical Interview',
-  director_interview: 'Director Interview',
-};
-
 export function CandidateProfilePage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [expandedInterview, setExpandedInterview] = useState<string | null>(null);
+  const permissions = usePermissions();
+  const toast = useToast();
   
+  const [expandedInterview, setExpandedInterview] = useState<string | null>(null);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [selectedStage, setSelectedStage] = useState<InterviewStage | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [scheduleForm, setScheduleForm] = useState({
+    interviewer_id: '',
+    scheduled_date: '',
+    scheduled_time: '',
+    notes: '',
+  });
+
   // In real app, fetch candidate by id
   const candidate = mockCandidate;
+
+  // Get interview by stage
+  const getInterviewByStage = (stage: InterviewStage) => {
+    return candidate.interviews.find(i => i.stage === stage);
+  };
+
+  const handleScheduleInterview = (stage: InterviewStage) => {
+    setSelectedStage(stage);
+    setScheduleForm({
+      interviewer_id: '',
+      scheduled_date: '',
+      scheduled_time: '',
+      notes: '',
+    });
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleSubmitSchedule = async () => {
+    if (!scheduleForm.interviewer_id || !scheduleForm.scheduled_date || !scheduleForm.scheduled_time) {
+      toast.error('Validation Error', 'Please fill in all required fields');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    toast.success('Interview Scheduled', `${stageConfig[selectedStage!].label} has been scheduled`);
+    setIsScheduleModalOpen(false);
+    setIsSubmitting(false);
+  };
 
   const toggleInterview = (interviewId: string) => {
     setExpandedInterview(expandedInterview === interviewId ? null : interviewId);
   };
+
+  const allStages: InterviewStage[] = ['phone_qualification', 'technical_interview', 'director_interview'];
 
   return (
     <div className="min-h-screen bg-brand-grey-100">
@@ -250,6 +251,7 @@ export function CandidateProfilePage() {
               Back
             </Button>
             <Button
+              variant="secondary"
               leftIcon={<Edit className="h-4 w-4" />}
               onClick={() => navigate(`/candidates/${id}/edit`)}
             >
@@ -318,255 +320,208 @@ export function CandidateProfilePage() {
             </div>
           </div>
 
-          {/* Skills Tags */}
-          <div className="mt-6 pt-6 border-t border-brand-grey-200">
-            <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Skills</h3>
-            <div className="flex flex-wrap gap-2">
-              {candidate.skills.map((skill) => (
-                <Badge key={skill} variant="cyan">
-                  {skill}
-                </Badge>
-              ))}
+          {/* Skills */}
+          {candidate.skills && candidate.skills.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-brand-grey-200">
+              <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Skills</h3>
+              <div className="flex flex-wrap gap-2">
+                {candidate.skills.map(skill => (
+                  <Badge key={skill} variant="cyan">
+                    {skill}
+                  </Badge>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Previous Companies */}
+          {candidate.previous_companies && candidate.previous_companies.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Previous Companies</h3>
+              <div className="flex flex-wrap gap-2">
+                {candidate.previous_companies.map(company => (
+                  <Badge key={company} variant="grey">
+                    <Building2 className="h-3 w-3 mr-1" />
+                    {company}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Interview Timeline - Takes 2 columns */}
-          <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-lg font-semibold text-brand-slate-900">Interview Timeline</h2>
-            
-            <div className="space-y-4">
-              {candidate.interviews.map((interview, index) => {
-                const StageIcon = stageIcons[interview.stage];
-                const softSkillsAvg = calculateSoftSkillsAverage(interview);
-                const technicalAvg = calculateTechnicalAverage(interview);
-                const isExpanded = expandedInterview === interview.id;
-                const isCompleted = interview.completed_at !== null;
-                const isPending = interview.outcome === 'pending';
-                
-                return (
-                  <Card key={interview.id} padding="none" className="overflow-hidden">
-                    {/* Timeline connector */}
-                    <div className="flex">
-                      {/* Left side - Icon and line */}
-                      <div className="flex flex-col items-center px-4 py-4">
-                        <div className={`
-                          w-10 h-10 rounded-full flex items-center justify-center
-                          ${interview.outcome === 'pass' ? 'bg-brand-green/15 text-green-700' :
-                            interview.outcome === 'fail' ? 'bg-red-100 text-red-700' :
-                            'bg-brand-gold/15 text-amber-700'}
-                        `}>
-                          <StageIcon className="h-5 w-5" />
-                        </div>
-                        {index < candidate.interviews.length - 1 && (
-                          <div className="w-0.5 flex-1 bg-brand-grey-200 mt-2" />
-                        )}
-                      </div>
-
-                      {/* Right side - Content */}
-                      <div className="flex-1 py-4 pr-4">
-                        {/* Header row */}
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <h3 className="font-semibold text-brand-slate-900">
-                              {stageLabels[interview.stage]}
-                            </h3>
-                            <div className="flex items-center gap-3 text-sm text-brand-grey-400 mt-0.5">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3.5 w-3.5" />
-                                {formatDate(interview.scheduled_at || '')}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <User className="h-3.5 w-3.5" />
-                                {interview.interviewer_name}
-                              </span>
+          {/* Left Column - Interview Pipeline */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Interview Pipeline</CardTitle>
+              </CardHeader>
+              
+              <div className="space-y-4">
+                {allStages.map((stage, index) => {
+                  const interview = getInterviewByStage(stage);
+                  const StageIcon = stageConfig[stage].icon;
+                  const isCompleted = interview?.outcome === 'pass' || interview?.outcome === 'fail';
+                  const isPending = interview?.outcome === 'pending';
+                  const isNotStarted = !interview;
+                  const isExpanded = expandedInterview === interview?.id;
+                  
+                  // Determine if this stage can be scheduled
+                  const previousStage = index > 0 ? allStages[index - 1] : null;
+                  const previousInterview = previousStage ? getInterviewByStage(previousStage) : null;
+                  const canSchedule = isNotStarted && (index === 0 || previousInterview?.outcome === 'pass');
+                  
+                  return (
+                    <div
+                      key={stage}
+                      className={`
+                        rounded-lg border-2 transition-all
+                        ${isCompleted ? 'border-green-200 bg-green-50/50' : 
+                          isPending ? 'border-amber-200 bg-amber-50/50' :
+                          canSchedule ? 'border-brand-grey-200 bg-white' :
+                          'border-brand-grey-100 bg-brand-grey-50 opacity-50'}
+                      `}
+                    >
+                      <div className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`
+                              w-10 h-10 rounded-full flex items-center justify-center
+                              ${isCompleted ? 'bg-green-100 text-green-700' :
+                                isPending ? 'bg-amber-100 text-amber-700' :
+                                isNotStarted && canSchedule ? `${stageConfig[stage].bgColour} ${stageConfig[stage].colour}` :
+                                'bg-brand-grey-100 text-brand-grey-400'}
+                            `}>
+                              <StageIcon className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <h3 className={`font-semibold ${isNotStarted && !canSchedule ? 'text-brand-grey-400' : 'text-brand-slate-900'}`}>
+                                {stageConfig[stage].label}
+                              </h3>
+                              {interview && (
+                                <div className="flex items-center gap-3 text-sm text-brand-grey-400 mt-0.5">
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3.5 w-3.5" />
+                                    {formatDate(interview.scheduled_at || '')}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <User className="h-3.5 w-3.5" />
+                                    {interview.interviewer_name}
+                                  </span>
+                                </div>
+                              )}
+                              {isNotStarted && !canSchedule && (
+                                <p className="text-sm text-brand-grey-400">Complete previous stage first</p>
+                              )}
                             </div>
                           </div>
-                          
-                          {/* Outcome badge */}
-                          <div className="flex items-center gap-2">
-                            {interview.outcome === 'pass' && (
+
+                          {/* Status / Action */}
+                          <div className="flex items-center gap-3">
+                            {interview?.outcome === 'pass' && (
                               <span className="flex items-center gap-1 text-sm font-medium text-green-700">
                                 <CheckCircle className="h-4 w-4" />
                                 Pass
                               </span>
                             )}
-                            {interview.outcome === 'fail' && (
+                            {interview?.outcome === 'fail' && (
                               <span className="flex items-center gap-1 text-sm font-medium text-red-700">
                                 <XCircle className="h-4 w-4" />
                                 Fail
                               </span>
                             )}
-                            {interview.outcome === 'pending' && (
+                            {interview?.outcome === 'pending' && (
                               <span className="flex items-center gap-1 text-sm font-medium text-amber-700">
                                 <Clock className="h-4 w-4" />
-                                Pending
+                                Pending Feedback
                               </span>
+                            )}
+                            {isNotStarted && canSchedule && (
+                              <Button
+                                variant="success"
+                                size="sm"
+                                leftIcon={<Plus className="h-4 w-4" />}
+                                onClick={() => handleScheduleInterview(stage)}
+                              >
+                                Schedule
+                              </Button>
                             )}
                           </div>
                         </div>
 
-                        {/* Scores row */}
-                        {isCompleted && (
-                          <div className="flex items-center gap-6 mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-brand-grey-400">Soft Skills:</span>
-                              {softSkillsAvg !== null ? (
-                                <span className={`text-sm font-semibold ${
-                                  softSkillsAvg >= 4 ? 'text-green-700' :
-                                  softSkillsAvg >= 3 ? 'text-amber-700' : 'text-red-700'
-                                }`}>
-                                  {softSkillsAvg}/5
-                                </span>
-                              ) : (
-                                <span className="text-sm text-brand-grey-400">N/A</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-brand-grey-400">Technical:</span>
-                              {technicalAvg !== null ? (
-                                <span className={`text-sm font-semibold ${
-                                  technicalAvg >= 4 ? 'text-green-700' :
-                                  technicalAvg >= 3 ? 'text-amber-700' : 'text-red-700'
-                                }`}>
-                                  {technicalAvg}/5
-                                </span>
-                              ) : (
-                                <span className="text-sm text-brand-grey-400">N/A</span>
-                              )}
+                        {/* Scores for completed interviews */}
+                        {isCompleted && interview && (
+                          <div className="mt-3 pt-3 border-t border-green-200">
+                            <div className="flex items-center gap-6">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-brand-grey-400">Soft Skills:</span>
+                                {calculateSoftSkillsAverage(interview) !== null ? (
+                                  <span className={`text-sm font-semibold ${
+                                    calculateSoftSkillsAverage(interview)! >= 4 ? 'text-green-700' :
+                                    calculateSoftSkillsAverage(interview)! >= 3 ? 'text-amber-700' : 'text-red-700'
+                                  }`}>
+                                    {calculateSoftSkillsAverage(interview)}/5
+                                  </span>
+                                ) : (
+                                  <span className="text-sm text-brand-grey-400">N/A</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-brand-grey-400">Technical:</span>
+                                {calculateTechnicalAverage(interview) !== null ? (
+                                  <span className={`text-sm font-semibold ${
+                                    calculateTechnicalAverage(interview)! >= 4 ? 'text-green-700' :
+                                    calculateTechnicalAverage(interview)! >= 3 ? 'text-amber-700' : 'text-red-700'
+                                  }`}>
+                                    {calculateTechnicalAverage(interview)}/5
+                                  </span>
+                                ) : (
+                                  <span className="text-sm text-brand-grey-400">N/A</span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => toggleInterview(interview.id)}
+                                className="ml-auto flex items-center gap-1 text-sm text-brand-cyan hover:text-cyan-700"
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp className="h-4 w-4" />
+                                    Hide Details
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="h-4 w-4" />
+                                    View Details
+                                  </>
+                                )}
+                              </button>
                             </div>
                           </div>
                         )}
 
-                        {/* Expand button */}
-                        {isCompleted && (
-                          <button
-                            onClick={() => toggleInterview(interview.id)}
-                            className="flex items-center gap-1 text-sm text-brand-cyan hover:text-cyan-700 transition-colors"
-                          >
-                            {isExpanded ? (
-                              <>
-                                <ChevronUp className="h-4 w-4" />
-                                Hide details
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown className="h-4 w-4" />
-                                View details
-                              </>
-                            )}
-                          </button>
-                        )}
-
                         {/* Expanded details */}
-                        {isExpanded && isCompleted && (
+                        {isExpanded && interview && (
                           <div className="mt-4 pt-4 border-t border-brand-grey-200 space-y-4">
-                            {/* General comments */}
                             {interview.general_comments && (
                               <div>
-                                <h4 className="text-sm font-medium text-brand-slate-700 mb-1">General Comments</h4>
+                                <h4 className="text-sm font-medium text-brand-slate-700 mb-1">Comments</h4>
                                 <p className="text-sm text-brand-slate-600">{interview.general_comments}</p>
                               </div>
                             )}
-
-                            {/* Soft Skills breakdown */}
-                            <div>
-                              <h4 className="text-sm font-medium text-brand-slate-700 mb-2">Soft Skills Breakdown</h4>
-                              <div className="grid grid-cols-2 gap-3">
-                                {interview.communication_score && (
-                                  <ScoreItem label="Communication" score={interview.communication_score} note={interview.communication_notes} />
-                                )}
-                                {interview.professionalism_score && (
-                                  <ScoreItem label="Professionalism" score={interview.professionalism_score} note={interview.professionalism_notes} />
-                                )}
-                                {interview.enthusiasm_score && (
-                                  <ScoreItem label="Enthusiasm" score={interview.enthusiasm_score} note={interview.enthusiasm_notes} />
-                                )}
-                                {interview.cultural_fit_score && (
-                                  <ScoreItem label="Cultural Fit" score={interview.cultural_fit_score} note={interview.cultural_fit_notes} />
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Technical breakdown */}
-                            {(interview.technical_depth_score || interview.problem_solving_score) && (
-                              <div>
-                                <h4 className="text-sm font-medium text-brand-slate-700 mb-2">Technical Skills Breakdown</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                  {interview.technical_depth_score && (
-                                    <ScoreItem label="Technical Depth" score={interview.technical_depth_score} note={interview.technical_depth_notes} />
-                                  )}
-                                  {interview.problem_solving_score && (
-                                    <ScoreItem label="Problem Solving" score={interview.problem_solving_score} note={interview.problem_solving_notes} />
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Recommendation */}
                             {interview.recommendation && (
-                              <div className="p-3 bg-brand-grey-100 rounded-lg">
+                              <div>
                                 <h4 className="text-sm font-medium text-brand-slate-700 mb-1">Recommendation</h4>
                                 <p className="text-sm text-brand-slate-600">{interview.recommendation}</p>
                               </div>
                             )}
                           </div>
                         )}
-
-                        {/* Pending state */}
-                        {isPending && !isCompleted && (
-                          <p className="text-sm text-brand-grey-400 italic">
-                            Interview scheduled - awaiting feedback
-                          </p>
-                        )}
                       </div>
                     </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right Sidebar */}
-          <div className="space-y-4">
-            {/* Key Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Details</CardTitle>
-              </CardHeader>
-              <div className="space-y-4">
-                <DetailRow
-                  icon={<Briefcase className="h-4 w-4" />}
-                  label="Experience"
-                  value={`${candidate.years_experience} years`}
-                />
-                <DetailRow
-                  icon={<GraduationCap className="h-4 w-4" />}
-                  label="Education"
-                  value={candidate.degree}
-                />
-                <DetailRow
-                  icon={<Shield className="h-4 w-4" />}
-                  label="Security Clearance"
-                  value={statusLabels[candidate.security_vetting]}
-                />
-                <DetailRow
-                  icon={<FileText className="h-4 w-4" />}
-                  label="Right to Work"
-                  value={statusLabels[candidate.right_to_work]}
-                />
-                <DetailRow
-                  icon={<PoundSterling className="h-4 w-4" />}
-                  label="Salary Expectation"
-                  value={`${formatCurrency(candidate.salary_expectation_min || 0)} - ${formatCurrency(candidate.salary_expectation_max || 0)}`}
-                />
-                <DetailRow
-                  icon={<MapPin className="h-4 w-4" />}
-                  label="Open to Relocate"
-                  value={candidate.open_to_relocate ? `Yes - ${candidate.relocation_preferences}` : 'No'}
-                />
+                  );
+                })}
               </div>
             </Card>
 
@@ -576,73 +531,151 @@ export function CandidateProfilePage() {
                 <CardHeader>
                   <CardTitle>Summary</CardTitle>
                 </CardHeader>
-                <p className="text-sm text-brand-slate-600 leading-relaxed">
+                <p className="text-brand-slate-600 leading-relaxed">
                   {candidate.summary}
                 </p>
               </Card>
             )}
+          </div>
+
+          {/* Right Column - Details */}
+          <div className="space-y-6">
+            {/* Key Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Details</CardTitle>
+              </CardHeader>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Briefcase className="h-4 w-4 text-brand-grey-400" />
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Experience</p>
+                    <p className="text-sm text-brand-slate-700">{candidate.years_experience} years</p>
+                  </div>
+                </div>
+                
+                {candidate.degree && (
+                  <div className="flex items-center gap-3">
+                    <GraduationCap className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Education</p>
+                      <p className="text-sm text-brand-slate-700">{candidate.degree}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {candidate.security_vetting && (
+                  <div className="flex items-center gap-3">
+                    <Shield className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Security Clearance</p>
+                      <p className="text-sm text-brand-slate-700">{candidate.security_vetting.toUpperCase()}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {candidate.salary_expectation_min && (
+                  <div className="flex items-center gap-3">
+                    <PoundSterling className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Minimum Salary Expected</p>
+                      <p className="text-sm text-brand-slate-700">{formatCurrency(candidate.salary_expectation_min)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
 
             {/* Documents */}
             <Card>
               <CardHeader>
                 <CardTitle>Documents</CardTitle>
               </CardHeader>
-              <div className="space-y-2">
-                <button className="w-full flex items-center gap-3 p-3 rounded-lg border border-brand-grey-200 hover:bg-brand-grey-100 transition-colors text-left">
-                  <FileText className="h-5 w-5 text-brand-grey-400" />
+              {candidate.cv_url ? (
+                <a
+                  href={candidate.cv_url}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-brand-grey-100/50 hover:bg-brand-grey-100 transition-colors"
+                >
+                  <FileText className="h-5 w-5 text-brand-cyan" />
                   <div>
-                    <p className="text-sm font-medium text-brand-slate-900">CV_Sarah_Chen.pdf</p>
-                    <p className="text-xs text-brand-grey-400">Uploaded 10 Jan 2025</p>
+                    <p className="text-sm font-medium text-brand-slate-700">CV / Resume</p>
+                    <p className="text-xs text-brand-grey-400">Click to view</p>
                   </div>
-                </button>
-              </div>
+                </a>
+              ) : (
+                <p className="text-sm text-brand-grey-400">No documents uploaded</p>
+              )}
             </Card>
 
-            {/* Meta info */}
+            {/* Meta */}
             <Card>
-              <div className="text-sm text-brand-grey-400 space-y-1">
-                <p>Added: {formatDate(candidate.created_at)}</p>
-                <p>Last updated: {formatDate(candidate.updated_at)}</p>
-                <p>Source: {candidate.source}</p>
+              <CardHeader>
+                <CardTitle>Meta</CardTitle>
+              </CardHeader>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-brand-grey-400">Added</span>
+                  <span className="text-brand-slate-700">{formatDate(candidate.created_at)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-brand-grey-400">Source</span>
+                  <span className="text-brand-slate-700">{candidate.source || 'Direct'}</span>
+                </div>
               </div>
             </Card>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-// Helper components
-function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string | null }) {
-  if (!value) return null;
-  return (
-    <div className="flex items-start gap-3">
-      <span className="text-brand-grey-400 mt-0.5">{icon}</span>
-      <div>
-        <p className="text-xs text-brand-grey-400">{label}</p>
-        <p className="text-sm text-brand-slate-700">{value}</p>
-      </div>
-    </div>
-  );
-}
+      {/* Schedule Interview Modal */}
+      <Modal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        title={`Schedule ${selectedStage ? stageConfig[selectedStage].label : ''}`}
+        description={`Schedule an interview for ${candidate.first_name} ${candidate.last_name}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <Select
+            label="Interviewer *"
+            options={interviewerOptions}
+            value={scheduleForm.interviewer_id}
+            onChange={(e) => setScheduleForm(prev => ({ ...prev, interviewer_id: e.target.value }))}
+          />
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Date *"
+              type="date"
+              value={scheduleForm.scheduled_date}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+            />
+            <Input
+              label="Time *"
+              type="time"
+              value={scheduleForm.scheduled_time}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+            />
+          </div>
 
-function ScoreItem({ label, score, note }: { label: string; score: number; note?: string | null }) {
-  const getScoreColour = (s: number) => {
-    if (s >= 4) return 'bg-brand-green text-green-800';
-    if (s >= 3) return 'bg-brand-gold text-amber-800';
-    return 'bg-red-200 text-red-800';
-  };
+          <Textarea
+            label="Notes for Interviewer"
+            value={scheduleForm.notes}
+            onChange={(e) => setScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
+            placeholder="Any context or focus areas for this interview..."
+            rows={3}
+          />
 
-  return (
-    <div className="p-2 bg-brand-grey-100/50 rounded-lg">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-brand-grey-400">{label}</span>
-        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${getScoreColour(score)}`}>
-          {score}/5
-        </span>
-      </div>
-      {note && <p className="text-xs text-brand-slate-600">{note}</p>}
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsScheduleModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" onClick={handleSubmitSchedule} isLoading={isSubmitting}>
+              Schedule Interview
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

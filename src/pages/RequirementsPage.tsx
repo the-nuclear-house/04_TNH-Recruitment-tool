@@ -274,52 +274,63 @@ function BarChart({
   selectedId: string | null;
 }) {
   const maxValue = Math.max(...data.map(d => d.value), targetLine + 2);
-  const chartHeight = 200;
+  const chartHeight = 180;
 
   return (
-    <div className="relative">
-      {/* Chart area */}
-      <div className="flex items-end justify-around gap-2" style={{ height: chartHeight }}>
-        {data.map(item => {
-          const barHeight = (item.value / maxValue) * chartHeight;
-          const isSelected = selectedId === item.id;
-          
-          return (
-            <button
-              key={item.id}
-              onClick={() => onBarClick(isSelected ? null : item.id)}
-              className={`
-                flex flex-col items-center gap-1 flex-1 max-w-[80px] transition-all
-                ${isSelected ? 'opacity-100' : 'opacity-80 hover:opacity-100'}
-              `}
-            >
-              <span className="text-sm font-bold text-brand-slate-900">{item.value}</span>
-              <div 
-                className={`
-                  w-full rounded-t-lg transition-all
-                  ${isSelected ? 'bg-brand-cyan' : 'bg-brand-cyan/70 hover:bg-brand-cyan'}
-                `}
-                style={{ height: barHeight }}
-              />
-              <span className="text-xs text-brand-grey-400 truncate w-full text-center mt-1">
-                {item.name.split(' ')[0]}
-              </span>
-              <span className="text-xs text-brand-grey-400">
-                ({item.count} req{item.count !== 1 ? 's' : ''})
-              </span>
-            </button>
-          );
-        })}
+    <div className="relative pt-6">
+      {/* Y-axis labels */}
+      <div className="absolute left-0 top-6 bottom-8 w-8 flex flex-col justify-between text-xs text-brand-grey-400">
+        <span>{maxValue}</span>
+        <span>{Math.round(maxValue / 2)}</span>
+        <span>0</span>
       </div>
       
-      {/* Target line */}
-      <div 
-        className="absolute left-0 right-0 border-t-2 border-dashed border-red-500 pointer-events-none"
-        style={{ bottom: (targetLine / maxValue) * chartHeight + 40 }}
-      >
-        <span className="absolute -top-5 right-0 text-xs text-red-500 font-medium">
-          Target: {targetLine} FTEs
-        </span>
+      {/* Chart area */}
+      <div className="ml-10 relative" style={{ height: chartHeight }}>
+        {/* Target line */}
+        <div 
+          className="absolute left-0 right-0 border-t-2 border-dashed border-red-400 z-10"
+          style={{ bottom: `${(targetLine / maxValue) * 100}%` }}
+        >
+          <span className="absolute -top-5 right-0 text-xs text-red-500 font-medium bg-white px-1">
+            Target: {targetLine}
+          </span>
+        </div>
+        
+        {/* Bars */}
+        <div className="flex items-end justify-around gap-3 h-full">
+          {data.map(item => {
+            const barHeight = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+            const isSelected = selectedId === item.id;
+            
+            return (
+              <button
+                key={item.id}
+                onClick={() => onBarClick(isSelected ? null : item.id)}
+                className="flex flex-col items-center flex-1 max-w-[100px] h-full justify-end"
+              >
+                <span className="text-sm font-bold text-brand-slate-900 mb-1">{item.value}</span>
+                <div 
+                  className={`
+                    w-full rounded-t-lg transition-all min-h-[4px]
+                    ${isSelected ? 'bg-brand-cyan' : 'bg-brand-cyan/70 hover:bg-brand-cyan'}
+                  `}
+                  style={{ height: `${barHeight}%` }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      
+      {/* X-axis labels */}
+      <div className="ml-10 flex justify-around gap-3 mt-2">
+        {data.map(item => (
+          <div key={item.id} className="flex-1 max-w-[100px] text-center">
+            <p className="text-xs text-brand-slate-700 truncate">{item.name.split(' ')[0]}</p>
+            <p className="text-xs text-brand-grey-400">({item.count} req{item.count !== 1 ? 's' : ''})</p>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -412,7 +412,7 @@ export function CandidatesPage() {
               placeholder="5"
             />
             <Input
-              label="Minimum Salary (£)"
+              label="Minimum Salary Expected (£)"
               type="number"
               value={formData.minimum_salary}
               onChange={(e) => handleFormChange('minimum_salary', e.target.value)}
