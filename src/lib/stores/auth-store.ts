@@ -37,33 +37,33 @@ export const useAuthStore = create<AuthState>()(
           const { data: { session } } = await supabase.auth.getSession();
           
           if (session?.user) {
-            // Fetch user profile from our users table
+            // First try to fetch existing user profile
             const { data: profile, error } = await supabase
               .from('users')
               .select('*')
-              .eq('id', session.user.id)
-              .single();
+              .eq('email', session.user.email)
+              .maybeSingle();
             
-            if (error && error.code !== 'PGRST116') {
+            if (error) {
               console.error('Error fetching user profile:', error);
             }
             
             if (profile) {
+              // User exists in our table
               set({ 
                 user: profile, 
                 isAuthenticated: true,
                 isLoading: false 
               });
             } else {
-              // User exists in auth but not in our users table
-              // This happens on first login - we should create the profile
-              const newProfile: Partial<User> = {
+              // User doesn't exist in our users table - create one
+              const newProfile = {
                 id: session.user.id,
                 email: session.user.email || '',
                 full_name: session.user.user_metadata?.full_name || 
                            session.user.user_metadata?.name ||
                            session.user.email?.split('@')[0] || 'Unknown',
-                role: 'recruiter', // Default role
+                role: 'recruiter' as const,
                 avatar_url: session.user.user_metadata?.avatar_url || null,
                 is_active: true,
               };
@@ -76,7 +76,12 @@ export const useAuthStore = create<AuthState>()(
               
               if (createError) {
                 console.error('Error creating user profile:', createError);
-                set({ user: null, isAuthenticated: false, isLoading: false });
+                // Still allow login even if profile creation fails
+                set({ 
+                  user: newProfile as User, 
+                  isAuthenticated: true,
+                  isLoading: false 
+                });
               } else {
                 set({ 
                   user: createdProfile, 

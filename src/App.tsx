@@ -21,36 +21,12 @@ import { LoadingOverlay } from '@/components/ui';
 import type { User } from '@/types';
 
 function App() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
 
   useEffect(() => {
-    // Check for test user in localStorage
-    const storedUser = localStorage.getItem('test-user');
-    if (storedUser) {
-      try {
-        const user: User = JSON.parse(storedUser);
-        useAuthStore.setState({
-          user,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      } catch {
-        // Invalid stored user, clear it
-        localStorage.removeItem('test-user');
-        useAuthStore.setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-      }
-    } else {
-      useAuthStore.setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
-    }
-  }, []);
+    // Check for existing Supabase session
+    checkAuth();
+  }, [checkAuth]);
 
   if (isLoading) {
     return <LoadingOverlay />;
