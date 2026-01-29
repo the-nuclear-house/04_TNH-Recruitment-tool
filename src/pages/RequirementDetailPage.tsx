@@ -11,6 +11,9 @@ import {
   Shield,
   Briefcase,
   Trash2,
+  Plus,
+  UserPlus,
+  X,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -22,12 +25,15 @@ import {
   EmptyState,
   Select,
   ConfirmDialog,
+  Modal,
+  Avatar,
+  Input,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, type DbApplication, type DbCandidate } from '@/lib/services';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
@@ -74,6 +80,17 @@ export function RequirementDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Applications (linked candidates)
+  const [applications, setApplications] = useState<DbApplication[]>([]);
+  const [allCandidates, setAllCandidates] = useState<DbCandidate[]>([]);
+  
+  // Add candidate modal
+  const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
+  const [selectedCandidateId, setSelectedCandidateId] = useState('');
+  const [applicationNotes, setApplicationNotes] = useState('');
+  const [isAddingCandidate, setIsAddingCandidate] = useState(false);
+  const [candidateSearch, setCandidateSearch] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -84,12 +101,17 @@ export function RequirementDetailPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [reqData, usersData] = await Promise.all([
+      const [reqData, usersData, appsData, candidatesData] = await Promise.all([
         requirementsService.getById(id!),
         usersService.getAll(),
+        applicationsService.getByRequirement(id!),
+        candidatesService.getAll(),
       ]);
       
       setRequirement(reqData);
+      setApplications(appsData);
+      setAllCandidates(candidatesData);
+      
       if (reqData?.manager_id) {
         const mgr = usersData.find(u => u.id === reqData.manager_id);
         setManager(mgr);
@@ -132,10 +154,66 @@ export function RequirementDetailPage() {
     }
   };
 
+  const handleAddCandidate = async () => {
+    if (!selectedCandidateId || !user) return;
+    
+    setIsAddingCandidate(true);
+    try {
+      await applicationsService.create({
+        candidate_id: selectedCandidateId,
+        requirement_id: id!,
+        notes: applicationNotes || undefined,
+        created_by: user.id,
+      });
+      
+      // Reload applications
+      const appsData = await applicationsService.getByRequirement(id!);
+      setApplications(appsData);
+      
+      setIsAddCandidateModalOpen(false);
+      setSelectedCandidateId('');
+      setApplicationNotes('');
+      setCandidateSearch('');
+      toast.success('Candidate Added', 'Candidate has been linked to this requirement');
+    } catch (error: any) {
+      console.error('Error adding candidate:', error);
+      if (error.code === '23505') {
+        toast.error('Already Linked', 'This candidate is already linked to this requirement');
+      } else {
+        toast.error('Error', 'Failed to add candidate');
+      }
+    } finally {
+      setIsAddingCandidate(false);
+    }
+  };
+
+  const handleRemoveCandidate = async (applicationId: string) => {
+    try {
+      await applicationsService.delete(applicationId);
+      setApplications(applications.filter(a => a.id !== applicationId));
+      toast.success('Candidate Removed', 'Candidate has been unlinked from this requirement');
+    } catch (error) {
+      console.error('Error removing candidate:', error);
+      toast.error('Error', 'Failed to remove candidate');
+    }
+  };
+
+  // Filter candidates not already linked
+  const linkedCandidateIds = applications.map(a => a.candidate_id);
+  const availableCandidates = allCandidates.filter(c => !linkedCandidateIds.includes(c.id));
+  
+  // Filter by search
+  const filteredAvailableCandidates = candidateSearch
+    ? availableCandidates.filter(c => 
+        `${c.first_name} ${c.last_name}`.toLowerCase().includes(candidateSearch.toLowerCase()) ||
+        c.email.toLowerCase().includes(candidateSearch.toLowerCase())
+      )
+    : availableCandidates;
+
   // Check if current user can edit this requirement
   const canEditThisRequirement = 
     permissions.isAdmin || 
-    requirement?.created_by === user?.id || 
+    requirement?.created_by === user?.id ||
     requirement?.manager_id === user?.id;
 
   if (isLoading) {
@@ -352,6 +430,83 @@ export function RequirementDetailPage() {
           </Card>
         )}
 
+        {/* Linked Candidates */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Linked Candidates ({applications.length})</CardTitle>
+            {canEditThisRequirement && (
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<UserPlus className="h-4 w-4" />}
+                onClick={() => setIsAddCandidateModalOpen(true)}
+              >
+                Add Candidate
+              </Button>
+            )}
+          </CardHeader>
+          
+          {applications.length === 0 ? (
+            <div className="text-center py-8">
+              <Users className="h-12 w-12 text-brand-grey-300 mx-auto mb-3" />
+              <p className="text-brand-grey-400">No candidates linked to this requirement yet</p>
+              {canEditThisRequirement && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setIsAddCandidateModalOpen(true)}
+                >
+                  Add First Candidate
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {applications.map((app) => (
+                <div 
+                  key={app.id}
+                  className="flex items-center justify-between p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan transition-colors"
+                >
+                  <div 
+                    className="flex items-center gap-3 flex-1 cursor-pointer"
+                    onClick={() => navigate(`/candidates/${app.candidate_id}`)}
+                  >
+                    <Avatar 
+                      name={`${app.candidate?.first_name} ${app.candidate?.last_name}`}
+                      size="sm"
+                    />
+                    <div>
+                      <p className="font-medium text-brand-slate-900">
+                        {app.candidate?.first_name} {app.candidate?.last_name}
+                      </p>
+                      <p className="text-sm text-brand-grey-400">{app.candidate?.email}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <Badge variant={app.status === 'applied' ? 'default' : 'success'}>
+                      {app.status.replace('_', ' ')}
+                    </Badge>
+                    <span className="text-xs text-brand-grey-400">
+                      Added {formatDate(app.created_at)}
+                    </span>
+                    {canEditThisRequirement && (
+                      <button
+                        onClick={() => handleRemoveCandidate(app.id)}
+                        className="p-1 text-brand-grey-400 hover:text-red-500 rounded transition-colors"
+                        title="Remove candidate"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {/* Description */}
         {requirement.description && (
           <Card>
@@ -364,6 +519,96 @@ export function RequirementDetailPage() {
           </Card>
         )}
       </div>
+
+      {/* Add Candidate Modal */}
+      <Modal
+        isOpen={isAddCandidateModalOpen}
+        onClose={() => {
+          setIsAddCandidateModalOpen(false);
+          setSelectedCandidateId('');
+          setApplicationNotes('');
+          setCandidateSearch('');
+        }}
+        title="Add Candidate to Requirement"
+        description={`Link a candidate to ${requirement.customer}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <Input
+            placeholder="Search candidates by name or email..."
+            value={candidateSearch}
+            onChange={(e) => setCandidateSearch(e.target.value)}
+            isSearch
+          />
+          
+          <div className="max-h-64 overflow-y-auto border border-brand-grey-200 rounded-lg">
+            {filteredAvailableCandidates.length === 0 ? (
+              <p className="text-center py-4 text-brand-grey-400 text-sm">
+                {candidateSearch ? 'No matching candidates found' : 'No available candidates'}
+              </p>
+            ) : (
+              filteredAvailableCandidates.map((candidate) => (
+                <div
+                  key={candidate.id}
+                  className={`flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-brand-grey-100 last:border-b-0 ${
+                    selectedCandidateId === candidate.id 
+                      ? 'bg-brand-cyan/10 border-l-2 border-l-brand-cyan' 
+                      : 'hover:bg-brand-grey-50'
+                  }`}
+                  onClick={() => setSelectedCandidateId(candidate.id)}
+                >
+                  <Avatar name={`${candidate.first_name} ${candidate.last_name}`} size="sm" />
+                  <div className="flex-1">
+                    <p className="font-medium text-brand-slate-900">
+                      {candidate.first_name} {candidate.last_name}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">{candidate.email}</p>
+                  </div>
+                  {candidate.skills && candidate.skills.length > 0 && (
+                    <div className="flex gap-1">
+                      {candidate.skills.slice(0, 2).map((skill) => (
+                        <Badge key={skill} variant="cyan" className="text-xs">{skill}</Badge>
+                      ))}
+                      {candidate.skills.length > 2 && (
+                        <Badge variant="default" className="text-xs">+{candidate.skills.length - 2}</Badge>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <Input
+            label="Notes (optional)"
+            placeholder="Why is this candidate a good fit?"
+            value={applicationNotes}
+            onChange={(e) => setApplicationNotes(e.target.value)}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                setIsAddCandidateModalOpen(false);
+                setSelectedCandidateId('');
+                setApplicationNotes('');
+                setCandidateSearch('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleAddCandidate}
+              isLoading={isAddingCandidate}
+              disabled={!selectedCandidateId}
+            >
+              Add Candidate
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

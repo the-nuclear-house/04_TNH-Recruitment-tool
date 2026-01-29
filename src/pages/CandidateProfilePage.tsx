@@ -1029,7 +1029,7 @@ export function CandidateProfilePage() {
                             minute: '2-digit',
                           })}
                         </span>
-                        {comment.user_id === user?.id && (
+                        {(comment.user_id === user?.id || permissions.isAdmin) && (
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => {

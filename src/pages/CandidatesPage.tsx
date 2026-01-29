@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal, X, Upload, FileText } from 'lucide-react';
+import { Plus, X, Upload, FileText } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -262,7 +262,6 @@ export function CandidatesPage() {
                   <th>Min Salary</th>
                   <th>Status</th>
                   <th>Added</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -312,15 +311,6 @@ export function CandidatesPage() {
                       {formatDate(candidate.created_at)}
                     </td>
                     <td>
-                      <button 
-                        className="p-1 rounded hover:bg-brand-grey-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // TODO: Open actions menu
-                        }}
-                      >
-                        <MoreHorizontal className="h-4 w-4 text-brand-grey-400" />
-                      </button>
                     </td>
                   </tr>
                 ))}

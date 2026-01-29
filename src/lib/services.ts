@@ -549,3 +549,104 @@ export const commentsService = {
     if (error) throw error;
   },
 };
+
+// ============ APPLICATIONS SERVICE ============
+// Links candidates to requirements
+
+export interface DbApplication {
+  id: string;
+  candidate_id: string;
+  requirement_id: string;
+  status: string;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  candidate?: DbCandidate;
+  requirement?: DbRequirement;
+}
+
+export interface CreateApplicationInput {
+  candidate_id: string;
+  requirement_id: string;
+  status?: string;
+  notes?: string;
+  created_by: string;
+}
+
+export const applicationsService = {
+  // Get all applications for a requirement
+  async getByRequirement(requirementId: string): Promise<DbApplication[]> {
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        candidate:candidates(*)
+      `)
+      .eq('requirement_id', requirementId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get all applications for a candidate
+  async getByCandidate(candidateId: string): Promise<DbApplication[]> {
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        requirement:requirements(*)
+      `)
+      .eq('candidate_id', candidateId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Create a new application (link candidate to requirement)
+  async create(input: CreateApplicationInput): Promise<DbApplication> {
+    const { data, error } = await supabase
+      .from('applications')
+      .insert(input)
+      .select(`
+        *,
+        candidate:candidates(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update application status
+  async updateStatus(id: string, status: string, notes?: string): Promise<DbApplication> {
+    const updateData: any = { status, updated_at: new Date().toISOString() };
+    if (notes !== undefined) updateData.notes = notes;
+
+    const { data, error } = await supabase
+      .from('applications')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        candidate:candidates(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Remove candidate from requirement
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('applications')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
