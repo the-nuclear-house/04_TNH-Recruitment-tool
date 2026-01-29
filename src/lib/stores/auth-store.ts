@@ -32,7 +32,11 @@ export const useAuthStore = create<AuthState>()(
 
       checkAuth: async () => {
         try {
-          set({ isLoading: true });
+          // Only show loading if we don't have a user yet (initial load)
+          const currentState = useAuthStore.getState();
+          if (!currentState.user) {
+            set({ isLoading: true });
+          }
           
           const { data: { session } } = await supabase.auth.getSession();
           
@@ -142,10 +146,15 @@ export const useAuthStore = create<AuthState>()(
 );
 
 // Listen for auth state changes
+// Note: We only react to actual sign-in/sign-out events, not token refreshes
+// This prevents modals from closing when switching tabs
 supabase.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'SIGNED_IN' && session) {
+  // Only handle actual auth events, ignore TOKEN_REFRESHED and other events
+  if (event === 'SIGNED_IN' && session && !useAuthStore.getState().isAuthenticated) {
+    // Only check auth if we weren't already authenticated
     useAuthStore.getState().checkAuth();
   } else if (event === 'SIGNED_OUT') {
     useAuthStore.getState().setUser(null);
   }
+  // Ignore TOKEN_REFRESHED, INITIAL_SESSION, etc. to prevent re-renders
 });
