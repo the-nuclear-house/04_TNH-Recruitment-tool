@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Download, MoreHorizontal } from 'lucide-react';
+import { Plus, Download, MoreHorizontal, X } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -11,9 +11,12 @@ import {
   Avatar,
   EmptyState,
   Select,
+  Modal,
+  Textarea,
 } from '@/components/ui';
 import { formatDate, statusLabels, formatCurrency } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useToast } from '@/lib/stores/ui-store';
 import type { Candidate, RightToWork, SecurityVetting, CandidateStatus } from '@/types';
 
 // Mock data - sorted by created_at descending (newest first)
@@ -114,7 +117,53 @@ export function CandidatesPage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const permissions = usePermissions();
+  const toast = useToast();
+
+  // Form state
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    location: '',
+    current_role: '',
+    current_company: '',
+    years_experience: '',
+    skills: '',
+    summary: '',
+  });
+
+  const handleFormChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.first_name || !formData.last_name || !formData.email) {
+      toast.error('Validation Error', 'Please fill in the required fields');
+      return;
+    }
+    setIsSubmitting(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast.success('Candidate Added', `${formData.first_name} ${formData.last_name} has been added to the database`);
+    setIsModalOpen(false);
+    setIsSubmitting(false);
+    setFormData({
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone: '',
+      location: '',
+      current_role: '',
+      current_company: '',
+      years_experience: '',
+      skills: '',
+      summary: '',
+    });
+  };
 
   const filteredCandidates = mockCandidates.filter(c => {
     const matchesSearch = !searchQuery || 
@@ -134,7 +183,7 @@ export function CandidatesPage() {
             <Button 
               variant="success"
               leftIcon={<Plus className="h-4 w-4" />}
-              onClick={() => navigate('/candidates/new')}
+              onClick={() => setIsModalOpen(true)}
             >
               Add Candidate
             </Button>
@@ -257,6 +306,103 @@ export function CandidatesPage() {
           </div>
         )}
       </div>
+
+      {/* Add Candidate Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Add New Candidate"
+        description="Enter the candidate's basic information"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="First Name *"
+              value={formData.first_name}
+              onChange={(e) => handleFormChange('first_name', e.target.value)}
+              placeholder="John"
+            />
+            <Input
+              label="Last Name *"
+              value={formData.last_name}
+              onChange={(e) => handleFormChange('last_name', e.target.value)}
+              placeholder="Smith"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Email *"
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleFormChange('email', e.target.value)}
+              placeholder="john.smith@email.com"
+            />
+            <Input
+              label="Phone"
+              value={formData.phone}
+              onChange={(e) => handleFormChange('phone', e.target.value)}
+              placeholder="+44 7700 900000"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Current Role"
+              value={formData.current_role}
+              onChange={(e) => handleFormChange('current_role', e.target.value)}
+              placeholder="Senior Software Engineer"
+            />
+            <Input
+              label="Current Company"
+              value={formData.current_company}
+              onChange={(e) => handleFormChange('current_company', e.target.value)}
+              placeholder="TechCorp Ltd"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Location"
+              value={formData.location}
+              onChange={(e) => handleFormChange('location', e.target.value)}
+              placeholder="London"
+            />
+            <Input
+              label="Years of Experience"
+              type="number"
+              value={formData.years_experience}
+              onChange={(e) => handleFormChange('years_experience', e.target.value)}
+              placeholder="5"
+            />
+          </div>
+
+          <Input
+            label="Skills (comma-separated)"
+            value={formData.skills}
+            onChange={(e) => handleFormChange('skills', e.target.value)}
+            placeholder="Python, AWS, React, TypeScript"
+          />
+
+          <Textarea
+            label="Summary"
+            value={formData.summary}
+            onChange={(e) => handleFormChange('summary', e.target.value)}
+            placeholder="Brief overview of the candidate's background and experience..."
+            rows={3}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" onClick={handleSubmit} isLoading={isSubmitting}>
+              Add Candidate
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

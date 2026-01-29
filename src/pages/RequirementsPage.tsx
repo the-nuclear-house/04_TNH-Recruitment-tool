@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Building2, Calendar, BarChart3, LayoutGrid } from 'lucide-react';
+import { Plus, Users, Building2, Calendar, BarChart3, LayoutGrid, X } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
   Card,
@@ -12,9 +12,12 @@ import {
   Avatar,
   EmptyState,
   Select,
+  Modal,
+  Textarea,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useToast } from '@/lib/stores/ui-store';
 
 // Types
 type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';
@@ -373,12 +376,125 @@ function Treemap({
 export function RequirementsPage() {
   const navigate = useNavigate();
   const permissions = usePermissions();
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<RequirementStatus | 'all'>('all');
   const [disciplineFilter, setDisciplineFilter] = useState('');
   const [selectedManager, setSelectedManager] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [dashboardView, setDashboardView] = useState<'manager' | 'customer'>('manager');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
+
+  // Form state
+  const [formData, setFormData] = useState({
+    customer: '',
+    industry: '',
+    location: '',
+    fte_count: '1',
+    day_rate_min: '',
+    day_rate_max: '',
+    description: '',
+    status: 'opportunity',
+    clearance_required: 'none',
+    engineering_discipline: 'software',
+    manager_id: '',
+  });
+
+  const handleFormChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddSkill = () => {
+    if (skillInput.trim()) {
+      const newSkills = skillInput.split(',').map(s => s.trim()).filter(s => s && !skills.includes(s));
+      setSkills([...skills, ...newSkills]);
+      setSkillInput('');
+    }
+  };
+
+  const handleRemoveSkill = (skill: string) => {
+    setSkills(skills.filter(s => s !== skill));
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.customer || !formData.manager_id) {
+      toast.error('Validation Error', 'Please fill in customer name and assign a manager');
+      return;
+    }
+    setIsSubmitting(true);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast.success('Requirement Created', `${formData.customer} requirement has been created`);
+    setIsModalOpen(false);
+    setIsSubmitting(false);
+    setFormData({
+      customer: '',
+      industry: '',
+      location: '',
+      fte_count: '1',
+      day_rate_min: '',
+      day_rate_max: '',
+      description: '',
+      status: 'opportunity',
+      clearance_required: 'none',
+      engineering_discipline: 'software',
+      manager_id: '',
+    });
+    setSkills([]);
+  };
+
+  const industryOptions = [
+    { value: '', label: 'Select Industry' },
+    { value: 'defence', label: 'Defence' },
+    { value: 'finance', label: 'Finance' },
+    { value: 'healthcare', label: 'Healthcare' },
+    { value: 'government', label: 'Government' },
+    { value: 'aerospace', label: 'Aerospace' },
+    { value: 'nuclear', label: 'Nuclear' },
+    { value: 'telecoms', label: 'Telecoms' },
+    { value: 'energy', label: 'Energy' },
+    { value: 'transport', label: 'Transport' },
+    { value: 'technology', label: 'Technology' },
+  ];
+
+  const statusOptions = [
+    { value: 'opportunity', label: 'Opportunity' },
+    { value: 'active', label: 'Active' },
+  ];
+
+  const clearanceOptions = [
+    { value: 'none', label: 'None Required' },
+    { value: 'bpss', label: 'BPSS' },
+    { value: 'ctc', label: 'CTC' },
+    { value: 'sc', label: 'SC' },
+    { value: 'esc', label: 'eSC' },
+    { value: 'dv', label: 'DV' },
+    { value: 'edv', label: 'eDV' },
+    { value: 'doe_q', label: 'DOE Q (US)' },
+    { value: 'doe_l', label: 'DOE L (US)' },
+  ];
+
+  const engineeringOptions = [
+    { value: 'software', label: 'Software Engineering' },
+    { value: 'electrical', label: 'Electrical Engineering' },
+    { value: 'mechanical', label: 'Mechanical Engineering' },
+    { value: 'civil', label: 'Civil Engineering' },
+    { value: 'systems', label: 'Systems Engineering' },
+    { value: 'nuclear', label: 'Nuclear Engineering' },
+    { value: 'chemical', label: 'Chemical Engineering' },
+    { value: 'structural', label: 'Structural Engineering' },
+    { value: 'other', label: 'Other' },
+  ];
+
+  const managerOptions = [
+    { value: '', label: 'Select Manager' },
+    { value: 'user-manager-001', label: 'James Wilson' },
+    { value: 'user-manager-002', label: 'Rebecca Taylor' },
+    { value: 'user-manager-003', label: 'David Kumar' },
+    { value: 'user-director-001', label: 'Sarah Thompson' },
+  ];
 
   // Calculate FTE counts per manager for active/opportunity requirements
   const managerFTEData = mockManagers.map(manager => {
@@ -440,7 +556,7 @@ export function RequirementsPage() {
             <Button
               variant="success"
               leftIcon={<Plus className="h-4 w-4" />}
-              onClick={() => navigate('/requirements/new')}
+              onClick={() => setIsModalOpen(true)}
             >
               New Requirement
             </Button>
@@ -670,6 +786,149 @@ export function RequirementsPage() {
           </div>
         )}
       </div>
+
+      {/* New Requirement Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="New Requirement"
+        description="Create a new customer requirement"
+        size="xl"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Customer Name *"
+              value={formData.customer}
+              onChange={(e) => handleFormChange('customer', e.target.value)}
+              placeholder="e.g., BAE Systems"
+            />
+            <Select
+              label="Industry"
+              options={industryOptions}
+              value={formData.industry}
+              onChange={(e) => handleFormChange('industry', e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <Input
+              label="FTE Count *"
+              type="number"
+              min="1"
+              value={formData.fte_count}
+              onChange={(e) => handleFormChange('fte_count', e.target.value)}
+            />
+            <Input
+              label="Day Rate Min (£)"
+              type="number"
+              value={formData.day_rate_min}
+              onChange={(e) => handleFormChange('day_rate_min', e.target.value)}
+              placeholder="450"
+            />
+            <Input
+              label="Day Rate Max (£)"
+              type="number"
+              value={formData.day_rate_max}
+              onChange={(e) => handleFormChange('day_rate_max', e.target.value)}
+              placeholder="550"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Location"
+              value={formData.location}
+              onChange={(e) => handleFormChange('location', e.target.value)}
+              placeholder="e.g., London, Remote"
+            />
+            <Select
+              label="Status"
+              options={statusOptions}
+              value={formData.status}
+              onChange={(e) => handleFormChange('status', e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Engineering Discipline *"
+              options={engineeringOptions}
+              value={formData.engineering_discipline}
+              onChange={(e) => handleFormChange('engineering_discipline', e.target.value)}
+            />
+            <Select
+              label="Clearance Required"
+              options={clearanceOptions}
+              value={formData.clearance_required}
+              onChange={(e) => handleFormChange('clearance_required', e.target.value)}
+            />
+          </div>
+
+          <Select
+            label="Assigned Manager *"
+            options={managerOptions}
+            value={formData.manager_id}
+            onChange={(e) => handleFormChange('manager_id', e.target.value)}
+          />
+
+          {/* Skills */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+              Required Skills
+            </label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Add skills (comma-separated)..."
+                value={skillInput}
+                onChange={(e) => setSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddSkill();
+                  }
+                }}
+              />
+              <Button type="button" variant="secondary" onClick={handleAddSkill}>
+                Add
+              </Button>
+            </div>
+            {skills.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {skills.map(skill => (
+                  <Badge key={skill} variant="cyan">
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSkill(skill)}
+                      className="ml-1.5 hover:text-cyan-900"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Textarea
+            label="Description"
+            value={formData.description}
+            onChange={(e) => handleFormChange('description', e.target.value)}
+            placeholder="Describe the requirement, project details, team structure..."
+            rows={3}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" onClick={handleSubmit} isLoading={isSubmitting}>
+              Create Requirement
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
