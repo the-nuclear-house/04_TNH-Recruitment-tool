@@ -218,11 +218,11 @@ const mockRequirements: Requirement[] = [
 ];
 
 const statusConfig: Record<RequirementStatus, { label: string; colour: string; bgColour: string; borderColour: string; cardStyle: string }> = {
-  active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100', borderColour: 'border-l-green-500', cardStyle: 'bg-green-50' },
+  active: { label: 'Active', colour: 'text-white', bgColour: 'bg-green-600', borderColour: 'border-l-green-600', cardStyle: 'bg-green-100 border-green-300' },
   opportunity: { label: 'Opportunity', colour: 'text-amber-700', bgColour: 'bg-amber-100', borderColour: 'border-l-amber-500', cardStyle: '' },
-  won: { label: 'Won', colour: 'text-green-600', bgColour: 'bg-green-50', borderColour: 'border-l-green-300', cardStyle: '' },
-  lost: { label: 'Lost', colour: 'text-red-700', bgColour: 'bg-red-100', borderColour: 'border-l-red-500', cardStyle: '' },
-  cancelled: { label: 'Cancelled', colour: 'text-slate-500', bgColour: 'bg-slate-100', borderColour: 'border-l-slate-400', cardStyle: '' },
+  won: { label: 'Won', colour: 'text-green-600', bgColour: 'bg-green-50', borderColour: 'border-l-green-300', cardStyle: 'opacity-75' },
+  lost: { label: 'Lost', colour: 'text-red-700', bgColour: 'bg-red-100', borderColour: 'border-l-red-500', cardStyle: 'opacity-60' },
+  cancelled: { label: 'Cancelled', colour: 'text-slate-500', bgColour: 'bg-slate-100', borderColour: 'border-l-slate-400', cardStyle: 'opacity-60' },
 };
 
 const clearanceLabels: Record<SecurityClearance, string> = {
@@ -394,8 +394,7 @@ export function RequirementsPage() {
     industry: '',
     location: '',
     fte_count: '1',
-    day_rate_min: '',
-    day_rate_max: '',
+    max_day_rate: '',
     description: '',
     status: 'opportunity',
     clearance_required: 'none',
@@ -407,10 +406,25 @@ export function RequirementsPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleAddSkill = () => {
-    if (skillInput.trim()) {
-      const newSkills = skillInput.split(',').map(s => s.trim()).filter(s => s && !skills.includes(s));
-      setSkills([...skills, ...newSkills]);
+  const handleSkillInputChange = (value: string) => {
+    if (value.includes(',')) {
+      const parts = value.split(',').map(s => s.trim()).filter(s => s);
+      const newSkills = parts.filter(s => !skills.includes(s));
+      if (newSkills.length > 0) {
+        setSkills([...skills, ...newSkills]);
+      }
+      setSkillInput('');
+    } else {
+      setSkillInput(value);
+    }
+  };
+
+  const handleSkillKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && skillInput.trim()) {
+      e.preventDefault();
+      if (!skills.includes(skillInput.trim())) {
+        setSkills([...skills, skillInput.trim()]);
+      }
       setSkillInput('');
     }
   };
@@ -434,8 +448,7 @@ export function RequirementsPage() {
       industry: '',
       location: '',
       fte_count: '1',
-      day_rate_min: '',
-      day_rate_max: '',
+      max_day_rate: '',
       description: '',
       status: 'opportunity',
       clearance_required: 'none',
@@ -567,37 +580,36 @@ export function RequirementsPage() {
       <div className="p-6 space-y-6">
         {/* Dashboard Card */}
         <Card>
-          <CardHeader>
-            <CardTitle>FTEs Overview</CardTitle>
-            <span className="text-sm text-brand-grey-400">
-              Active & Opportunity only
-            </span>
-          </CardHeader>
-
-          {/* Toggle buttons - below title */}
-          <div className="flex rounded-lg border border-brand-grey-200 overflow-hidden w-fit mb-6">
-            <button
-              onClick={() => { setDashboardView('manager'); setSelectedCustomer(null); }}
-              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
-                dashboardView === 'manager' 
-                  ? 'bg-brand-cyan text-white' 
-                  : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
-              }`}
-            >
-              <BarChart3 className="h-4 w-4" />
-              By Manager
-            </button>
-            <button
-              onClick={() => { setDashboardView('customer'); setSelectedManager(null); }}
-              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
-                dashboardView === 'customer' 
-                  ? 'bg-brand-cyan text-white' 
-                  : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
-              }`}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              By Customer
-            </button>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-brand-slate-900">FTEs Overview</h3>
+              <p className="text-sm text-brand-grey-400">Active & Opportunity only</p>
+            </div>
+            {/* Toggle buttons */}
+            <div className="flex rounded-lg border border-brand-grey-200 overflow-hidden">
+              <button
+                onClick={() => { setDashboardView('manager'); setSelectedCustomer(null); }}
+                className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                  dashboardView === 'manager' 
+                    ? 'bg-brand-cyan text-white' 
+                    : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
+                }`}
+              >
+                <BarChart3 className="h-4 w-4" />
+                By Manager
+              </button>
+              <button
+                onClick={() => { setDashboardView('customer'); setSelectedManager(null); }}
+                className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                  dashboardView === 'customer' 
+                    ? 'bg-brand-cyan text-white' 
+                    : 'bg-white text-brand-grey-400 hover:text-brand-slate-700'
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                By Customer
+              </button>
+            </div>
           </div>
 
           {dashboardView === 'manager' ? (
@@ -820,37 +832,21 @@ export function RequirementsPage() {
               onChange={(e) => handleFormChange('fte_count', e.target.value)}
             />
             <Input
-              label="Day Rate Min (£)"
+              label="Max Day Rate (£)"
               type="number"
-              value={formData.day_rate_min}
-              onChange={(e) => handleFormChange('day_rate_min', e.target.value)}
-              placeholder="450"
-            />
-            <Input
-              label="Day Rate Max (£)"
-              type="number"
-              value={formData.day_rate_max}
-              onChange={(e) => handleFormChange('day_rate_max', e.target.value)}
+              value={formData.max_day_rate}
+              onChange={(e) => handleFormChange('max_day_rate', e.target.value)}
               placeholder="550"
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <Input
               label="Location"
               value={formData.location}
               onChange={(e) => handleFormChange('location', e.target.value)}
               placeholder="e.g., London, Remote"
             />
-            <Select
-              label="Status"
-              options={statusOptions}
-              value={formData.status}
-              onChange={(e) => handleFormChange('status', e.target.value)}
-            />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Select
               label="Engineering Discipline *"
               options={engineeringOptions}
@@ -862,6 +858,12 @@ export function RequirementsPage() {
               options={clearanceOptions}
               value={formData.clearance_required}
               onChange={(e) => handleFormChange('clearance_required', e.target.value)}
+            />
+            <Select
+              label="Status"
+              options={statusOptions}
+              value={formData.status}
+              onChange={(e) => handleFormChange('status', e.target.value)}
             />
           </div>
 
@@ -877,24 +879,14 @@ export function RequirementsPage() {
             <label className="block text-sm font-medium text-brand-slate-700 mb-1">
               Required Skills
             </label>
-            <div className="flex gap-2 mb-2">
-              <Input
-                placeholder="Add skills (comma-separated)..."
-                value={skillInput}
-                onChange={(e) => setSkillInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSkill();
-                  }
-                }}
-              />
-              <Button type="button" variant="secondary" onClick={handleAddSkill}>
-                Add
-              </Button>
-            </div>
+            <Input
+              placeholder="Type skill, press Enter or comma to add..."
+              value={skillInput}
+              onChange={(e) => handleSkillInputChange(e.target.value)}
+              onKeyDown={handleSkillKeyDown}
+            />
             {skills.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 {skills.map(skill => (
                   <Badge key={skill} variant="cyan">
                     {skill}

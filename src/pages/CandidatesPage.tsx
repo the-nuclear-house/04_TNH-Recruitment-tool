@@ -129,15 +129,64 @@ export function CandidatesPage() {
     email: '',
     phone: '',
     location: '',
-    current_role: '',
-    current_company: '',
     years_experience: '',
-    skills: '',
+    minimum_salary: '',
     summary: '',
   });
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
+  const [previousCompanies, setPreviousCompanies] = useState<string[]>([]);
+  const [companyInput, setCompanyInput] = useState('');
+  const [cvFile, setCvFile] = useState<File | null>(null);
 
   const handleFormChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSkillInputChange = (value: string) => {
+    if (value.includes(',')) {
+      const parts = value.split(',').map(s => s.trim()).filter(s => s);
+      const newSkills = parts.filter(s => !skills.includes(s));
+      if (newSkills.length > 0) {
+        setSkills([...skills, ...newSkills]);
+      }
+      setSkillInput('');
+    } else {
+      setSkillInput(value);
+    }
+  };
+
+  const handleSkillKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && skillInput.trim()) {
+      e.preventDefault();
+      if (!skills.includes(skillInput.trim())) {
+        setSkills([...skills, skillInput.trim()]);
+      }
+      setSkillInput('');
+    }
+  };
+
+  const handleCompanyInputChange = (value: string) => {
+    if (value.includes(',')) {
+      const parts = value.split(',').map(s => s.trim()).filter(s => s);
+      const newCompanies = parts.filter(s => !previousCompanies.includes(s));
+      if (newCompanies.length > 0) {
+        setPreviousCompanies([...previousCompanies, ...newCompanies]);
+      }
+      setCompanyInput('');
+    } else {
+      setCompanyInput(value);
+    }
+  };
+
+  const handleCompanyKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && companyInput.trim()) {
+      e.preventDefault();
+      if (!previousCompanies.includes(companyInput.trim())) {
+        setPreviousCompanies([...previousCompanies, companyInput.trim()]);
+      }
+      setCompanyInput('');
+    }
   };
 
   const handleSubmit = async () => {
@@ -157,12 +206,13 @@ export function CandidatesPage() {
       email: '',
       phone: '',
       location: '',
-      current_role: '',
-      current_company: '',
       years_experience: '',
-      skills: '',
+      minimum_salary: '',
       summary: '',
     });
+    setSkills([]);
+    setPreviousCompanies([]);
+    setCvFile(null);
   };
 
   const filteredCandidates = mockCandidates.filter(c => {
@@ -312,7 +362,7 @@ export function CandidatesPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Add New Candidate"
-        description="Enter the candidate's basic information"
+        description="Enter the candidate's information"
         size="lg"
       >
         <div className="space-y-4">
@@ -347,22 +397,7 @@ export function CandidatesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Current Role"
-              value={formData.current_role}
-              onChange={(e) => handleFormChange('current_role', e.target.value)}
-              placeholder="Senior Software Engineer"
-            />
-            <Input
-              label="Current Company"
-              value={formData.current_company}
-              onChange={(e) => handleFormChange('current_company', e.target.value)}
-              placeholder="TechCorp Ltd"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Input
               label="Location"
               value={formData.location}
@@ -376,14 +411,108 @@ export function CandidatesPage() {
               onChange={(e) => handleFormChange('years_experience', e.target.value)}
               placeholder="5"
             />
+            <Input
+              label="Minimum Salary (£)"
+              type="number"
+              value={formData.minimum_salary}
+              onChange={(e) => handleFormChange('minimum_salary', e.target.value)}
+              placeholder="75000"
+            />
           </div>
 
-          <Input
-            label="Skills (comma-separated)"
-            value={formData.skills}
-            onChange={(e) => handleFormChange('skills', e.target.value)}
-            placeholder="Python, AWS, React, TypeScript"
-          />
+          {/* CV Upload */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+              CV / Resume
+            </label>
+            <div className="border-2 border-dashed border-brand-grey-200 rounded-lg p-4 text-center hover:border-brand-cyan transition-colors">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(e) => setCvFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="cv-upload"
+              />
+              <label htmlFor="cv-upload" className="cursor-pointer">
+                {cvFile ? (
+                  <div className="flex items-center justify-center gap-2 text-brand-cyan">
+                    <span className="font-medium">{cvFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setCvFile(null); }}
+                      className="text-brand-grey-400 hover:text-red-500"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-brand-grey-400">
+                    <p className="font-medium">Click to upload CV</p>
+                    <p className="text-sm">PDF, DOC, DOCX (max 10MB)</p>
+                  </div>
+                )}
+              </label>
+            </div>
+          </div>
+
+          {/* Previous Companies */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+              Previous Companies
+            </label>
+            <Input
+              placeholder="Type company name, press Enter or comma to add..."
+              value={companyInput}
+              onChange={(e) => handleCompanyInputChange(e.target.value)}
+              onKeyDown={handleCompanyKeyDown}
+            />
+            {previousCompanies.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {previousCompanies.map(company => (
+                  <Badge key={company} variant="grey">
+                    {company}
+                    <button
+                      type="button"
+                      onClick={() => setPreviousCompanies(previousCompanies.filter(c => c !== company))}
+                      className="ml-1.5 hover:text-slate-900"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-brand-grey-400 mt-1">Helps with searching candidates by company history</p>
+          </div>
+
+          {/* Skills */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+              Skills
+            </label>
+            <Input
+              placeholder="Type skill, press Enter or comma to add..."
+              value={skillInput}
+              onChange={(e) => handleSkillInputChange(e.target.value)}
+              onKeyDown={handleSkillKeyDown}
+            />
+            {skills.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {skills.map(skill => (
+                  <Badge key={skill} variant="cyan">
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => setSkills(skills.filter(s => s !== skill))}
+                      className="ml-1.5 hover:text-cyan-900"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
 
           <Textarea
             label="Summary"
