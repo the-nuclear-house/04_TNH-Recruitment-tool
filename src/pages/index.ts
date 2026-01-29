@@ -1,0 +1,10 @@
+export { DashboardPage } from './DashboardPage';
+export { SearchPage } from './SearchPage';
+export { CandidatesPage } from './CandidatesPage';
+export { CandidateFormPage } from './CandidateFormPage';
+export { RequirementsPage } from './RequirementsPage';
+export { InterviewsPage } from './InterviewsPage';
+export { ContractsPage } from './ContractsPage';
+export { OrganisationPage } from './OrganisationPage';
+export { SettingsPage } from './SettingsPage';
+export { LoginPage } from './LoginPage';
