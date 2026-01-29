@@ -9,11 +9,24 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  X,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
-import { Card, CardHeader, CardTitle, Badge, Avatar, Select, EmptyState } from '@/components/ui';
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  Badge, 
+  Avatar, 
+  Select, 
+  EmptyState,
+  Modal,
+  Button,
+  Textarea,
+} from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
+import { useToast } from '@/lib/stores/ui-store';
 import { interviewsService, candidatesService, usersService } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
@@ -31,15 +44,42 @@ const outcomeConfig: Record<string, { label: string; colour: string }> = {
   cancelled: { label: 'Cancelled', colour: 'bg-slate-100 text-slate-500' },
 };
 
+const scoreOptions = [
+  { value: '', label: 'Select score' },
+  { value: '1', label: '1 - Poor' },
+  { value: '2', label: '2 - Below Average' },
+  { value: '3', label: '3 - Average' },
+  { value: '4', label: '4 - Good' },
+  { value: '5', label: '5 - Excellent' },
+];
+
 export function InterviewsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const toast = useToast();
+  
   const [interviews, setInterviews] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<Record<string, any>>({});
   const [users, setUsers] = useState<Record<string, any>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [stageFilter, setStageFilter] = useState<string>('');
   const [outcomeFilter, setOutcomeFilter] = useState<string>('');
+  
+  // Complete interview modal
+  const [selectedInterview, setSelectedInterview] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackForm, setFeedbackForm] = useState({
+    outcome: '',
+    communication_score: '',
+    professionalism_score: '',
+    enthusiasm_score: '',
+    cultural_fit_score: '',
+    technical_depth_score: '',
+    problem_solving_score: '',
+    general_comments: '',
+    recommendation: '',
+  });
 
   useEffect(() => {
     loadData();
@@ -56,7 +96,6 @@ export function InterviewsPage() {
       
       setInterviews(interviewsData);
       
-      // Create lookup maps
       const candidateMap: Record<string, any> = {};
       candidatesData.forEach(c => { candidateMap[c.id] = c; });
       setCandidates(candidateMap);
@@ -68,6 +107,54 @@ export function InterviewsPage() {
       console.error('Error loading interviews:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleOpenInterview = (interview: any) => {
+    setSelectedInterview(interview);
+    setFeedbackForm({
+      outcome: interview.outcome || '',
+      communication_score: interview.communication_score?.toString() || '',
+      professionalism_score: interview.professionalism_score?.toString() || '',
+      enthusiasm_score: interview.enthusiasm_score?.toString() || '',
+      cultural_fit_score: interview.cultural_fit_score?.toString() || '',
+      technical_depth_score: interview.technical_depth_score?.toString() || '',
+      problem_solving_score: interview.problem_solving_score?.toString() || '',
+      general_comments: interview.general_comments || '',
+      recommendation: interview.recommendation || '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!feedbackForm.outcome) {
+      toast.error('Validation Error', 'Please select an outcome (Pass/Fail)');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await interviewsService.update(selectedInterview.id, {
+        outcome: feedbackForm.outcome,
+        completed_at: new Date().toISOString(),
+        communication_score: feedbackForm.communication_score ? parseInt(feedbackForm.communication_score) : undefined,
+        professionalism_score: feedbackForm.professionalism_score ? parseInt(feedbackForm.professionalism_score) : undefined,
+        enthusiasm_score: feedbackForm.enthusiasm_score ? parseInt(feedbackForm.enthusiasm_score) : undefined,
+        cultural_fit_score: feedbackForm.cultural_fit_score ? parseInt(feedbackForm.cultural_fit_score) : undefined,
+        technical_depth_score: feedbackForm.technical_depth_score ? parseInt(feedbackForm.technical_depth_score) : undefined,
+        problem_solving_score: feedbackForm.problem_solving_score ? parseInt(feedbackForm.problem_solving_score) : undefined,
+        general_comments: feedbackForm.general_comments || undefined,
+        recommendation: feedbackForm.recommendation || undefined,
+      });
+      
+      toast.success('Interview Updated', 'Feedback has been saved');
+      setIsModalOpen(false);
+      loadData();
+    } catch (error) {
+      console.error('Error updating interview:', error);
+      toast.error('Error', 'Failed to save feedback');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -91,6 +178,9 @@ export function InterviewsPage() {
     const today = new Date();
     return date.toDateString() === today.toDateString();
   };
+
+  const selectedCandidate = selectedInterview ? candidates[selectedInterview.candidate_id] : null;
+  const selectedStageConfig = selectedInterview ? stageConfig[selectedInterview.stage as InterviewStage] : null;
 
   return (
     <div className="min-h-screen">
@@ -187,13 +277,15 @@ export function InterviewsPage() {
               const stageInfo = stageConfig[stage] || stageConfig.phone_qualification;
               const StageIcon = stageInfo.icon;
               const outcomeInfo = outcomeConfig[interview.outcome] || outcomeConfig.pending;
+              const isMyInterview = interview.interviewer_id === user?.id;
+              const canComplete = interview.outcome === 'pending';
               
               return (
                 <Card
                   key={interview.id}
                   hover
-                  className={`cursor-pointer ${interview.outcome === 'pending' && isToday(interview.scheduled_at) ? 'border-l-4 border-l-amber-500' : ''}`}
-                  onClick={() => candidate && navigate(`/candidates/${candidate.id}`)}
+                  className={`cursor-pointer ${interview.outcome === 'pending' && isToday(interview.scheduled_at) ? 'border-l-4 border-l-amber-500' : ''} ${isMyInterview ? 'ring-2 ring-brand-cyan/30' : ''}`}
+                  onClick={() => handleOpenInterview(interview)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -211,6 +303,11 @@ export function InterviewsPage() {
                           </span>
                           {interview.outcome === 'pass' && <CheckCircle className="h-4 w-4 text-green-600" />}
                           {interview.outcome === 'fail' && <XCircle className="h-4 w-4 text-red-600" />}
+                          {isMyInterview && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan">
+                              Your Interview
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-brand-grey-400">
                           {stageInfo.label} Interview
@@ -241,6 +338,141 @@ export function InterviewsPage() {
           </div>
         )}
       </div>
+
+      {/* Complete Interview Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={selectedStageConfig ? `${selectedStageConfig.label} Interview` : 'Interview'}
+        description={selectedCandidate ? `${selectedCandidate.first_name} ${selectedCandidate.last_name}` : ''}
+        size="xl"
+      >
+        <div className="space-y-6">
+          {/* Outcome */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">
+              Outcome *
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setFeedbackForm(prev => ({ ...prev, outcome: 'pass' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  feedbackForm.outcome === 'pass' 
+                    ? 'border-green-500 bg-green-50 text-green-700' 
+                    : 'border-brand-grey-200 hover:border-green-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5" />
+                Pass
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedbackForm(prev => ({ ...prev, outcome: 'fail' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  feedbackForm.outcome === 'fail' 
+                    ? 'border-red-500 bg-red-50 text-red-700' 
+                    : 'border-brand-grey-200 hover:border-red-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5" />
+                Fail
+              </button>
+            </div>
+          </div>
+
+          {/* Soft Skills Scores */}
+          <div>
+            <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Soft Skills</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                label="Communication"
+                options={scoreOptions}
+                value={feedbackForm.communication_score}
+                onChange={(e) => setFeedbackForm(prev => ({ ...prev, communication_score: e.target.value }))}
+              />
+              <Select
+                label="Professionalism"
+                options={scoreOptions}
+                value={feedbackForm.professionalism_score}
+                onChange={(e) => setFeedbackForm(prev => ({ ...prev, professionalism_score: e.target.value }))}
+              />
+              <Select
+                label="Enthusiasm"
+                options={scoreOptions}
+                value={feedbackForm.enthusiasm_score}
+                onChange={(e) => setFeedbackForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))}
+              />
+              <Select
+                label="Cultural Fit"
+                options={scoreOptions}
+                value={feedbackForm.cultural_fit_score}
+                onChange={(e) => setFeedbackForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* Technical Scores (for technical/director interviews) */}
+          {selectedInterview?.stage !== 'phone_qualification' && (
+            <div>
+              <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Technical Skills</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <Select
+                  label="Technical Depth"
+                  options={scoreOptions}
+                  value={feedbackForm.technical_depth_score}
+                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, technical_depth_score: e.target.value }))}
+                />
+                <Select
+                  label="Problem Solving"
+                  options={scoreOptions}
+                  value={feedbackForm.problem_solving_score}
+                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, problem_solving_score: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Comments */}
+          <Textarea
+            label="General Comments"
+            value={feedbackForm.general_comments}
+            onChange={(e) => setFeedbackForm(prev => ({ ...prev, general_comments: e.target.value }))}
+            placeholder="Notes from the interview..."
+            rows={3}
+          />
+
+          <Textarea
+            label="Recommendation"
+            value={feedbackForm.recommendation}
+            onChange={(e) => setFeedbackForm(prev => ({ ...prev, recommendation: e.target.value }))}
+            placeholder="Your recommendation for next steps..."
+            rows={2}
+          />
+
+          {/* Actions */}
+          <div className="flex justify-between items-center pt-4 border-t border-brand-grey-200">
+            <Button
+              variant="ghost"
+              onClick={() => selectedCandidate && navigate(`/candidates/${selectedCandidate.id}`)}
+            >
+              View Candidate Profile
+            </Button>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                variant="success" 
+                onClick={handleSubmitFeedback} 
+                isLoading={isSubmitting}
+              >
+                Save Feedback
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

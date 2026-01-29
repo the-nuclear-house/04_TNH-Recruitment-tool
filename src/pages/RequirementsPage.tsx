@@ -309,11 +309,17 @@ export function RequirementsPage() {
         ) : filteredRequirements.length === 0 ? (
           <EmptyState
             title="No requirements found"
-            description={requirements.length === 0 ? "Create your first requirement to get started." : "Try adjusting your filters."}
-            action={{
+            description={
+              requirements.length === 0 
+                ? (permissions.canCreateRequirements 
+                    ? "Create your first requirement to get started." 
+                    : "No requirements have been created yet.")
+                : "Try adjusting your filters."
+            }
+            action={permissions.canCreateRequirements ? {
               label: 'New Requirement',
               onClick: () => setIsModalOpen(true),
-            }}
+            } : undefined}
           />
         ) : (
           <div className="grid gap-4">
