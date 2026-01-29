@@ -14,7 +14,7 @@ import {
 } from '@/components/ui';
 import { formatDate, statusLabels, formatCurrency } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
-import type { Candidate } from '@/types';
+import type { Candidate, RightToWork, SecurityVetting, CandidateStatus } from '@/types';
 
 // Mock data - sorted by created_at descending (newest first)
 const mockCandidates: Candidate[] = [
@@ -32,8 +32,8 @@ const mockCandidates: Candidate[] = [
     degree: 'MSc Computer Science',
     summary: 'Full-stack developer with expertise in cloud architecture.',
     skills: ['Python', 'AWS', 'Kubernetes', 'React'],
-    right_to_work: 'british_citizen',
-    security_vetting: 'sc',
+    right_to_work: 'british_citizen' as RightToWork,
+    security_vetting: 'sc' as SecurityVetting,
     open_to_relocate: true,
     relocation_preferences: 'Manchester',
     current_salary: 85000,
@@ -42,7 +42,7 @@ const mockCandidates: Candidate[] = [
     salary_currency: 'GBP',
     sector_flexibility: 'Defence, Finance',
     scope_flexibility: 'Backend, Full-stack',
-    status: 'director_interview',
+    status: 'director_interview' as CandidateStatus,
     source: 'LinkedIn',
     created_by: 'user-1',
     created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
@@ -62,8 +62,8 @@ const mockCandidates: Candidate[] = [
     degree: 'BEng Software Engineering',
     summary: 'DevOps specialist with CI/CD expertise.',
     skills: ['Terraform', 'AWS', 'Azure', 'Jenkins'],
-    right_to_work: 'settled_status',
-    security_vetting: 'bpss',
+    right_to_work: 'settled_status' as RightToWork,
+    security_vetting: 'bpss' as SecurityVetting,
     open_to_relocate: false,
     relocation_preferences: null,
     current_salary: 75000,
@@ -72,7 +72,7 @@ const mockCandidates: Candidate[] = [
     salary_currency: 'GBP',
     sector_flexibility: 'Any',
     scope_flexibility: 'DevOps, SRE',
-    status: 'technical_interview',
+    status: 'technical_interview' as CandidateStatus,
     source: 'Referral',
     created_by: 'user-1',
     created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
@@ -92,8 +92,8 @@ const mockCandidates: Candidate[] = [
     degree: 'MSc Data Science',
     summary: 'Data engineer specialising in scalable pipelines.',
     skills: ['Python', 'Spark', 'Airflow', 'SQL'],
-    right_to_work: 'skilled_worker_visa',
-    security_vetting: 'none',
+    right_to_work: 'skilled_worker_visa' as RightToWork,
+    security_vetting: 'none' as SecurityVetting,
     open_to_relocate: true,
     relocation_preferences: 'London',
     current_salary: 65000,
@@ -102,7 +102,7 @@ const mockCandidates: Candidate[] = [
     salary_currency: 'GBP',
     sector_flexibility: 'Finance, Tech',
     scope_flexibility: 'Data Engineering',
-    status: 'phone_qualification',
+    status: 'phone_qualification' as CandidateStatus,
     source: 'Job Board',
     created_by: 'user-1',
     created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
