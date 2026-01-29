@@ -8,6 +8,8 @@ import {
   CandidateProfilePage,
   CandidateFormPage,
   RequirementsPage,
+  RequirementDetailPage,
+  RequirementFormPage,
   InterviewsPage,
   ContractsPage,
   OrganisationPage,
@@ -78,6 +80,9 @@ function App() {
           <Route path="/candidates/:id" element={<CandidateProfilePage />} />
           <Route path="/candidates/:id/edit" element={<CandidateFormPage />} />
           <Route path="/requirements" element={<RequirementsPage />} />
+          <Route path="/requirements/new" element={<RequirementFormPage />} />
+          <Route path="/requirements/:id" element={<RequirementDetailPage />} />
+          <Route path="/requirements/:id/edit" element={<RequirementFormPage />} />
           <Route path="/interviews" element={<InterviewsPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/organisation" element={<OrganisationPage />} />

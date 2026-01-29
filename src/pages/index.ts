@@ -4,6 +4,8 @@ export { CandidatesPage } from './CandidatesPage';
 export { CandidateProfilePage } from './CandidateProfilePage';
 export { CandidateFormPage } from './CandidateFormPage';
 export { RequirementsPage } from './RequirementsPage';
+export { RequirementDetailPage } from './RequirementDetailPage';
+export { RequirementFormPage } from './RequirementFormPage';
 export { InterviewsPage } from './InterviewsPage';
 export { ContractsPage } from './ContractsPage';
 export { OrganisationPage } from './OrganisationPage';
