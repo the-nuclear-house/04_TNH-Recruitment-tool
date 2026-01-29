@@ -48,16 +48,12 @@ export function Sidebar() {
       <div className="h-16 flex items-center justify-between px-4 border-b border-brand-slate-800">
         {!sidebarCollapsed && (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-brand-cyan flex items-center justify-center">
-              <span className="text-white font-bold text-sm">RH</span>
-            </div>
+            <img src="/assets/logo.svg" alt="TNH" className="h-8 w-8" />
             <span className="text-white font-semibold">RecruitHub</span>
           </div>
         )}
         {sidebarCollapsed && (
-          <div className="w-8 h-8 rounded-lg bg-brand-cyan flex items-center justify-center mx-auto">
-            <span className="text-white font-bold text-sm">RH</span>
-          </div>
+          <img src="/assets/logo.svg" alt="TNH" className="h-8 w-8 mx-auto" />
         )}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
