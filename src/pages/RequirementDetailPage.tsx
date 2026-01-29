@@ -485,7 +485,7 @@ export function RequirementDetailPage() {
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    <Badge variant={app.status === 'applied' ? 'default' : 'success'}>
+                    <Badge variant={app.status === 'applied' ? 'grey' : 'green'}>
                       {app.status.replace('_', ' ')}
                     </Badge>
                     <span className="text-xs text-brand-grey-400">
@@ -570,7 +570,7 @@ export function RequirementDetailPage() {
                         <Badge key={skill} variant="cyan" className="text-xs">{skill}</Badge>
                       ))}
                       {candidate.skills.length > 2 && (
-                        <Badge variant="default" className="text-xs">+{candidate.skills.length - 2}</Badge>
+                        <Badge variant="grey" className="text-xs">+{candidate.skills.length - 2}</Badge>
                       )}
                     </div>
                   )}
