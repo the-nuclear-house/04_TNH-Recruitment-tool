@@ -23,6 +23,7 @@ import {
   Modal,
   Button,
   Textarea,
+  StarRating,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -43,15 +44,6 @@ const outcomeConfig: Record<string, { label: string; colour: string }> = {
   fail: { label: 'Fail', colour: 'bg-red-100 text-red-700' },
   cancelled: { label: 'Cancelled', colour: 'bg-slate-100 text-slate-500' },
 };
-
-const scoreOptions = [
-  { value: '', label: 'Select score' },
-  { value: '1', label: '1 - Poor' },
-  { value: '2', label: '2 - Below Average' },
-  { value: '3', label: '3 - Average' },
-  { value: '4', label: '4 - Good' },
-  { value: '5', label: '5 - Excellent' },
-];
 
 export function InterviewsPage() {
   const navigate = useNavigate();
@@ -388,29 +380,25 @@ export function InterviewsPage() {
           <div>
             <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Soft Skills</h4>
             <div className="grid grid-cols-2 gap-4">
-              <Select
+              <StarRating
                 label="Communication"
-                options={scoreOptions}
-                value={feedbackForm.communication_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, communication_score: e.target.value }))}
+                value={parseInt(feedbackForm.communication_score) || 0}
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, communication_score: v.toString() }))}
               />
-              <Select
+              <StarRating
                 label="Professionalism"
-                options={scoreOptions}
-                value={feedbackForm.professionalism_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, professionalism_score: e.target.value }))}
+                value={parseInt(feedbackForm.professionalism_score) || 0}
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, professionalism_score: v.toString() }))}
               />
-              <Select
+              <StarRating
                 label="Enthusiasm"
-                options={scoreOptions}
-                value={feedbackForm.enthusiasm_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))}
+                value={parseInt(feedbackForm.enthusiasm_score) || 0}
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, enthusiasm_score: v.toString() }))}
               />
-              <Select
+              <StarRating
                 label="Cultural Fit"
-                options={scoreOptions}
-                value={feedbackForm.cultural_fit_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))}
+                value={parseInt(feedbackForm.cultural_fit_score) || 0}
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, cultural_fit_score: v.toString() }))}
               />
             </div>
           </div>
@@ -420,17 +408,15 @@ export function InterviewsPage() {
             <div>
               <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Technical Skills</h4>
               <div className="grid grid-cols-2 gap-4">
-                <Select
+                <StarRating
                   label="Technical Depth"
-                  options={scoreOptions}
-                  value={feedbackForm.technical_depth_score}
-                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, technical_depth_score: e.target.value }))}
+                  value={parseInt(feedbackForm.technical_depth_score) || 0}
+                  onChange={(v) => setFeedbackForm(prev => ({ ...prev, technical_depth_score: v.toString() }))}
                 />
-                <Select
+                <StarRating
                   label="Problem Solving"
-                  options={scoreOptions}
-                  value={feedbackForm.problem_solving_score}
-                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, problem_solving_score: e.target.value }))}
+                  value={parseInt(feedbackForm.problem_solving_score) || 0}
+                  onChange={(v) => setFeedbackForm(prev => ({ ...prev, problem_solving_score: v.toString() }))}
                 />
               </div>
             </div>

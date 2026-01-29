@@ -17,6 +17,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
+import { useAuthStore } from '@/lib/stores/auth-store';
 import { requirementsService, usersService, type DbRequirement, type DbUser } from '@/lib/services';
 
 type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';
@@ -64,6 +65,7 @@ export function RequirementsPage() {
   const navigate = useNavigate();
   const permissions = usePermissions();
   const toast = useToast();
+  const { user } = useAuthStore();
   
   const [requirements, setRequirements] = useState<DbRequirement[]>([]);
   const [users, setUsers] = useState<DbUser[]>([]);
@@ -115,23 +117,17 @@ export function RequirementsPage() {
   };
 
   const handleSkillInputChange = (value: string) => {
-    if (value.includes(',')) {
-      const parts = value.split(',').map(s => s.trim()).filter(s => s);
-      const newSkills = parts.filter(s => !skills.includes(s));
-      if (newSkills.length > 0) {
-        setSkills([...skills, ...newSkills]);
-      }
-      setSkillInput('');
-    } else {
-      setSkillInput(value);
-    }
+    setSkillInput(value);
   };
 
   const handleSkillKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && skillInput.trim()) {
       e.preventDefault();
-      if (!skills.includes(skillInput.trim())) {
-        setSkills([...skills, skillInput.trim()]);
+      // Parse comma-separated values on Enter
+      const parts = skillInput.split(',').map(s => s.trim()).filter(s => s);
+      const newSkills = parts.filter(s => !skills.includes(s));
+      if (newSkills.length > 0) {
+        setSkills([...skills, ...newSkills]);
       }
       setSkillInput('');
     }
@@ -157,6 +153,7 @@ export function RequirementsPage() {
         engineering_discipline: formData.engineering_discipline,
         manager_id: formData.manager_id || undefined,
         skills: skills.length > 0 ? skills : undefined,
+        created_by: user?.id,
       });
       
       toast.success('Requirement Created', `${formData.customer} requirement has been created`);

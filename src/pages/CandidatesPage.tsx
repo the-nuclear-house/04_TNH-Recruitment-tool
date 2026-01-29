@@ -85,46 +85,34 @@ export function CandidatesPage() {
   };
 
   const handleSkillInputChange = (value: string) => {
-    if (value.includes(',')) {
-      const parts = value.split(',').map(s => s.trim()).filter(s => s);
-      const newSkills = parts.filter(s => !skills.includes(s));
-      if (newSkills.length > 0) {
-        setSkills([...skills, ...newSkills]);
-      }
-      setSkillInput('');
-    } else {
-      setSkillInput(value);
-    }
+    setSkillInput(value);
   };
 
   const handleSkillKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && skillInput.trim()) {
       e.preventDefault();
-      if (!skills.includes(skillInput.trim())) {
-        setSkills([...skills, skillInput.trim()]);
+      // Parse comma-separated values on Enter
+      const parts = skillInput.split(',').map(s => s.trim()).filter(s => s);
+      const newSkills = parts.filter(s => !skills.includes(s));
+      if (newSkills.length > 0) {
+        setSkills([...skills, ...newSkills]);
       }
       setSkillInput('');
     }
   };
 
   const handleCompanyInputChange = (value: string) => {
-    if (value.includes(',')) {
-      const parts = value.split(',').map(s => s.trim()).filter(s => s);
-      const newCompanies = parts.filter(s => !previousCompanies.includes(s));
-      if (newCompanies.length > 0) {
-        setPreviousCompanies([...previousCompanies, ...newCompanies]);
-      }
-      setCompanyInput('');
-    } else {
-      setCompanyInput(value);
-    }
+    setCompanyInput(value);
   };
 
   const handleCompanyKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && companyInput.trim()) {
       e.preventDefault();
-      if (!previousCompanies.includes(companyInput.trim())) {
-        setPreviousCompanies([...previousCompanies, companyInput.trim()]);
+      // Parse comma-separated values on Enter
+      const parts = companyInput.split(',').map(s => s.trim()).filter(s => s);
+      const newCompanies = parts.filter(s => !previousCompanies.includes(s));
+      if (newCompanies.length > 0) {
+        setPreviousCompanies([...previousCompanies, ...newCompanies]);
       }
       setCompanyInput('');
     }

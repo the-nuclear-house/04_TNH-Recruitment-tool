@@ -10,6 +10,7 @@ import {
   PoundSterling,
   Shield,
   Briefcase,
+  Trash2,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -20,9 +21,11 @@ import {
   Badge,
   EmptyState,
   Select,
+  ConfirmDialog,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
+import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { requirementsService, usersService } from '@/lib/services';
 
@@ -62,11 +65,15 @@ export function RequirementDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const toast = useToast();
+  const { user } = useAuthStore();
   const permissions = usePermissions();
   
   const [requirement, setRequirement] = useState<any>(null);
   const [manager, setManager] = useState<any>(null);
+  const [createdBy, setCreatedBy] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -87,6 +94,10 @@ export function RequirementDetailPage() {
         const mgr = usersData.find(u => u.id === reqData.manager_id);
         setManager(mgr);
       }
+      if (reqData?.created_by) {
+        const creator = usersData.find(u => u.id === reqData.created_by);
+        setCreatedBy(creator);
+      }
     } catch (error) {
       console.error('Error loading requirement:', error);
       toast.error('Error', 'Failed to load requirement');
@@ -105,6 +116,27 @@ export function RequirementDetailPage() {
       toast.error('Error', 'Failed to update status');
     }
   };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await requirementsService.delete(id!);
+      toast.success('Requirement Deleted', 'The requirement has been permanently deleted');
+      navigate('/requirements');
+    } catch (error) {
+      console.error('Error deleting requirement:', error);
+      toast.error('Error', 'Failed to delete requirement');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
+  // Check if current user can edit this requirement
+  const canEditThisRequirement = 
+    permissions.isAdmin || 
+    requirement?.created_by === user?.id || 
+    requirement?.manager_id === user?.id;
 
   if (isLoading) {
     return (
@@ -144,13 +176,33 @@ export function RequirementDetailPage() {
       <Header
         title="Requirement Details"
         actions={
-          <Button
-            variant="ghost"
-            leftIcon={<ArrowLeft className="h-4 w-4" />}
-            onClick={() => navigate('/requirements')}
-          >
-            Back
-          </Button>
+          <div className="flex items-center gap-2">
+            {canEditThisRequirement && (
+              <Button
+                variant="secondary"
+                leftIcon={<Edit className="h-4 w-4" />}
+                onClick={() => navigate(`/requirements/${id}/edit`)}
+              >
+                Edit
+              </Button>
+            )}
+            {permissions.isAdmin && (
+              <Button
+                variant="danger"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              leftIcon={<ArrowLeft className="h-4 w-4" />}
+              onClick={() => navigate('/requirements')}
+            >
+              Back
+            </Button>
+          </div>
         }
       />
 
@@ -266,6 +318,13 @@ export function RequirementDetailPage() {
               <CardTitle>Assignment</CardTitle>
             </CardHeader>
             <div className="space-y-4">
+              {createdBy && (
+                <div>
+                  <p className="text-xs text-brand-grey-400 mb-1">Created By</p>
+                  <p className="text-sm font-medium text-brand-slate-700">{createdBy.full_name}</p>
+                  <p className="text-xs text-brand-grey-400">{createdBy.email}</p>
+                </div>
+              )}
               {manager ? (
                 <div>
                   <p className="text-xs text-brand-grey-400 mb-1">Assigned Manager</p>
@@ -305,6 +364,19 @@ export function RequirementDetailPage() {
           </Card>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete Requirement"
+        message={`Are you sure you want to delete "${requirement.customer}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

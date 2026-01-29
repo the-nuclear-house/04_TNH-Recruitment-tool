@@ -19,6 +19,11 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Trash2,
+  FileText,
+  Send,
+  Edit,
+  Download,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -33,11 +38,15 @@ import {
   Select,
   Textarea,
   EmptyState,
+  StarRating,
+  StarRatingDisplay,
+  ConfirmDialog,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { candidatesService, interviewsService, usersService } from '@/lib/services';
+import { usePermissions } from '@/hooks/usePermissions';
+import { candidatesService, interviewsService, usersService, commentsService, type DbComment } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
 
@@ -101,15 +110,6 @@ const rightToWorkLabels: Record<string, string> = {
   unknown: 'Unknown',
 };
 
-const scoreOptions = [
-  { value: '', label: 'Select score' },
-  { value: '1', label: '1 - Poor' },
-  { value: '2', label: '2 - Below Average' },
-  { value: '3', label: '3 - Average' },
-  { value: '4', label: '4 - Good' },
-  { value: '5', label: '5 - Excellent' },
-];
-
 const rightToWorkOptions = [
   { value: '', label: 'Select status' },
   { value: 'british_citizen', label: 'British Citizen' },
@@ -148,12 +148,24 @@ export function CandidateProfilePage() {
   const { id } = useParams();
   const toast = useToast();
   const { user } = useAuthStore();
+  const permissions = usePermissions();
   
   const [candidate, setCandidate] = useState<any>(null);
   const [interviews, setInterviews] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedInterview, setExpandedInterview] = useState<string | null>(null);
+  
+  // Comments
+  const [comments, setComments] = useState<DbComment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  
+  // Delete confirmation
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Schedule interview modal
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -219,6 +231,7 @@ export function CandidateProfilePage() {
   useEffect(() => {
     if (id) {
       loadData();
+      loadComments();
     }
   }, [id]);
 
@@ -239,6 +252,74 @@ export function CandidateProfilePage() {
       toast.error('Error', 'Failed to load candidate');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadComments = async () => {
+    try {
+      const data = await commentsService.getByCandidate(id!);
+      setComments(data);
+    } catch (error) {
+      console.error('Error loading comments:', error);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!newComment.trim() || !user) return;
+    
+    setIsPostingComment(true);
+    try {
+      await commentsService.create({
+        candidate_id: id!,
+        user_id: user.id,
+        content: newComment.trim(),
+      });
+      setNewComment('');
+      loadComments();
+    } catch (error) {
+      console.error('Error posting comment:', error);
+      toast.error('Error', 'Failed to post comment');
+    } finally {
+      setIsPostingComment(false);
+    }
+  };
+
+  const handleUpdateComment = async (commentId: string) => {
+    if (!editingCommentText.trim()) return;
+    
+    try {
+      await commentsService.update(commentId, editingCommentText.trim());
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      loadComments();
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      toast.error('Error', 'Failed to update comment');
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await commentsService.delete(commentId);
+      loadComments();
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      toast.error('Error', 'Failed to delete comment');
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await candidatesService.delete(id!);
+      toast.success('Candidate Deleted', 'The candidate has been permanently deleted');
+      navigate('/candidates');
+    } catch (error) {
+      console.error('Error deleting candidate:', error);
+      toast.error('Error', 'Failed to delete candidate');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -444,8 +525,13 @@ export function CandidateProfilePage() {
   };
 
   const handleSkillAdd = (skillList: string[], setSkillList: (s: string[]) => void, input: string, setInput: (s: string) => void) => {
-    if (input.trim() && !skillList.includes(input.trim())) {
-      setSkillList([...skillList, input.trim()]);
+    if (input.trim()) {
+      // Parse comma-separated values
+      const parts = input.split(',').map(s => s.trim()).filter(s => s);
+      const newSkills = parts.filter(s => !skillList.includes(s));
+      if (newSkills.length > 0) {
+        setSkillList([...skillList, ...newSkills]);
+      }
     }
     setInput('');
   };
@@ -497,13 +583,24 @@ export function CandidateProfilePage() {
       <Header
         title="Candidate Profile"
         actions={
-          <Button
-            variant="ghost"
-            leftIcon={<ArrowLeft className="h-4 w-4" />}
-            onClick={() => navigate('/candidates')}
-          >
-            Back
-          </Button>
+          <div className="flex items-center gap-2">
+            {permissions.isAdmin && (
+              <Button
+                variant="danger"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              leftIcon={<ArrowLeft className="h-4 w-4" />}
+              onClick={() => navigate('/candidates')}
+            >
+              Back
+            </Button>
+          </div>
         }
       />
 
@@ -714,28 +811,34 @@ export function CandidateProfilePage() {
                             
                             {isExpanded && (
                               <div className="mt-3 space-y-3">
-                                <div className="flex flex-wrap gap-4">
+                                {/* All soft skills scores */}
+                                <div className="grid grid-cols-2 gap-3">
                                   {interview.communication_score && (
-                                    <div className="text-sm">
-                                      <span className="text-brand-grey-400">Communication:</span>{' '}
-                                      <span className="font-medium">{interview.communication_score}/5</span>
-                                    </div>
+                                    <StarRatingDisplay rating={interview.communication_score} label="Communication" />
                                   )}
                                   {interview.professionalism_score && (
-                                    <div className="text-sm">
-                                      <span className="text-brand-grey-400">Professionalism:</span>{' '}
-                                      <span className="font-medium">{interview.professionalism_score}/5</span>
-                                    </div>
+                                    <StarRatingDisplay rating={interview.professionalism_score} label="Professionalism" />
                                   )}
-                                  {interview.technical_depth_score && (
-                                    <div className="text-sm">
-                                      <span className="text-brand-grey-400">Technical:</span>{' '}
-                                      <span className="font-medium">{interview.technical_depth_score}/5</span>
-                                    </div>
+                                  {interview.enthusiasm_score && (
+                                    <StarRatingDisplay rating={interview.enthusiasm_score} label="Enthusiasm" />
+                                  )}
+                                  {interview.cultural_fit_score && (
+                                    <StarRatingDisplay rating={interview.cultural_fit_score} label="Cultural Fit" />
                                   )}
                                 </div>
+                                {/* Technical scores if present */}
+                                {(interview.technical_depth_score || interview.problem_solving_score) && (
+                                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-brand-grey-100">
+                                    {interview.technical_depth_score && (
+                                      <StarRatingDisplay rating={interview.technical_depth_score} label="Technical Depth" />
+                                    )}
+                                    {interview.problem_solving_score && (
+                                      <StarRatingDisplay rating={interview.problem_solving_score} label="Problem Solving" />
+                                    )}
+                                  </div>
+                                )}
                                 {interview.general_comments && (
-                                  <div>
+                                  <div className="pt-2">
                                     <p className="text-sm text-brand-grey-400">Comments:</p>
                                     <p className="text-sm text-brand-slate-700">{interview.general_comments}</p>
                                   </div>
@@ -823,9 +926,31 @@ export function CandidateProfilePage() {
               </div>
             </Card>
 
+            {/* CV Download */}
+            {candidate.cv_url && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>CV / Resume</CardTitle>
+                </CardHeader>
+                <a
+                  href={candidate.cv_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors"
+                >
+                  <FileText className="h-8 w-8 text-brand-cyan" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-brand-slate-900">Download CV</p>
+                    <p className="text-xs text-brand-grey-400">Click to view or download</p>
+                  </div>
+                  <Download className="h-4 w-4 text-brand-grey-400" />
+                </a>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
-                <CardTitle>Meta</CardTitle>
+                <CardTitle>Record Info</CardTitle>
               </CardHeader>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
@@ -842,6 +967,134 @@ export function CandidateProfilePage() {
             </Card>
           </div>
         </div>
+
+        {/* Comments Section */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Activity & Comments</CardTitle>
+          </CardHeader>
+          
+          {/* New Comment Input */}
+          <div className="flex gap-3 mb-6">
+            <Avatar name={user?.full_name || 'User'} size="sm" />
+            <div className="flex-1">
+              <Textarea
+                placeholder="Add a comment about this candidate..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                rows={2}
+              />
+              <div className="flex justify-end mt-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Send className="h-4 w-4" />}
+                  onClick={handlePostComment}
+                  isLoading={isPostingComment}
+                  disabled={!newComment.trim()}
+                >
+                  Post Comment
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Comments List */}
+          <div className="space-y-4">
+            {comments.length === 0 ? (
+              <p className="text-sm text-brand-grey-400 text-center py-4">
+                No comments yet. Be the first to add one!
+              </p>
+            ) : (
+              comments.map(comment => (
+                <div key={comment.id} className="flex gap-3 p-3 rounded-lg bg-brand-grey-50">
+                  <Avatar name={comment.user?.full_name || 'User'} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-brand-slate-900">
+                          {comment.user?.full_name || 'Unknown User'}
+                        </span>
+                        <span className="text-xs text-brand-grey-400">
+                          {comment.user?.role && `(${comment.user.role})`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-brand-grey-400">
+                          {new Date(comment.created_at).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        {comment.user_id === user?.id && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingCommentId(comment.id);
+                                setEditingCommentText(comment.content);
+                              }}
+                              className="p-1 text-brand-grey-400 hover:text-brand-cyan rounded"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className="p-1 text-brand-grey-400 hover:text-red-500 rounded"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {editingCommentId === comment.id ? (
+                      <div className="mt-2">
+                        <Textarea
+                          value={editingCommentText}
+                          onChange={(e) => setEditingCommentText(e.target.value)}
+                          rows={2}
+                        />
+                        <div className="flex justify-end gap-2 mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingCommentId(null);
+                              setEditingCommentText('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleUpdateComment(comment.id)}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-brand-slate-700 mt-1 whitespace-pre-wrap">
+                        {comment.content}
+                      </p>
+                    )}
+                    
+                    {comment.updated_at !== comment.created_at && (
+                      <span className="text-xs text-brand-grey-300 mt-1 inline-block">
+                        (edited)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
       </div>
 
       {/* Schedule Interview Modal */}
@@ -1038,10 +1291,10 @@ export function CandidateProfilePage() {
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment</h4>
             <div className="grid grid-cols-2 gap-4">
-              <Select label="Communication" options={scoreOptions} value={phoneForm.communication_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, communication_score: e.target.value }))} />
-              <Select label="Professionalism" options={scoreOptions} value={phoneForm.professionalism_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, professionalism_score: e.target.value }))} />
-              <Select label="Enthusiasm" options={scoreOptions} value={phoneForm.enthusiasm_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))} />
-              <Select label="Cultural Fit" options={scoreOptions} value={phoneForm.cultural_fit_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))} />
+              <StarRating label="Communication" value={parseInt(phoneForm.communication_score) || 0} onChange={(v) => setPhoneForm(prev => ({ ...prev, communication_score: v.toString() }))} />
+              <StarRating label="Professionalism" value={parseInt(phoneForm.professionalism_score) || 0} onChange={(v) => setPhoneForm(prev => ({ ...prev, professionalism_score: v.toString() }))} />
+              <StarRating label="Enthusiasm" value={parseInt(phoneForm.enthusiasm_score) || 0} onChange={(v) => setPhoneForm(prev => ({ ...prev, enthusiasm_score: v.toString() }))} />
+              <StarRating label="Cultural Fit" value={parseInt(phoneForm.cultural_fit_score) || 0} onChange={(v) => setPhoneForm(prev => ({ ...prev, cultural_fit_score: v.toString() }))} />
             </div>
           </div>
 
@@ -1143,18 +1396,18 @@ export function CandidateProfilePage() {
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Technical Assessment</h4>
             <div className="grid grid-cols-2 gap-4">
-              <Select label="Technical Depth" options={scoreOptions} value={techForm.technical_depth_score} onChange={(e) => setTechForm(prev => ({ ...prev, technical_depth_score: e.target.value }))} />
-              <Select label="Problem Solving" options={scoreOptions} value={techForm.problem_solving_score} onChange={(e) => setTechForm(prev => ({ ...prev, problem_solving_score: e.target.value }))} />
+              <StarRating label="Technical Depth" value={parseInt(techForm.technical_depth_score) || 0} onChange={(v) => setTechForm(prev => ({ ...prev, technical_depth_score: v.toString() }))} />
+              <StarRating label="Problem Solving" value={parseInt(techForm.problem_solving_score) || 0} onChange={(v) => setTechForm(prev => ({ ...prev, problem_solving_score: v.toString() }))} />
             </div>
           </div>
 
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment</h4>
             <div className="grid grid-cols-2 gap-4">
-              <Select label="Communication" options={scoreOptions} value={techForm.communication_score} onChange={(e) => setTechForm(prev => ({ ...prev, communication_score: e.target.value }))} />
-              <Select label="Professionalism" options={scoreOptions} value={techForm.professionalism_score} onChange={(e) => setTechForm(prev => ({ ...prev, professionalism_score: e.target.value }))} />
-              <Select label="Enthusiasm" options={scoreOptions} value={techForm.enthusiasm_score} onChange={(e) => setTechForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))} />
-              <Select label="Cultural Fit" options={scoreOptions} value={techForm.cultural_fit_score} onChange={(e) => setTechForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))} />
+              <StarRating label="Communication" value={parseInt(techForm.communication_score) || 0} onChange={(v) => setTechForm(prev => ({ ...prev, communication_score: v.toString() }))} />
+              <StarRating label="Professionalism" value={parseInt(techForm.professionalism_score) || 0} onChange={(v) => setTechForm(prev => ({ ...prev, professionalism_score: v.toString() }))} />
+              <StarRating label="Enthusiasm" value={parseInt(techForm.enthusiasm_score) || 0} onChange={(v) => setTechForm(prev => ({ ...prev, enthusiasm_score: v.toString() }))} />
+              <StarRating label="Cultural Fit" value={parseInt(techForm.cultural_fit_score) || 0} onChange={(v) => setTechForm(prev => ({ ...prev, cultural_fit_score: v.toString() }))} />
             </div>
           </div>
 
@@ -1218,10 +1471,10 @@ export function CandidateProfilePage() {
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment</h4>
             <div className="grid grid-cols-2 gap-4">
-              <Select label="Communication" options={scoreOptions} value={directorForm.communication_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, communication_score: e.target.value }))} />
-              <Select label="Professionalism" options={scoreOptions} value={directorForm.professionalism_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, professionalism_score: e.target.value }))} />
-              <Select label="Enthusiasm" options={scoreOptions} value={directorForm.enthusiasm_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))} />
-              <Select label="Cultural Fit" options={scoreOptions} value={directorForm.cultural_fit_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))} />
+              <StarRating label="Communication" value={parseInt(directorForm.communication_score) || 0} onChange={(v) => setDirectorForm(prev => ({ ...prev, communication_score: v.toString() }))} />
+              <StarRating label="Professionalism" value={parseInt(directorForm.professionalism_score) || 0} onChange={(v) => setDirectorForm(prev => ({ ...prev, professionalism_score: v.toString() }))} />
+              <StarRating label="Enthusiasm" value={parseInt(directorForm.enthusiasm_score) || 0} onChange={(v) => setDirectorForm(prev => ({ ...prev, enthusiasm_score: v.toString() }))} />
+              <StarRating label="Cultural Fit" value={parseInt(directorForm.cultural_fit_score) || 0} onChange={(v) => setDirectorForm(prev => ({ ...prev, cultural_fit_score: v.toString() }))} />
             </div>
           </div>
 
@@ -1246,6 +1499,19 @@ export function CandidateProfilePage() {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete Candidate"
+        message={`Are you sure you want to delete ${candidate?.first_name} ${candidate?.last_name}? This will also delete all their interview records. This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -177,6 +177,7 @@ export interface CreateRequirementInput {
   clearance_required?: string;
   status?: string;
   manager_id?: string;
+  created_by?: string;
 }
 
 export const requirementsService = {
@@ -469,5 +470,82 @@ export const usersService = {
 
     if (error) throw error;
     return data || [];
+  },
+};
+
+// ============ COMMENTS SERVICE ============
+
+export interface DbComment {
+  id: string;
+  candidate_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  user?: DbUser;
+}
+
+export interface CreateCommentInput {
+  candidate_id: string;
+  user_id: string;
+  content: string;
+}
+
+export const commentsService = {
+  // Get all comments for a candidate
+  async getByCandidate(candidateId: string): Promise<DbComment[]> {
+    const { data, error } = await supabase
+      .from('candidate_comments')
+      .select(`
+        *,
+        user:users(id, full_name, email, role, avatar_url)
+      `)
+      .eq('candidate_id', candidateId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Create a new comment
+  async create(input: CreateCommentInput): Promise<DbComment> {
+    const { data, error } = await supabase
+      .from('candidate_comments')
+      .insert(input)
+      .select(`
+        *,
+        user:users(id, full_name, email, role, avatar_url)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update a comment
+  async update(id: string, content: string): Promise<DbComment> {
+    const { data, error } = await supabase
+      .from('candidate_comments')
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select(`
+        *,
+        user:users(id, full_name, email, role, avatar_url)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Delete a comment
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('candidate_comments')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
   },
 };

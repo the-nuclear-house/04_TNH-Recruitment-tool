@@ -9,4 +9,4 @@ export { Modal, ConfirmDialog } from './Modal';
 export { ToastContainer } from './Toast';
 export { EmptyState } from './EmptyState';
 export { Spinner, LoadingState, LoadingOverlay, Skeleton, TableSkeleton, CardSkeleton } from './Loading';
-export { Score, StarRating, ScoreBar } from './Score';
+export { Score, StarRating, StarRatingDisplay, ScoreBar } from './Score';
