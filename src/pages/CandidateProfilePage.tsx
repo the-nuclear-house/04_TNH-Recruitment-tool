@@ -46,7 +46,7 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { candidatesService, interviewsService, usersService, commentsService, type DbComment } from '@/lib/services';
+import { candidatesService, interviewsService, usersService, commentsService, applicationsService, type DbComment, type DbApplication } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
 
@@ -156,6 +156,9 @@ export function CandidateProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedInterview, setExpandedInterview] = useState<string | null>(null);
   
+  // Linked requirements
+  const [linkedRequirements, setLinkedRequirements] = useState<DbApplication[]>([]);
+  
   // Comments
   const [comments, setComments] = useState<DbComment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -238,15 +241,17 @@ export function CandidateProfilePage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [candidateData, interviewsData, usersData] = await Promise.all([
+      const [candidateData, interviewsData, usersData, applicationsData] = await Promise.all([
         candidatesService.getById(id!),
         interviewsService.getByCandidate(id!),
         usersService.getAll(),
+        applicationsService.getByCandidate(id!),
       ]);
       
       setCandidate(candidateData);
       setInterviews(interviewsData);
       setUsers(usersData);
+      setLinkedRequirements(applicationsData);
     } catch (error) {
       console.error('Error loading candidate:', error);
       toast.error('Error', 'Failed to load candidate');
@@ -422,6 +427,23 @@ export function CandidateProfilePage() {
       return;
     }
     
+    // Validate all soft skills scores are filled
+    if (!phoneForm.communication_score || !phoneForm.professionalism_score || 
+        !phoneForm.enthusiasm_score || !phoneForm.cultural_fit_score) {
+      toast.error('Validation Error', 'Please rate all soft skills (Communication, Professionalism, Enthusiasm, Cultural Fit)');
+      return;
+    }
+    
+    if (!phoneForm.general_comments) {
+      toast.error('Validation Error', 'Please add general comments');
+      return;
+    }
+    
+    if (!phoneForm.recommendation) {
+      toast.error('Validation Error', 'Please add a recommendation');
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       // Update candidate with admin info from phone call
@@ -437,12 +459,12 @@ export function CandidateProfilePage() {
       await interviewsService.update(selectedInterview.id, {
         outcome: phoneForm.outcome,
         completed_at: new Date().toISOString(),
-        communication_score: phoneForm.communication_score ? parseInt(phoneForm.communication_score) : undefined,
-        professionalism_score: phoneForm.professionalism_score ? parseInt(phoneForm.professionalism_score) : undefined,
-        enthusiasm_score: phoneForm.enthusiasm_score ? parseInt(phoneForm.enthusiasm_score) : undefined,
-        cultural_fit_score: phoneForm.cultural_fit_score ? parseInt(phoneForm.cultural_fit_score) : undefined,
-        general_comments: phoneForm.general_comments || undefined,
-        recommendation: phoneForm.recommendation || undefined,
+        communication_score: parseInt(phoneForm.communication_score),
+        professionalism_score: parseInt(phoneForm.professionalism_score),
+        enthusiasm_score: parseInt(phoneForm.enthusiasm_score),
+        cultural_fit_score: parseInt(phoneForm.cultural_fit_score),
+        general_comments: phoneForm.general_comments,
+        recommendation: phoneForm.recommendation,
       });
       
       toast.success('Phone Interview Completed', 'Feedback and candidate info have been saved');
@@ -462,6 +484,29 @@ export function CandidateProfilePage() {
       return;
     }
     
+    // Validate technical scores
+    if (!techForm.technical_depth_score || !techForm.problem_solving_score) {
+      toast.error('Validation Error', 'Please rate Technical Depth and Problem Solving');
+      return;
+    }
+    
+    // Validate all soft skills scores
+    if (!techForm.communication_score || !techForm.professionalism_score || 
+        !techForm.enthusiasm_score || !techForm.cultural_fit_score) {
+      toast.error('Validation Error', 'Please rate all soft skills (Communication, Professionalism, Enthusiasm, Cultural Fit)');
+      return;
+    }
+    
+    if (!techForm.general_comments) {
+      toast.error('Validation Error', 'Please add general comments');
+      return;
+    }
+    
+    if (!techForm.recommendation) {
+      toast.error('Validation Error', 'Please add a recommendation');
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       // Update candidate skills
@@ -473,14 +518,14 @@ export function CandidateProfilePage() {
       await interviewsService.update(selectedInterview.id, {
         outcome: techForm.outcome,
         completed_at: new Date().toISOString(),
-        communication_score: techForm.communication_score ? parseInt(techForm.communication_score) : undefined,
-        professionalism_score: techForm.professionalism_score ? parseInt(techForm.professionalism_score) : undefined,
-        enthusiasm_score: techForm.enthusiasm_score ? parseInt(techForm.enthusiasm_score) : undefined,
-        cultural_fit_score: techForm.cultural_fit_score ? parseInt(techForm.cultural_fit_score) : undefined,
-        technical_depth_score: techForm.technical_depth_score ? parseInt(techForm.technical_depth_score) : undefined,
-        problem_solving_score: techForm.problem_solving_score ? parseInt(techForm.problem_solving_score) : undefined,
-        general_comments: techForm.general_comments || undefined,
-        recommendation: techForm.recommendation || undefined,
+        communication_score: parseInt(techForm.communication_score),
+        professionalism_score: parseInt(techForm.professionalism_score),
+        enthusiasm_score: parseInt(techForm.enthusiasm_score),
+        cultural_fit_score: parseInt(techForm.cultural_fit_score),
+        technical_depth_score: parseInt(techForm.technical_depth_score),
+        problem_solving_score: parseInt(techForm.problem_solving_score),
+        general_comments: techForm.general_comments,
+        recommendation: techForm.recommendation,
       });
       
       toast.success('Technical Interview Completed', 'Feedback has been saved');
@@ -500,17 +545,34 @@ export function CandidateProfilePage() {
       return;
     }
     
+    // Validate all soft skills scores
+    if (!directorForm.communication_score || !directorForm.professionalism_score || 
+        !directorForm.enthusiasm_score || !directorForm.cultural_fit_score) {
+      toast.error('Validation Error', 'Please rate all soft skills (Communication, Professionalism, Enthusiasm, Cultural Fit)');
+      return;
+    }
+    
+    if (!directorForm.general_comments) {
+      toast.error('Validation Error', 'Please add general comments');
+      return;
+    }
+    
+    if (!directorForm.recommendation) {
+      toast.error('Validation Error', 'Please add a recommendation');
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       await interviewsService.update(selectedInterview.id, {
         outcome: directorForm.outcome,
         completed_at: new Date().toISOString(),
-        communication_score: directorForm.communication_score ? parseInt(directorForm.communication_score) : undefined,
-        professionalism_score: directorForm.professionalism_score ? parseInt(directorForm.professionalism_score) : undefined,
-        enthusiasm_score: directorForm.enthusiasm_score ? parseInt(directorForm.enthusiasm_score) : undefined,
-        cultural_fit_score: directorForm.cultural_fit_score ? parseInt(directorForm.cultural_fit_score) : undefined,
-        general_comments: directorForm.general_comments || undefined,
-        recommendation: directorForm.recommendation || undefined,
+        communication_score: parseInt(directorForm.communication_score),
+        professionalism_score: parseInt(directorForm.professionalism_score),
+        enthusiasm_score: parseInt(directorForm.enthusiasm_score),
+        cultural_fit_score: parseInt(directorForm.cultural_fit_score),
+        general_comments: directorForm.general_comments,
+        recommendation: directorForm.recommendation,
       });
       
       toast.success('Director Interview Completed', 'Feedback has been saved');
@@ -869,6 +931,40 @@ export function CandidateProfilePage() {
                 <p className="text-brand-slate-600 leading-relaxed">
                   {candidate.summary}
                 </p>
+              </Card>
+            )}
+
+            {/* Linked Requirements */}
+            {linkedRequirements.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Linked Requirements ({linkedRequirements.length})</CardTitle>
+                </CardHeader>
+                <div className="space-y-3">
+                  {linkedRequirements.map((app) => (
+                    <div 
+                      key={app.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan cursor-pointer transition-colors"
+                      onClick={() => navigate(`/requirements/${app.requirement_id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Briefcase className="h-5 w-5 text-brand-cyan" />
+                        <div>
+                          <p className="font-medium text-brand-slate-900">
+                            {app.requirement?.customer || 'Unknown Requirement'}
+                          </p>
+                          <p className="text-sm text-brand-grey-400">
+                            {app.requirement?.location && `${app.requirement.location} · `}
+                            Added {formatDate(app.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant={app.status === 'applied' ? 'grey' : 'green'}>
+                        {app.status.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </Card>
             )}
           </div>

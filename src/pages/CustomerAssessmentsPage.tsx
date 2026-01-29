@@ -150,7 +150,7 @@ export function CustomerAssessmentsPage() {
           </Card>
         ) : filteredAssessments.length === 0 ? (
           <EmptyState
-            icon={Calendar}
+            icon={<Calendar className="h-8 w-8" />}
             title="No customer assessments"
             description={filter === 'all' 
               ? "Customer assessments will appear here when candidates are scheduled to meet customers"
@@ -182,10 +182,12 @@ export function CustomerAssessmentsPage() {
                           >
                             {candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Unknown Candidate'}
                           </h3>
-                          <Badge variant={config.colour as any}>
-                            <Icon className="h-3 w-3 mr-1" />
-                            {config.label}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Icon className="h-3.5 w-3.5" style={{ color: config.colour === 'green' ? '#22c55e' : config.colour === 'red' ? '#ef4444' : '#f97316' }} />
+                            <Badge variant={config.colour as any}>
+                              {config.label}
+                            </Badge>
+                          </div>
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
