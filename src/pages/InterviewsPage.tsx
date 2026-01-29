@@ -158,14 +158,17 @@ export function InterviewsPage() {
     }
   };
 
-  const filteredInterviews = interviews.filter(interview => {
+  // Only show interviews where the current user is the interviewer
+  const myInterviews = interviews.filter(i => i.interviewer_id === user?.id);
+
+  const filteredInterviews = myInterviews.filter(interview => {
     const matchesStage = !stageFilter || interview.stage === stageFilter;
     const matchesOutcome = !outcomeFilter || interview.outcome === outcomeFilter;
     return matchesStage && matchesOutcome;
   });
 
-  const pendingCount = interviews.filter(i => i.outcome === 'pending').length;
-  const completedCount = interviews.filter(i => i.outcome === 'pass' || i.outcome === 'fail').length;
+  const pendingCount = myInterviews.filter(i => i.outcome === 'pending').length;
+  const completedCount = myInterviews.filter(i => i.outcome === 'pass' || i.outcome === 'fail').length;
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return '';
@@ -185,8 +188,8 @@ export function InterviewsPage() {
   return (
     <div className="min-h-screen">
       <Header
-        title="Interviews"
-        subtitle="Manage and track all interviews"
+        title="My Interviews"
+        subtitle="Your scheduled interviews"
       />
 
       <div className="p-6 space-y-6">
@@ -222,7 +225,7 @@ export function InterviewsPage() {
                 <Calendar className="h-5 w-5 text-brand-slate-700" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{interviews.length}</p>
+                <p className="text-2xl font-bold text-brand-slate-900">{myInterviews.length}</p>
                 <p className="text-sm text-brand-grey-400">Total</p>
               </div>
             </div>
@@ -263,9 +266,9 @@ export function InterviewsPage() {
           </Card>
         ) : filteredInterviews.length === 0 ? (
           <EmptyState
-            title="No interviews found"
-            description={interviews.length === 0 
-              ? "Interviews will appear here when you schedule them from a candidate's profile." 
+            title="No interviews assigned to you"
+            description={myInterviews.length === 0 
+              ? "You don't have any interviews assigned yet. Interviews will appear here when you're selected as an interviewer." 
               : "Try adjusting your filters."}
           />
         ) : (

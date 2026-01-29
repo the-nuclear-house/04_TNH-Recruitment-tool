@@ -18,6 +18,7 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
+  X,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -89,6 +90,17 @@ const clearanceLabels: Record<string, string> = {
   edv: 'eDV',
 };
 
+const rightToWorkLabels: Record<string, string> = {
+  british_citizen: 'British Citizen',
+  settled_status: 'Settled Status',
+  pre_settled_status: 'Pre-Settled Status',
+  skilled_worker_visa: 'Skilled Worker Visa',
+  graduate_visa: 'Graduate Visa',
+  requires_sponsorship: 'Requires Sponsorship',
+  other: 'Other',
+  unknown: 'Unknown',
+};
+
 const scoreOptions = [
   { value: '', label: 'Select score' },
   { value: '1', label: '1 - Poor' },
@@ -96,6 +108,39 @@ const scoreOptions = [
   { value: '3', label: '3 - Average' },
   { value: '4', label: '4 - Good' },
   { value: '5', label: '5 - Excellent' },
+];
+
+const rightToWorkOptions = [
+  { value: '', label: 'Select status' },
+  { value: 'british_citizen', label: 'British Citizen' },
+  { value: 'settled_status', label: 'Settled Status' },
+  { value: 'pre_settled_status', label: 'Pre-Settled Status' },
+  { value: 'skilled_worker_visa', label: 'Skilled Worker Visa' },
+  { value: 'graduate_visa', label: 'Graduate Visa' },
+  { value: 'requires_sponsorship', label: 'Requires Sponsorship' },
+  { value: 'other', label: 'Other (specify below)' },
+];
+
+const securityClearanceOptions = [
+  { value: '', label: 'Select clearance' },
+  { value: 'none', label: 'None' },
+  { value: 'bpss', label: 'BPSS' },
+  { value: 'ctc', label: 'CTC' },
+  { value: 'sc', label: 'SC' },
+  { value: 'esc', label: 'eSC' },
+  { value: 'dv', label: 'DV' },
+  { value: 'edv', label: 'eDV' },
+];
+
+const noticePeriodOptions = [
+  { value: '', label: 'Select notice period' },
+  { value: 'immediate', label: 'Immediate' },
+  { value: '1_week', label: '1 Week' },
+  { value: '2_weeks', label: '2 Weeks' },
+  { value: '1_month', label: '1 Month' },
+  { value: '2_months', label: '2 Months' },
+  { value: '3_months', label: '3 Months' },
+  { value: '6_months', label: '6 Months' },
 ];
 
 export function CandidateProfilePage() {
@@ -123,7 +168,30 @@ export function CandidateProfilePage() {
   // Complete interview modal
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [selectedInterview, setSelectedInterview] = useState<any>(null);
-  const [feedbackForm, setFeedbackForm] = useState({
+  
+  // Phone qualification form (includes admin questions)
+  const [phoneForm, setPhoneForm] = useState({
+    outcome: '',
+    years_experience: '',
+    minimum_salary_expected: '',
+    right_to_work: '',
+    right_to_work_other: '',
+    security_vetting: '',
+    notice_period: '',
+    open_to_relocate: '',
+    relocation_preferences: '',
+    communication_score: '',
+    professionalism_score: '',
+    enthusiasm_score: '',
+    cultural_fit_score: '',
+    general_comments: '',
+    recommendation: '',
+  });
+  const [phoneSkills, setPhoneSkills] = useState<string[]>([]);
+  const [phoneSkillInput, setPhoneSkillInput] = useState('');
+  
+  // Technical interview form
+  const [techForm, setTechForm] = useState({
     outcome: '',
     communication_score: '',
     professionalism_score: '',
@@ -131,6 +199,19 @@ export function CandidateProfilePage() {
     cultural_fit_score: '',
     technical_depth_score: '',
     problem_solving_score: '',
+    general_comments: '',
+    recommendation: '',
+  });
+  const [techSkills, setTechSkills] = useState<string[]>([]);
+  const [techSkillInput, setTechSkillInput] = useState('');
+  
+  // Director interview form
+  const [directorForm, setDirectorForm] = useState({
+    outcome: '',
+    communication_score: '',
+    professionalism_score: '',
+    enthusiasm_score: '',
+    cultural_fit_score: '',
     general_comments: '',
     recommendation: '',
   });
@@ -205,42 +286,85 @@ export function CandidateProfilePage() {
 
   const handleOpenCompleteModal = (interview: any) => {
     setSelectedInterview(interview);
-    setFeedbackForm({
-      outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
-      communication_score: interview.communication_score?.toString() || '',
-      professionalism_score: interview.professionalism_score?.toString() || '',
-      enthusiasm_score: interview.enthusiasm_score?.toString() || '',
-      cultural_fit_score: interview.cultural_fit_score?.toString() || '',
-      technical_depth_score: interview.technical_depth_score?.toString() || '',
-      problem_solving_score: interview.problem_solving_score?.toString() || '',
-      general_comments: interview.general_comments || '',
-      recommendation: interview.recommendation || '',
-    });
+    
+    // Initialize form based on interview stage
+    if (interview.stage === 'phone_qualification') {
+      setPhoneForm({
+        outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
+        years_experience: candidate?.years_experience?.toString() || '',
+        minimum_salary_expected: candidate?.minimum_salary_expected?.toString() || '',
+        right_to_work: candidate?.right_to_work || '',
+        right_to_work_other: '',
+        security_vetting: candidate?.security_vetting || '',
+        notice_period: '',
+        open_to_relocate: '',
+        relocation_preferences: '',
+        communication_score: interview.communication_score?.toString() || '',
+        professionalism_score: interview.professionalism_score?.toString() || '',
+        enthusiasm_score: interview.enthusiasm_score?.toString() || '',
+        cultural_fit_score: interview.cultural_fit_score?.toString() || '',
+        general_comments: interview.general_comments || '',
+        recommendation: interview.recommendation || '',
+      });
+      setPhoneSkills(candidate?.skills || []);
+    } else if (interview.stage === 'technical_interview') {
+      setTechForm({
+        outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
+        communication_score: interview.communication_score?.toString() || '',
+        professionalism_score: interview.professionalism_score?.toString() || '',
+        enthusiasm_score: interview.enthusiasm_score?.toString() || '',
+        cultural_fit_score: interview.cultural_fit_score?.toString() || '',
+        technical_depth_score: interview.technical_depth_score?.toString() || '',
+        problem_solving_score: interview.problem_solving_score?.toString() || '',
+        general_comments: interview.general_comments || '',
+        recommendation: interview.recommendation || '',
+      });
+      setTechSkills(candidate?.skills || []);
+    } else {
+      setDirectorForm({
+        outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
+        communication_score: interview.communication_score?.toString() || '',
+        professionalism_score: interview.professionalism_score?.toString() || '',
+        enthusiasm_score: interview.enthusiasm_score?.toString() || '',
+        cultural_fit_score: interview.cultural_fit_score?.toString() || '',
+        general_comments: interview.general_comments || '',
+        recommendation: interview.recommendation || '',
+      });
+    }
+    
     setIsCompleteModalOpen(true);
   };
 
-  const handleSubmitFeedback = async () => {
-    if (!feedbackForm.outcome) {
+  const handleSubmitPhoneFeedback = async () => {
+    if (!phoneForm.outcome) {
       toast.error('Validation Error', 'Please select an outcome (Pass/Fail)');
       return;
     }
     
     setIsSubmitting(true);
     try {
-      await interviewsService.update(selectedInterview.id, {
-        outcome: feedbackForm.outcome,
-        completed_at: new Date().toISOString(),
-        communication_score: feedbackForm.communication_score ? parseInt(feedbackForm.communication_score) : undefined,
-        professionalism_score: feedbackForm.professionalism_score ? parseInt(feedbackForm.professionalism_score) : undefined,
-        enthusiasm_score: feedbackForm.enthusiasm_score ? parseInt(feedbackForm.enthusiasm_score) : undefined,
-        cultural_fit_score: feedbackForm.cultural_fit_score ? parseInt(feedbackForm.cultural_fit_score) : undefined,
-        technical_depth_score: feedbackForm.technical_depth_score ? parseInt(feedbackForm.technical_depth_score) : undefined,
-        problem_solving_score: feedbackForm.problem_solving_score ? parseInt(feedbackForm.problem_solving_score) : undefined,
-        general_comments: feedbackForm.general_comments || undefined,
-        recommendation: feedbackForm.recommendation || undefined,
+      // Update candidate with admin info from phone call
+      await candidatesService.update(id!, {
+        years_experience: phoneForm.years_experience ? parseInt(phoneForm.years_experience) : undefined,
+        minimum_salary_expected: phoneForm.minimum_salary_expected ? parseInt(phoneForm.minimum_salary_expected) : undefined,
+        right_to_work: phoneForm.right_to_work || undefined,
+        security_vetting: phoneForm.security_vetting || undefined,
+        skills: phoneSkills.length > 0 ? phoneSkills : undefined,
       });
       
-      toast.success('Interview Updated', 'Feedback has been saved');
+      // Update interview
+      await interviewsService.update(selectedInterview.id, {
+        outcome: phoneForm.outcome,
+        completed_at: new Date().toISOString(),
+        communication_score: phoneForm.communication_score ? parseInt(phoneForm.communication_score) : undefined,
+        professionalism_score: phoneForm.professionalism_score ? parseInt(phoneForm.professionalism_score) : undefined,
+        enthusiasm_score: phoneForm.enthusiasm_score ? parseInt(phoneForm.enthusiasm_score) : undefined,
+        cultural_fit_score: phoneForm.cultural_fit_score ? parseInt(phoneForm.cultural_fit_score) : undefined,
+        general_comments: phoneForm.general_comments || undefined,
+        recommendation: phoneForm.recommendation || undefined,
+      });
+      
+      toast.success('Phone Interview Completed', 'Feedback and candidate info have been saved');
       setIsCompleteModalOpen(false);
       loadData();
     } catch (error) {
@@ -249,6 +373,85 @@ export function CandidateProfilePage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmitTechFeedback = async () => {
+    if (!techForm.outcome) {
+      toast.error('Validation Error', 'Please select an outcome (Pass/Fail)');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      // Update candidate skills
+      await candidatesService.update(id!, {
+        skills: techSkills.length > 0 ? techSkills : undefined,
+      });
+      
+      // Update interview
+      await interviewsService.update(selectedInterview.id, {
+        outcome: techForm.outcome,
+        completed_at: new Date().toISOString(),
+        communication_score: techForm.communication_score ? parseInt(techForm.communication_score) : undefined,
+        professionalism_score: techForm.professionalism_score ? parseInt(techForm.professionalism_score) : undefined,
+        enthusiasm_score: techForm.enthusiasm_score ? parseInt(techForm.enthusiasm_score) : undefined,
+        cultural_fit_score: techForm.cultural_fit_score ? parseInt(techForm.cultural_fit_score) : undefined,
+        technical_depth_score: techForm.technical_depth_score ? parseInt(techForm.technical_depth_score) : undefined,
+        problem_solving_score: techForm.problem_solving_score ? parseInt(techForm.problem_solving_score) : undefined,
+        general_comments: techForm.general_comments || undefined,
+        recommendation: techForm.recommendation || undefined,
+      });
+      
+      toast.success('Technical Interview Completed', 'Feedback has been saved');
+      setIsCompleteModalOpen(false);
+      loadData();
+    } catch (error) {
+      console.error('Error updating interview:', error);
+      toast.error('Error', 'Failed to save feedback');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitDirectorFeedback = async () => {
+    if (!directorForm.outcome) {
+      toast.error('Validation Error', 'Please select an outcome (Pass/Fail)');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await interviewsService.update(selectedInterview.id, {
+        outcome: directorForm.outcome,
+        completed_at: new Date().toISOString(),
+        communication_score: directorForm.communication_score ? parseInt(directorForm.communication_score) : undefined,
+        professionalism_score: directorForm.professionalism_score ? parseInt(directorForm.professionalism_score) : undefined,
+        enthusiasm_score: directorForm.enthusiasm_score ? parseInt(directorForm.enthusiasm_score) : undefined,
+        cultural_fit_score: directorForm.cultural_fit_score ? parseInt(directorForm.cultural_fit_score) : undefined,
+        general_comments: directorForm.general_comments || undefined,
+        recommendation: directorForm.recommendation || undefined,
+      });
+      
+      toast.success('Director Interview Completed', 'Feedback has been saved');
+      setIsCompleteModalOpen(false);
+      loadData();
+    } catch (error) {
+      console.error('Error updating interview:', error);
+      toast.error('Error', 'Failed to save feedback');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkillAdd = (skillList: string[], setSkillList: (s: string[]) => void, input: string, setInput: (s: string) => void) => {
+    if (input.trim() && !skillList.includes(input.trim())) {
+      setSkillList([...skillList, input.trim()]);
+    }
+    setInput('');
+  };
+
+  const handleSkillRemove = (skillList: string[], setSkillList: (s: string[]) => void, skill: string) => {
+    setSkillList(skillList.filter(s => s !== skill));
   };
 
   const interviewerOptions = [
@@ -511,7 +714,6 @@ export function CandidateProfilePage() {
                             
                             {isExpanded && (
                               <div className="mt-3 space-y-3">
-                                {/* Scores */}
                                 <div className="flex flex-wrap gap-4">
                                   {interview.communication_score && (
                                     <div className="text-sm">
@@ -581,6 +783,18 @@ export function CandidateProfilePage() {
                     <div>
                       <p className="text-xs text-brand-grey-400">Experience</p>
                       <p className="text-sm text-brand-slate-700">{candidate.years_experience} years</p>
+                    </div>
+                  </div>
+                )}
+                
+                {candidate.right_to_work && candidate.right_to_work !== 'unknown' && (
+                  <div className="flex items-center gap-3">
+                    <User className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Right to Work</p>
+                      <p className="text-sm text-brand-slate-700">
+                        {rightToWorkLabels[candidate.right_to_work] || candidate.right_to_work}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -672,129 +886,363 @@ export function CandidateProfilePage() {
         </div>
       </Modal>
 
-      {/* Complete Interview Modal */}
+      {/* Phone Qualification Modal */}
       <Modal
-        isOpen={isCompleteModalOpen}
+        isOpen={isCompleteModalOpen && selectedInterview?.stage === 'phone_qualification'}
         onClose={() => setIsCompleteModalOpen(false)}
-        title={selectedInterview ? stageConfig[selectedInterview.stage as InterviewStage]?.label : 'Complete Interview'}
+        title="Phone Qualification"
         description={`${candidate.first_name} ${candidate.last_name}`}
         size="xl"
       >
-        <div className="space-y-6">
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
           {/* Outcome */}
           <div>
-            <label className="block text-sm font-medium text-brand-slate-700 mb-2">
-              Outcome *
-            </label>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setFeedbackForm(prev => ({ ...prev, outcome: 'pass' }))}
+                onClick={() => setPhoneForm(prev => ({ ...prev, outcome: 'pass' }))}
                 className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  feedbackForm.outcome === 'pass' 
-                    ? 'border-green-500 bg-green-50 text-green-700' 
-                    : 'border-brand-grey-200 hover:border-green-300'
+                  phoneForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
                 }`}
               >
-                <CheckCircle className="h-5 w-5" />
-                Pass
+                <CheckCircle className="h-5 w-5" /> Pass
               </button>
               <button
                 type="button"
-                onClick={() => setFeedbackForm(prev => ({ ...prev, outcome: 'fail' }))}
+                onClick={() => setPhoneForm(prev => ({ ...prev, outcome: 'fail' }))}
                 className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  feedbackForm.outcome === 'fail' 
-                    ? 'border-red-500 bg-red-50 text-red-700' 
-                    : 'border-brand-grey-200 hover:border-red-300'
+                  phoneForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
                 }`}
               >
-                <XCircle className="h-5 w-5" />
-                Fail
+                <XCircle className="h-5 w-5" /> Fail
               </button>
             </div>
           </div>
 
-          {/* Soft Skills Scores */}
-          <div>
-            <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Soft Skills</h4>
+          {/* Admin Questions Section */}
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-4">Candidate Information</h4>
+            
             <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Years of Experience"
+                type="number"
+                value={phoneForm.years_experience}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, years_experience: e.target.value }))}
+                placeholder="e.g., 5"
+              />
+              <Input
+                label="Minimum Salary Expected (£)"
+                type="number"
+                value={phoneForm.minimum_salary_expected}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, minimum_salary_expected: e.target.value }))}
+                placeholder="e.g., 75000"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
               <Select
-                label="Communication"
-                options={scoreOptions}
-                value={feedbackForm.communication_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, communication_score: e.target.value }))}
+                label="Right to Work in UK"
+                options={rightToWorkOptions}
+                value={phoneForm.right_to_work}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, right_to_work: e.target.value }))}
               />
               <Select
-                label="Professionalism"
-                options={scoreOptions}
-                value={feedbackForm.professionalism_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, professionalism_score: e.target.value }))}
+                label="Security Clearance"
+                options={securityClearanceOptions}
+                value={phoneForm.security_vetting}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, security_vetting: e.target.value }))}
+              />
+            </div>
+
+            {phoneForm.right_to_work === 'other' && (
+              <Input
+                label="Please specify Right to Work status"
+                value={phoneForm.right_to_work_other}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, right_to_work_other: e.target.value }))}
+                placeholder="Specify visa type or status"
+                className="mt-4"
+              />
+            )}
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Select
+                label="Notice Period"
+                options={noticePeriodOptions}
+                value={phoneForm.notice_period}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, notice_period: e.target.value }))}
               />
               <Select
-                label="Enthusiasm"
-                options={scoreOptions}
-                value={feedbackForm.enthusiasm_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))}
+                label="Open to Relocate?"
+                options={[
+                  { value: '', label: 'Select' },
+                  { value: 'yes', label: 'Yes' },
+                  { value: 'no', label: 'No' },
+                  { value: 'maybe', label: 'Maybe / Depends' },
+                ]}
+                value={phoneForm.open_to_relocate}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, open_to_relocate: e.target.value }))}
               />
-              <Select
-                label="Cultural Fit"
-                options={scoreOptions}
-                value={feedbackForm.cultural_fit_score}
-                onChange={(e) => setFeedbackForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))}
+            </div>
+
+            {phoneForm.open_to_relocate === 'yes' && (
+              <Input
+                label="Relocation Preferences"
+                value={phoneForm.relocation_preferences}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, relocation_preferences: e.target.value }))}
+                placeholder="e.g., London, Manchester, Remote only"
+                className="mt-4"
               />
+            )}
+          </div>
+
+          {/* Skills Section */}
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Skills (add or remove)</h4>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Add a skill..."
+                value={phoneSkillInput}
+                onChange={(e) => setPhoneSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSkillAdd(phoneSkills, setPhoneSkills, phoneSkillInput, setPhoneSkillInput);
+                  }
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => handleSkillAdd(phoneSkills, setPhoneSkills, phoneSkillInput, setPhoneSkillInput)}
+              >
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {phoneSkills.map(skill => (
+                <Badge key={skill} variant="cyan">
+                  {skill}
+                  <button
+                    onClick={() => handleSkillRemove(phoneSkills, setPhoneSkills, skill)}
+                    className="ml-1.5 hover:text-red-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
             </div>
           </div>
 
-          {/* Technical Scores */}
-          {selectedInterview?.stage !== 'phone_qualification' && (
-            <div>
-              <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Technical Skills</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <Select
-                  label="Technical Depth"
-                  options={scoreOptions}
-                  value={feedbackForm.technical_depth_score}
-                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, technical_depth_score: e.target.value }))}
-                />
-                <Select
-                  label="Problem Solving"
-                  options={scoreOptions}
-                  value={feedbackForm.problem_solving_score}
-                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, problem_solving_score: e.target.value }))}
-                />
-              </div>
+          {/* Scores */}
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <Select label="Communication" options={scoreOptions} value={phoneForm.communication_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, communication_score: e.target.value }))} />
+              <Select label="Professionalism" options={scoreOptions} value={phoneForm.professionalism_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, professionalism_score: e.target.value }))} />
+              <Select label="Enthusiasm" options={scoreOptions} value={phoneForm.enthusiasm_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))} />
+              <Select label="Cultural Fit" options={scoreOptions} value={phoneForm.cultural_fit_score} onChange={(e) => setPhoneForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))} />
             </div>
-          )}
+          </div>
 
           {/* Comments */}
           <Textarea
             label="General Comments"
-            value={feedbackForm.general_comments}
-            onChange={(e) => setFeedbackForm(prev => ({ ...prev, general_comments: e.target.value }))}
-            placeholder="Notes from the interview..."
+            value={phoneForm.general_comments}
+            onChange={(e) => setPhoneForm(prev => ({ ...prev, general_comments: e.target.value }))}
+            placeholder="Notes from the call..."
             rows={3}
           />
-
           <Textarea
             label="Recommendation"
-            value={feedbackForm.recommendation}
-            onChange={(e) => setFeedbackForm(prev => ({ ...prev, recommendation: e.target.value }))}
-            placeholder="Your recommendation for next steps..."
+            value={phoneForm.recommendation}
+            onChange={(e) => setPhoneForm(prev => ({ ...prev, recommendation: e.target.value }))}
+            placeholder="Your recommendation..."
             rows={2}
           />
 
-          {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
-            <Button variant="secondary" onClick={() => setIsCompleteModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              variant="success" 
-              onClick={handleSubmitFeedback} 
-              isLoading={isSubmitting}
-            >
-              Save Feedback
-            </Button>
+            <Button variant="secondary" onClick={() => setIsCompleteModalOpen(false)}>Cancel</Button>
+            <Button variant="success" onClick={handleSubmitPhoneFeedback} isLoading={isSubmitting}>Save Feedback</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Technical Interview Modal */}
+      <Modal
+        isOpen={isCompleteModalOpen && selectedInterview?.stage === 'technical_interview'}
+        onClose={() => setIsCompleteModalOpen(false)}
+        title="Technical Interview"
+        description={`${candidate.first_name} ${candidate.last_name}`}
+        size="xl"
+      >
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+          {/* Outcome */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setTechForm(prev => ({ ...prev, outcome: 'pass' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  techForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5" /> Pass
+              </button>
+              <button
+                type="button"
+                onClick={() => setTechForm(prev => ({ ...prev, outcome: 'fail' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  techForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5" /> Fail
+              </button>
+            </div>
+          </div>
+
+          {/* Skills Section */}
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Technical Skills (add or remove based on interview)</h4>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Add a skill..."
+                value={techSkillInput}
+                onChange={(e) => setTechSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSkillAdd(techSkills, setTechSkills, techSkillInput, setTechSkillInput);
+                  }
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => handleSkillAdd(techSkills, setTechSkills, techSkillInput, setTechSkillInput)}
+              >
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {techSkills.map(skill => (
+                <Badge key={skill} variant="cyan">
+                  {skill}
+                  <button
+                    onClick={() => handleSkillRemove(techSkills, setTechSkills, skill)}
+                    className="ml-1.5 hover:text-red-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Scores */}
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Technical Assessment</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <Select label="Technical Depth" options={scoreOptions} value={techForm.technical_depth_score} onChange={(e) => setTechForm(prev => ({ ...prev, technical_depth_score: e.target.value }))} />
+              <Select label="Problem Solving" options={scoreOptions} value={techForm.problem_solving_score} onChange={(e) => setTechForm(prev => ({ ...prev, problem_solving_score: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <Select label="Communication" options={scoreOptions} value={techForm.communication_score} onChange={(e) => setTechForm(prev => ({ ...prev, communication_score: e.target.value }))} />
+              <Select label="Professionalism" options={scoreOptions} value={techForm.professionalism_score} onChange={(e) => setTechForm(prev => ({ ...prev, professionalism_score: e.target.value }))} />
+              <Select label="Enthusiasm" options={scoreOptions} value={techForm.enthusiasm_score} onChange={(e) => setTechForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))} />
+              <Select label="Cultural Fit" options={scoreOptions} value={techForm.cultural_fit_score} onChange={(e) => setTechForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))} />
+            </div>
+          </div>
+
+          <Textarea
+            label="General Comments"
+            value={techForm.general_comments}
+            onChange={(e) => setTechForm(prev => ({ ...prev, general_comments: e.target.value }))}
+            placeholder="Technical notes from the interview..."
+            rows={3}
+          />
+          <Textarea
+            label="Recommendation"
+            value={techForm.recommendation}
+            onChange={(e) => setTechForm(prev => ({ ...prev, recommendation: e.target.value }))}
+            placeholder="Your recommendation..."
+            rows={2}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsCompleteModalOpen(false)}>Cancel</Button>
+            <Button variant="success" onClick={handleSubmitTechFeedback} isLoading={isSubmitting}>Save Feedback</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Director Interview Modal */}
+      <Modal
+        isOpen={isCompleteModalOpen && selectedInterview?.stage === 'director_interview'}
+        onClose={() => setIsCompleteModalOpen(false)}
+        title="Director Interview"
+        description={`${candidate.first_name} ${candidate.last_name}`}
+        size="lg"
+      >
+        <div className="space-y-6">
+          {/* Outcome */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDirectorForm(prev => ({ ...prev, outcome: 'pass' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  directorForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5" /> Pass
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirectorForm(prev => ({ ...prev, outcome: 'fail' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  directorForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5" /> Fail
+              </button>
+            </div>
+          </div>
+
+          {/* Scores */}
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <Select label="Communication" options={scoreOptions} value={directorForm.communication_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, communication_score: e.target.value }))} />
+              <Select label="Professionalism" options={scoreOptions} value={directorForm.professionalism_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, professionalism_score: e.target.value }))} />
+              <Select label="Enthusiasm" options={scoreOptions} value={directorForm.enthusiasm_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, enthusiasm_score: e.target.value }))} />
+              <Select label="Cultural Fit" options={scoreOptions} value={directorForm.cultural_fit_score} onChange={(e) => setDirectorForm(prev => ({ ...prev, cultural_fit_score: e.target.value }))} />
+            </div>
+          </div>
+
+          <Textarea
+            label="General Comments"
+            value={directorForm.general_comments}
+            onChange={(e) => setDirectorForm(prev => ({ ...prev, general_comments: e.target.value }))}
+            placeholder="Notes from the interview..."
+            rows={3}
+          />
+          <Textarea
+            label="Recommendation"
+            value={directorForm.recommendation}
+            onChange={(e) => setDirectorForm(prev => ({ ...prev, recommendation: e.target.value }))}
+            placeholder="Final recommendation..."
+            rows={2}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsCompleteModalOpen(false)}>Cancel</Button>
+            <Button variant="success" onClick={handleSubmitDirectorFeedback} isLoading={isSubmitting}>Save Feedback</Button>
           </div>
         </div>
       </Modal>

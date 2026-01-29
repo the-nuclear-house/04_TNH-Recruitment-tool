@@ -31,15 +31,13 @@ export function CandidatesPage() {
   const permissions = usePermissions();
   const toast = useToast();
 
-  // Form state
+  // Form state - only fields we can get from CV
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     email: '',
     phone: '',
     location: '',
-    years_experience: '',
-    minimum_salary: '',
     summary: '',
   });
   const [skills, setSkills] = useState<string[]>([]);
@@ -164,8 +162,6 @@ export function CandidatesPage() {
         email: formData.email,
         phone: formData.phone || undefined,
         location: formData.location || undefined,
-        years_experience: formData.years_experience ? parseInt(formData.years_experience) : undefined,
-        minimum_salary_expected: formData.minimum_salary ? parseInt(formData.minimum_salary) : undefined,
         summary: formData.summary || undefined,
         skills: skills.length > 0 ? skills : undefined,
         previous_companies: previousCompanies.length > 0 ? previousCompanies : undefined,
@@ -179,8 +175,6 @@ export function CandidatesPage() {
         email: '',
         phone: '',
         location: '',
-        years_experience: '',
-        minimum_salary: '',
         summary: '',
       });
       setSkills([]);
@@ -388,28 +382,12 @@ export function CandidatesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <Input
-              label="Location"
-              value={formData.location}
-              onChange={(e) => handleFormChange('location', e.target.value)}
-              placeholder="London"
-            />
-            <Input
-              label="Years of Experience"
-              type="number"
-              value={formData.years_experience}
-              onChange={(e) => handleFormChange('years_experience', e.target.value)}
-              placeholder="5"
-            />
-            <Input
-              label="Minimum Salary Expected (£)"
-              type="number"
-              value={formData.minimum_salary}
-              onChange={(e) => handleFormChange('minimum_salary', e.target.value)}
-              placeholder="75000"
-            />
-          </div>
+          <Input
+            label="Location"
+            value={formData.location}
+            onChange={(e) => handleFormChange('location', e.target.value)}
+            placeholder="London"
+          />
 
           {/* CV Upload */}
           <div>
