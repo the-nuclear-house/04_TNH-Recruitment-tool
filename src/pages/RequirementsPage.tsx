@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Users, Building2, Calendar, BarChart3, LayoutGrid, X } from 'lucide-react';
 import { Header } from '@/components/layout';
@@ -18,6 +18,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
+import { requirementsService, usersService, type DbRequirement, type DbUser } from '@/lib/services';
 
 // Types
 type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';

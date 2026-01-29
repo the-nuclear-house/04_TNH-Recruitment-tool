@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Download, MoreHorizontal, X } from 'lucide-react';
+import { Plus, MoreHorizontal, X } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -14,109 +14,18 @@ import {
   Modal,
   Textarea,
 } from '@/components/ui';
-import { formatDate, statusLabels, formatCurrency } from '@/lib/utils';
+import { formatDate, statusLabels } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
-import type { Candidate, RightToWork, SecurityVetting, CandidateStatus } from '@/types';
-
-// Mock data - sorted by created_at descending (newest first)
-const mockCandidates: Candidate[] = [
-  {
-    id: '1',
-    first_name: 'Sarah',
-    last_name: 'Chen',
-    email: 'sarah.chen@email.com',
-    phone: '+44 7700 900123',
-    location: 'London',
-    linkedin_url: null,
-    current_role: 'Senior Software Engineer',
-    current_company: 'TechCorp Ltd',
-    years_experience: 8,
-    degree: 'MSc Computer Science',
-    summary: 'Full-stack developer with expertise in cloud architecture.',
-    skills: ['Python', 'AWS', 'Kubernetes', 'React'],
-    right_to_work: 'british_citizen' as RightToWork,
-    security_vetting: 'sc' as SecurityVetting,
-    open_to_relocate: true,
-    relocation_preferences: 'Manchester',
-    current_salary: 85000,
-    salary_expectation_min: 95000,
-    salary_expectation_max: 110000,
-    salary_currency: 'GBP',
-    sector_flexibility: 'Defence, Finance',
-    scope_flexibility: 'Backend, Full-stack',
-    status: 'director_interview' as CandidateStatus,
-    source: 'LinkedIn',
-    created_by: 'user-1',
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    first_name: 'James',
-    last_name: 'Wilson',
-    email: 'james.wilson@email.com',
-    phone: '+44 7700 900456',
-    location: 'Manchester',
-    linkedin_url: null,
-    current_role: 'DevOps Lead',
-    current_company: 'CloudSystems',
-    years_experience: 10,
-    degree: 'BEng Software Engineering',
-    summary: 'DevOps specialist with CI/CD expertise.',
-    skills: ['Terraform', 'AWS', 'Azure', 'Jenkins'],
-    right_to_work: 'settled_status' as RightToWork,
-    security_vetting: 'bpss' as SecurityVetting,
-    open_to_relocate: false,
-    relocation_preferences: null,
-    current_salary: 75000,
-    salary_expectation_min: 85000,
-    salary_expectation_max: 95000,
-    salary_currency: 'GBP',
-    sector_flexibility: 'Any',
-    scope_flexibility: 'DevOps, SRE',
-    status: 'technical_interview' as CandidateStatus,
-    source: 'Referral',
-    created_by: 'user-1',
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    first_name: 'Priya',
-    last_name: 'Patel',
-    email: 'priya.patel@email.com',
-    phone: '+44 7700 900789',
-    location: 'Birmingham',
-    linkedin_url: null,
-    current_role: 'Data Engineer',
-    current_company: 'DataFlow Analytics',
-    years_experience: 5,
-    degree: 'MSc Data Science',
-    summary: 'Data engineer specialising in scalable pipelines.',
-    skills: ['Python', 'Spark', 'Airflow', 'SQL'],
-    right_to_work: 'skilled_worker_visa' as RightToWork,
-    security_vetting: 'none' as SecurityVetting,
-    open_to_relocate: true,
-    relocation_preferences: 'London',
-    current_salary: 65000,
-    salary_expectation_min: 75000,
-    salary_expectation_max: 85000,
-    salary_currency: 'GBP',
-    sector_flexibility: 'Finance, Tech',
-    scope_flexibility: 'Data Engineering',
-    status: 'phone_qualification' as CandidateStatus,
-    source: 'Job Board',
-    created_by: 'user-1',
-    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+import { candidatesService, type DbCandidate } from '@/lib/services';
+import type { CandidateStatus } from '@/types';
 
 export function CandidatesPage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [candidates, setCandidates] = useState<DbCandidate[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const permissions = usePermissions();
@@ -189,36 +98,75 @@ export function CandidatesPage() {
     }
   };
 
+  // Load candidates from database
+  const loadCandidates = async () => {
+    try {
+      setIsLoadingData(true);
+      const data = await candidatesService.getAll();
+      setCandidates(data);
+    } catch (error) {
+      console.error('Error loading candidates:', error);
+      toast.error('Error', 'Failed to load candidates');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCandidates();
+  }, []);
+
   const handleSubmit = async () => {
     if (!formData.first_name || !formData.last_name || !formData.email) {
       toast.error('Validation Error', 'Please fill in the required fields');
       return;
     }
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    toast.success('Candidate Added', `${formData.first_name} ${formData.last_name} has been added to the database`);
-    setIsModalOpen(false);
-    setIsSubmitting(false);
-    setFormData({
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone: '',
-      location: '',
-      years_experience: '',
-      minimum_salary: '',
-      summary: '',
-    });
-    setSkills([]);
-    setPreviousCompanies([]);
-    setCvFile(null);
+    
+    try {
+      await candidatesService.create({
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone || undefined,
+        location: formData.location || undefined,
+        years_experience: formData.years_experience ? parseInt(formData.years_experience) : undefined,
+        minimum_salary_expected: formData.minimum_salary ? parseInt(formData.minimum_salary) : undefined,
+        summary: formData.summary || undefined,
+        skills: skills.length > 0 ? skills : undefined,
+        previous_companies: previousCompanies.length > 0 ? previousCompanies : undefined,
+      });
+      
+      toast.success('Candidate Added', `${formData.first_name} ${formData.last_name} has been added to the database`);
+      setIsModalOpen(false);
+      setFormData({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        location: '',
+        years_experience: '',
+        minimum_salary: '',
+        summary: '',
+      });
+      setSkills([]);
+      setPreviousCompanies([]);
+      setCvFile(null);
+      
+      // Reload candidates
+      loadCandidates();
+    } catch (error) {
+      console.error('Error creating candidate:', error);
+      toast.error('Error', 'Failed to create candidate');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const filteredCandidates = mockCandidates.filter(c => {
+  const filteredCandidates = candidates.filter(c => {
     const matchesSearch = !searchQuery || 
       `${c.first_name} ${c.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.current_role?.toLowerCase().includes(searchQuery.toLowerCase());
+      c.skills?.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = !statusFilter || c.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -227,7 +175,7 @@ export function CandidatesPage() {
     <div className="min-h-screen">
       <Header 
         title="Candidates"
-        subtitle={`${mockCandidates.length} candidates in database`}
+        subtitle={`${candidates.length} candidates in database`}
         actions={
           permissions.canAddCandidates ? (
             <Button 
@@ -274,13 +222,19 @@ export function CandidatesPage() {
         </Card>
 
         {/* Candidates Table */}
-        {filteredCandidates.length === 0 ? (
+        {isLoadingData ? (
+          <Card>
+            <div className="text-center py-8 text-brand-grey-400">
+              Loading candidates...
+            </div>
+          </Card>
+        ) : filteredCandidates.length === 0 ? (
           <EmptyState
             title="No candidates found"
-            description="Try adjusting your filters or add a new candidate."
+            description={candidates.length === 0 ? "Add your first candidate to get started." : "Try adjusting your filters."}
             action={{
               label: 'Add Candidate',
-              onClick: () => navigate('/candidates/new'),
+              onClick: () => setIsModalOpen(true),
             }}
           />
         ) : (
@@ -289,10 +243,10 @@ export function CandidatesPage() {
               <thead>
                 <tr>
                   <th>Candidate</th>
-                  <th>Role</th>
+                  <th>Skills</th>
                   <th>Location</th>
                   <th>Experience</th>
-                  <th>Salary Expectation</th>
+                  <th>Min Salary</th>
                   <th>Status</th>
                   <th>Added</th>
                   <th></th>
@@ -322,17 +276,23 @@ export function CandidatesPage() {
                       </div>
                     </td>
                     <td>
-                      <p className="text-brand-slate-900">{candidate.current_role}</p>
-                      <p className="text-sm text-brand-grey-400">{candidate.current_company}</p>
+                      <div className="flex flex-wrap gap-1">
+                        {candidate.skills?.slice(0, 3).map(skill => (
+                          <Badge key={skill} variant="cyan" className="text-xs">{skill}</Badge>
+                        ))}
+                        {candidate.skills && candidate.skills.length > 3 && (
+                          <span className="text-xs text-brand-grey-400">+{candidate.skills.length - 3}</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="text-brand-slate-700">{candidate.location}</td>
-                    <td className="text-brand-slate-700">{candidate.years_experience} years</td>
+                    <td className="text-brand-slate-700">{candidate.location || '-'}</td>
+                    <td className="text-brand-slate-700">{candidate.years_experience ? `${candidate.years_experience} yrs` : '-'}</td>
                     <td className="text-brand-slate-700">
-                      {formatCurrency(candidate.salary_expectation_min || 0)} - {formatCurrency(candidate.salary_expectation_max || 0)}
+                      {candidate.minimum_salary_expected ? `£${candidate.minimum_salary_expected.toLocaleString()}` : '-'}
                     </td>
                     <td>
-                      <Badge variant={getStatusVariant(candidate.status)}>
-                        {statusLabels[candidate.status]}
+                      <Badge variant={getStatusVariant(candidate.status as CandidateStatus)}>
+                        {statusLabels[candidate.status as CandidateStatus] || candidate.status}
                       </Badge>
                     </td>
                     <td className="text-brand-grey-400 text-sm">
