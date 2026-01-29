@@ -215,9 +215,6 @@ export function CandidatesPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
               placeholder="Filter by status"
             />
-            <Button variant="secondary" leftIcon={<Download className="h-4 w-4" />}>
-              Export
-            </Button>
           </div>
         </Card>
 
