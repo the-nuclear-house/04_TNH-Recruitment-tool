@@ -430,7 +430,7 @@ export function RequirementDetailPage() {
               <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${config.bgColour} ${config.colour}`}>
                 {config.label}
               </span>
-            )}}
+            )}
           </div>
         </Card>
 
