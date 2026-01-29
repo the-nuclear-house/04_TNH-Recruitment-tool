@@ -87,6 +87,9 @@ export function RequirementDetailPage() {
   const [applications, setApplications] = useState<DbApplication[]>([]);
   const [allCandidates, setAllCandidates] = useState<DbCandidate[]>([]);
   
+  // Track scheduled assessments per application
+  const [scheduledAssessments, setScheduledAssessments] = useState<Record<string, boolean>>({});
+  
   // Add candidate modal
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
@@ -132,8 +135,10 @@ export function RequirementDetailPage() {
       setApplications(appsData);
       setAllCandidates(candidatesData);
       
-      // Check interview status for each linked candidate
+      // Check interview status and scheduled assessments for each linked candidate
       const interviewStatus: Record<string, boolean> = {};
+      const assessmentStatus: Record<string, boolean> = {};
+      
       for (const app of appsData) {
         try {
           const interviews = await interviewsService.getByCandidate(app.candidate_id);
@@ -142,11 +147,17 @@ export function RequirementDetailPage() {
           const techPass = interviews.some(i => i.stage === 'technical_interview' && i.outcome === 'pass');
           const directorPass = interviews.some(i => i.stage === 'director_interview' && i.outcome === 'pass');
           interviewStatus[app.candidate_id] = phonePass && techPass && directorPass;
+          
+          // Check if assessment is already scheduled for this application
+          const assessments = await customerAssessmentsService.getByApplication(app.id);
+          assessmentStatus[app.id] = assessments.length > 0;
         } catch (e) {
           interviewStatus[app.candidate_id] = false;
+          assessmentStatus[app.id] = false;
         }
       }
       setCandidateInterviewStatus(interviewStatus);
+      setScheduledAssessments(assessmentStatus);
       
       if (reqData?.manager_id) {
         const mgr = usersData.find(u => u.id === reqData.manager_id);
@@ -249,7 +260,7 @@ export function RequirementDetailPage() {
         created_by: user.id,
       });
       
-      toast.success('Assessment Scheduled', 'Customer assessment has been scheduled');
+      toast.success('Assessment Scheduled', 'Client assessment has been scheduled');
       setIsScheduleAssessmentModalOpen(false);
       setSelectedApplicationForAssessment(null);
       setAssessmentForm({
@@ -259,6 +270,9 @@ export function RequirementDetailPage() {
         location: '',
         notes: '',
       });
+      
+      // Reload to update assessment status
+      loadData();
     } catch (error) {
       console.error('Error scheduling assessment:', error);
       toast.error('Error', 'Failed to schedule assessment');
@@ -529,6 +543,7 @@ export function RequirementDetailPage() {
             <div className="space-y-3">
               {applications.map((app) => {
                 const hasPassedAllInterviews = candidateInterviewStatus[app.candidate_id];
+                const hasScheduledAssessment = scheduledAssessments[app.id];
                 
                 return (
                 <div 
@@ -555,15 +570,15 @@ export function RequirementDetailPage() {
                     {hasPassedAllInterviews && (
                       <Badge variant="green">Interviews Complete</Badge>
                     )}
-                    <Badge variant={app.status === 'applied' ? 'grey' : 'green'}>
-                      {app.status.replace('_', ' ')}
-                    </Badge>
+                    {hasScheduledAssessment && (
+                      <Badge variant="cyan">Assessment Planned</Badge>
+                    )}
                     <span className="text-xs text-brand-grey-400">
                       Added {formatDate(app.created_at)}
                     </span>
                     
-                    {/* Schedule Client Meeting - only for Manager/Director/Admin and if interviews passed */}
-                    {canScheduleAssessments && hasPassedAllInterviews && (
+                    {/* Schedule Client Assessment - only for Manager/Director/Admin and if interviews passed and no assessment yet */}
+                    {canScheduleAssessments && hasPassedAllInterviews && !hasScheduledAssessment && (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -574,7 +589,7 @@ export function RequirementDetailPage() {
                           setIsScheduleAssessmentModalOpen(true);
                         }}
                       >
-                        Client Meeting
+                        Client Assessment
                       </Button>
                     )}
                     

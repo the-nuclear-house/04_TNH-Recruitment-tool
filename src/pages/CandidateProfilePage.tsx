@@ -1044,6 +1044,65 @@ export function CandidateProfilePage() {
               </Card>
             )}
 
+            {/* Assigned Recruiter */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Assigned Recruiter</CardTitle>
+              </CardHeader>
+              <div className="space-y-3">
+                {candidate.assigned_recruiter_id ? (
+                  <div className="flex items-center gap-3">
+                    <Avatar 
+                      name={users.find(u => u.id === candidate.assigned_recruiter_id)?.name || 'Unknown'} 
+                      size="sm" 
+                    />
+                    <div>
+                      <p className="font-medium text-brand-slate-900">
+                        {users.find(u => u.id === candidate.assigned_recruiter_id)?.name || 'Unknown'}
+                      </p>
+                      <p className="text-xs text-brand-grey-400">
+                        {users.find(u => u.id === candidate.assigned_recruiter_id)?.email}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-brand-grey-400 text-sm">No recruiter assigned</p>
+                )}
+                
+                {/* Change recruiter - only assigned recruiter or admin can change */}
+                {(permissions.isAdmin || candidate.assigned_recruiter_id === user?.id) && (
+                  <div className="pt-3 border-t border-brand-grey-100">
+                    <label className="block text-xs text-brand-grey-400 mb-1">
+                      {candidate.assigned_recruiter_id ? 'Reassign to' : 'Assign to'}
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border border-brand-grey-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan"
+                      value={candidate.assigned_recruiter_id || ''}
+                      onChange={async (e) => {
+                        try {
+                          await candidatesService.update(candidate.id, {
+                            assigned_recruiter_id: e.target.value || undefined,
+                          });
+                          loadData();
+                          toast.success('Recruiter Updated', 'Candidate assignment has been updated');
+                        } catch (error) {
+                          toast.error('Error', 'Failed to update recruiter');
+                        }
+                      }}
+                    >
+                      <option value="">-- Select Recruiter --</option>
+                      {users
+                        .filter(u => u.role === 'recruiter' || u.role === 'admin')
+                        .map(u => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )}
+              </div>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Record Info</CardTitle>

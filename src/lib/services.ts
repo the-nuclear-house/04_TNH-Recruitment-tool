@@ -21,6 +21,7 @@ export interface DbCandidate {
   source: string | null;
   cv_url: string | null;
   created_by: string | null;
+  assigned_recruiter_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +43,7 @@ export interface CreateCandidateInput {
   security_vetting?: string;
   source?: string;
   cv_url?: string;
+  assigned_recruiter_id?: string;
 }
 
 export interface UpdateCandidateInput extends Partial<CreateCandidateInput> {

@@ -9,16 +9,13 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  X,
+  Users,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
-  CardHeader, 
-  CardTitle, 
   Badge, 
   Avatar, 
-  Select, 
   EmptyState,
   Modal,
   Button,
@@ -54,8 +51,11 @@ export function InterviewsPage() {
   const [candidates, setCandidates] = useState<Record<string, any>>({});
   const [users, setUsers] = useState<Record<string, any>>({});
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Filters
   const [stageFilter, setStageFilter] = useState<string>('');
   const [outcomeFilter, setOutcomeFilter] = useState<string>('');
+  const [showMyCandidatesOnly, setShowMyCandidatesOnly] = useState(false);
   
   // Complete interview modal
   const [selectedInterview, setSelectedInterview] = useState<any>(null);
@@ -85,9 +85,10 @@ export function InterviewsPage() {
         candidatesService.getAll(),
         usersService.getAll(),
       ]);
-      
+
       setInterviews(interviewsData);
       
+      // Create lookup maps
       const candidateMap: Record<string, any> = {};
       candidatesData.forEach(c => { candidateMap[c.id] = c; });
       setCandidates(candidateMap);
@@ -97,15 +98,16 @@ export function InterviewsPage() {
       setUsers(userMap);
     } catch (error) {
       console.error('Error loading interviews:', error);
+      toast.error('Error', 'Failed to load interviews');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleOpenInterview = (interview: any) => {
+  const handleCompleteInterview = (interview: any) => {
     setSelectedInterview(interview);
     setFeedbackForm({
-      outcome: interview.outcome || '',
+      outcome: interview.outcome === 'pending' ? '' : interview.outcome,
       communication_score: interview.communication_score?.toString() || '',
       professionalism_score: interview.professionalism_score?.toString() || '',
       enthusiasm_score: interview.enthusiasm_score?.toString() || '',
@@ -120,26 +122,43 @@ export function InterviewsPage() {
 
   const handleSubmitFeedback = async () => {
     if (!feedbackForm.outcome) {
-      toast.error('Validation Error', 'Please select an outcome (Pass/Fail)');
+      toast.error('Validation Error', 'Please select an outcome');
       return;
     }
-    
+
+    // Validate all scores
+    if (!feedbackForm.communication_score || !feedbackForm.professionalism_score || 
+        !feedbackForm.enthusiasm_score || !feedbackForm.cultural_fit_score) {
+      toast.error('Validation Error', 'Please rate all soft skills');
+      return;
+    }
+
+    if (!feedbackForm.general_comments) {
+      toast.error('Validation Error', 'Please add general comments');
+      return;
+    }
+
+    if (!feedbackForm.recommendation) {
+      toast.error('Validation Error', 'Please add a recommendation');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await interviewsService.update(selectedInterview.id, {
         outcome: feedbackForm.outcome,
         completed_at: new Date().toISOString(),
-        communication_score: feedbackForm.communication_score ? parseInt(feedbackForm.communication_score) : undefined,
-        professionalism_score: feedbackForm.professionalism_score ? parseInt(feedbackForm.professionalism_score) : undefined,
-        enthusiasm_score: feedbackForm.enthusiasm_score ? parseInt(feedbackForm.enthusiasm_score) : undefined,
-        cultural_fit_score: feedbackForm.cultural_fit_score ? parseInt(feedbackForm.cultural_fit_score) : undefined,
+        communication_score: parseInt(feedbackForm.communication_score),
+        professionalism_score: parseInt(feedbackForm.professionalism_score),
+        enthusiasm_score: parseInt(feedbackForm.enthusiasm_score),
+        cultural_fit_score: parseInt(feedbackForm.cultural_fit_score),
         technical_depth_score: feedbackForm.technical_depth_score ? parseInt(feedbackForm.technical_depth_score) : undefined,
         problem_solving_score: feedbackForm.problem_solving_score ? parseInt(feedbackForm.problem_solving_score) : undefined,
-        general_comments: feedbackForm.general_comments || undefined,
-        recommendation: feedbackForm.recommendation || undefined,
+        general_comments: feedbackForm.general_comments,
+        recommendation: feedbackForm.recommendation,
       });
-      
-      toast.success('Interview Updated', 'Feedback has been saved');
+
+      toast.success('Interview Completed', 'Feedback has been saved');
       setIsModalOpen(false);
       loadData();
     } catch (error) {
@@ -150,17 +169,46 @@ export function InterviewsPage() {
     }
   };
 
-  // Only show interviews where the current user is the interviewer
-  const myInterviews = interviews.filter(i => i.interviewer_id === user?.id);
+  // Filter interviews based on user role and "My Candidates" toggle
+  const getRelevantInterviews = () => {
+    let filtered = interviews;
+    
+    // Apply "My Candidates" filter
+    if (showMyCandidatesOnly) {
+      if (user?.role === 'recruiter') {
+        // Recruiters see interviews for candidates they're assigned to
+        filtered = filtered.filter(i => {
+          const candidate = candidates[i.candidate_id];
+          return candidate?.assigned_recruiter_id === user.id;
+        });
+      } else if (user?.role === 'manager') {
+        // Managers see interviews where they are the interviewer
+        filtered = filtered.filter(i => i.interviewer_id === user.id);
+      } else {
+        // Admin/Director - show interviews where they are the interviewer
+        filtered = filtered.filter(i => i.interviewer_id === user.id);
+      }
+    }
+    
+    // Apply stage filter
+    if (stageFilter) {
+      filtered = filtered.filter(i => i.stage === stageFilter);
+    }
+    
+    // Apply outcome filter
+    if (outcomeFilter) {
+      filtered = filtered.filter(i => i.outcome === outcomeFilter);
+    }
+    
+    return filtered;
+  };
 
-  const filteredInterviews = myInterviews.filter(interview => {
-    const matchesStage = !stageFilter || interview.stage === stageFilter;
-    const matchesOutcome = !outcomeFilter || interview.outcome === outcomeFilter;
-    return matchesStage && matchesOutcome;
-  });
-
-  const pendingCount = myInterviews.filter(i => i.outcome === 'pending').length;
-  const completedCount = myInterviews.filter(i => i.outcome === 'pass' || i.outcome === 'fail').length;
+  const filteredInterviews = getRelevantInterviews();
+  
+  // Stats based on all interviews (before "My Candidates" filter)
+  const allInterviews = interviews;
+  const pendingCount = allInterviews.filter(i => i.outcome === 'pending').length;
+  const completedCount = allInterviews.filter(i => i.outcome === 'pass' || i.outcome === 'fail').length;
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return '';
@@ -180,8 +228,8 @@ export function InterviewsPage() {
   return (
     <div className="min-h-screen">
       <Header
-        title="My Interviews"
-        subtitle="Your scheduled interviews"
+        title="Interviews"
+        subtitle="All scheduled interviews"
       />
 
       <div className="p-6 space-y-6">
@@ -217,37 +265,122 @@ export function InterviewsPage() {
                 <Calendar className="h-5 w-5 text-brand-slate-700" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{myInterviews.length}</p>
+                <p className="text-2xl font-bold text-brand-slate-900">{allInterviews.length}</p>
                 <p className="text-sm text-brand-grey-400">Total</p>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Filters */}
+        {/* Filters - Tag Style */}
         <Card>
-          <div className="flex flex-wrap items-center gap-4">
-            <Select
-              options={[
-                { value: '', label: 'All Stages' },
-                { value: 'phone_qualification', label: 'Phone' },
-                { value: 'technical_interview', label: 'Technical' },
-                { value: 'director_interview', label: 'Director' },
-              ]}
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value)}
-            />
+          <div className="space-y-4">
+            {/* My Candidates Toggle */}
+            <div className="flex items-center gap-3">
+              <Button
+                variant={showMyCandidatesOnly ? 'primary' : 'secondary'}
+                size="sm"
+                leftIcon={<Users className="h-4 w-4" />}
+                onClick={() => setShowMyCandidatesOnly(!showMyCandidatesOnly)}
+              >
+                My Candidates Only
+              </Button>
+              {showMyCandidatesOnly && (
+                <span className="text-sm text-brand-grey-400">
+                  Showing interviews for candidates you're responsible for
+                </span>
+              )}
+            </div>
+            
+            {/* Stage Filter Tags */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-brand-grey-400 mr-2">Stage:</span>
+              <button
+                onClick={() => setStageFilter('')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  stageFilter === '' 
+                    ? 'bg-brand-cyan text-white' 
+                    : 'bg-brand-grey-100 text-brand-grey-500 hover:bg-brand-grey-200'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setStageFilter('phone_qualification')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  stageFilter === 'phone_qualification' 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                }`}
+              >
+                Phone
+              </button>
+              <button
+                onClick={() => setStageFilter('technical_interview')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  stageFilter === 'technical_interview' 
+                    ? 'bg-purple-500 text-white' 
+                    : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                }`}
+              >
+                Technical
+              </button>
+              <button
+                onClick={() => setStageFilter('director_interview')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  stageFilter === 'director_interview' 
+                    ? 'bg-amber-500 text-white' 
+                    : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                }`}
+              >
+                Director
+              </button>
+            </div>
 
-            <Select
-              options={[
-                { value: '', label: 'All Outcomes' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'pass', label: 'Pass' },
-                { value: 'fail', label: 'Fail' },
-              ]}
-              value={outcomeFilter}
-              onChange={(e) => setOutcomeFilter(e.target.value)}
-            />
+            {/* Outcome Filter Tags */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-brand-grey-400 mr-2">Outcome:</span>
+              <button
+                onClick={() => setOutcomeFilter('')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  outcomeFilter === '' 
+                    ? 'bg-brand-cyan text-white' 
+                    : 'bg-brand-grey-100 text-brand-grey-500 hover:bg-brand-grey-200'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setOutcomeFilter('pending')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  outcomeFilter === 'pending' 
+                    ? 'bg-amber-500 text-white' 
+                    : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                onClick={() => setOutcomeFilter('pass')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  outcomeFilter === 'pass' 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-green-50 text-green-600 hover:bg-green-100'
+                }`}
+              >
+                Pass
+              </button>
+              <button
+                onClick={() => setOutcomeFilter('fail')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  outcomeFilter === 'fail' 
+                    ? 'bg-red-500 text-white' 
+                    : 'bg-red-50 text-red-600 hover:bg-red-100'
+                }`}
+              >
+                Fail
+              </button>
+            </div>
           </div>
         </Card>
 
@@ -258,10 +391,10 @@ export function InterviewsPage() {
           </Card>
         ) : filteredInterviews.length === 0 ? (
           <EmptyState
-            title="No interviews assigned to you"
-            description={myInterviews.length === 0 
-              ? "You don't have any interviews assigned yet. Interviews will appear here when you're selected as an interviewer." 
-              : "Try adjusting your filters."}
+            title="No interviews found"
+            description={showMyCandidatesOnly 
+              ? "No interviews for your candidates. Try turning off 'My Candidates Only' filter." 
+              : "No interviews match your filters."}
           />
         ) : (
           <div className="space-y-3">
@@ -273,33 +406,35 @@ export function InterviewsPage() {
               const StageIcon = stageInfo.icon;
               const outcomeInfo = outcomeConfig[interview.outcome] || outcomeConfig.pending;
               const isMyInterview = interview.interviewer_id === user?.id;
-              const canComplete = interview.outcome === 'pending';
+              const canComplete = interview.outcome === 'pending' && isMyInterview;
               
               return (
                 <Card
                   key={interview.id}
-                  hover
-                  className={`cursor-pointer ${interview.outcome === 'pending' && isToday(interview.scheduled_at) ? 'border-l-4 border-l-amber-500' : ''} ${isMyInterview ? 'ring-2 ring-brand-cyan/30' : ''}`}
-                  onClick={() => handleOpenInterview(interview)}
+                  className={`hover:shadow-md transition-all cursor-pointer ${
+                    isToday(interview.scheduled_at) ? 'border-l-4 border-l-brand-cyan' : ''
+                  }`}
+                  onClick={() => candidate && navigate(`/candidates/${candidate.id}`)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-lg ${stageInfo.colour}`}>
+                      {/* Stage Icon */}
+                      <div className={`p-3 rounded-xl ${stageInfo.colour}`}>
                         <StageIcon className="h-5 w-5" />
                       </div>
 
+                      {/* Candidate Info */}
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-brand-slate-900">
-                            {candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Unknown Candidate'}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${outcomeInfo.colour}`}>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-brand-slate-900">
+                            {candidate?.first_name} {candidate?.last_name}
+                          </h3>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${outcomeInfo.colour}`}>
                             {outcomeInfo.label}
                           </span>
-                          {interview.outcome === 'pass' && <CheckCircle className="h-4 w-4 text-green-600" />}
-                          {interview.outcome === 'fail' && <XCircle className="h-4 w-4 text-red-600" />}
                           {isMyInterview && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan">
+                            <span className="flex items-center gap-1 text-xs text-green-600">
+                              <CheckCircle className="h-3 w-3" />
                               Your Interview
                             </span>
                           )}
@@ -310,20 +445,37 @@ export function InterviewsPage() {
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      {interviewer && (
-                        <div className="flex items-center gap-2 text-sm mb-1">
-                          <Avatar name={interviewer.full_name} size="sm" />
-                          <span className="text-brand-slate-700">{interviewer.full_name}</span>
+                    {/* Right Side */}
+                    <div className="flex items-center gap-6">
+                      {/* Interviewer */}
+                      <div className="flex items-center gap-2 text-right">
+                        <div>
+                          <p className="text-sm font-medium text-brand-slate-700">
+                            {interviewer?.name || 'Unassigned'}
+                          </p>
+                          <p className="text-xs text-brand-grey-400 flex items-center gap-1 justify-end">
+                            <Clock className="h-3 w-3" />
+                            {interview.scheduled_at 
+                              ? `${formatDate(interview.scheduled_at)} ${formatTime(interview.scheduled_at)}`
+                              : 'Not scheduled'
+                            }
+                          </p>
                         </div>
-                      )}
-                      {interview.scheduled_at && (
-                        <div className="flex items-center gap-1 text-sm text-brand-grey-400">
-                          <Clock className="h-3.5 w-3.5" />
-                          <span className={isToday(interview.scheduled_at) ? 'text-amber-600 font-medium' : ''}>
-                            {formatDate(interview.scheduled_at)} {formatTime(interview.scheduled_at)}
-                          </span>
-                        </div>
+                        <Avatar name={interviewer?.name || 'U'} size="sm" />
+                      </div>
+
+                      {/* Complete Button */}
+                      {canComplete && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCompleteInterview(interview);
+                          }}
+                        >
+                          Complete
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -338,9 +490,9 @@ export function InterviewsPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedStageConfig ? `${selectedStageConfig.label} Interview` : 'Interview'}
+        title={`Complete ${selectedStageConfig?.label || ''} Interview`}
         description={selectedCandidate ? `${selectedCandidate.first_name} ${selectedCandidate.last_name}` : ''}
-        size="xl"
+        size="lg"
       >
         <div className="space-y-6">
           {/* Outcome */}
@@ -349,74 +501,64 @@ export function InterviewsPage() {
               Outcome *
             </label>
             <div className="flex gap-3">
-              <button
-                type="button"
+              <Button
+                variant={feedbackForm.outcome === 'pass' ? 'success' : 'secondary'}
                 onClick={() => setFeedbackForm(prev => ({ ...prev, outcome: 'pass' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  feedbackForm.outcome === 'pass' 
-                    ? 'border-green-500 bg-green-50 text-green-700' 
-                    : 'border-brand-grey-200 hover:border-green-300'
-                }`}
+                leftIcon={<CheckCircle className="h-4 w-4" />}
               >
-                <CheckCircle className="h-5 w-5" />
                 Pass
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant={feedbackForm.outcome === 'fail' ? 'danger' : 'secondary'}
                 onClick={() => setFeedbackForm(prev => ({ ...prev, outcome: 'fail' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  feedbackForm.outcome === 'fail' 
-                    ? 'border-red-500 bg-red-50 text-red-700' 
-                    : 'border-brand-grey-200 hover:border-red-300'
-                }`}
+                leftIcon={<XCircle className="h-4 w-4" />}
               >
-                <XCircle className="h-5 w-5" />
                 Fail
-              </button>
+              </Button>
             </div>
           </div>
 
-          {/* Soft Skills Scores */}
-          <div>
-            <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Soft Skills</h4>
+          {/* Soft Skills */}
+          <div className="border-t border-brand-grey-200 pt-4">
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment *</h4>
             <div className="grid grid-cols-2 gap-4">
-              <StarRating
-                label="Communication"
-                value={parseInt(feedbackForm.communication_score) || 0}
-                onChange={(v) => setFeedbackForm(prev => ({ ...prev, communication_score: v.toString() }))}
+              <StarRating 
+                label="Communication" 
+                value={parseInt(feedbackForm.communication_score) || 0} 
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, communication_score: v.toString() }))} 
               />
-              <StarRating
-                label="Professionalism"
-                value={parseInt(feedbackForm.professionalism_score) || 0}
-                onChange={(v) => setFeedbackForm(prev => ({ ...prev, professionalism_score: v.toString() }))}
+              <StarRating 
+                label="Professionalism" 
+                value={parseInt(feedbackForm.professionalism_score) || 0} 
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, professionalism_score: v.toString() }))} 
               />
-              <StarRating
-                label="Enthusiasm"
-                value={parseInt(feedbackForm.enthusiasm_score) || 0}
-                onChange={(v) => setFeedbackForm(prev => ({ ...prev, enthusiasm_score: v.toString() }))}
+              <StarRating 
+                label="Enthusiasm" 
+                value={parseInt(feedbackForm.enthusiasm_score) || 0} 
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, enthusiasm_score: v.toString() }))} 
               />
-              <StarRating
-                label="Cultural Fit"
-                value={parseInt(feedbackForm.cultural_fit_score) || 0}
-                onChange={(v) => setFeedbackForm(prev => ({ ...prev, cultural_fit_score: v.toString() }))}
+              <StarRating 
+                label="Cultural Fit" 
+                value={parseInt(feedbackForm.cultural_fit_score) || 0} 
+                onChange={(v) => setFeedbackForm(prev => ({ ...prev, cultural_fit_score: v.toString() }))} 
               />
             </div>
           </div>
 
-          {/* Technical Scores (for technical/director interviews) */}
-          {selectedInterview?.stage !== 'phone_qualification' && (
-            <div>
-              <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Technical Skills</h4>
+          {/* Technical Skills (for technical interviews) */}
+          {selectedInterview?.stage === 'technical_interview' && (
+            <div className="border-t border-brand-grey-200 pt-4">
+              <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Technical Assessment *</h4>
               <div className="grid grid-cols-2 gap-4">
-                <StarRating
-                  label="Technical Depth"
-                  value={parseInt(feedbackForm.technical_depth_score) || 0}
-                  onChange={(v) => setFeedbackForm(prev => ({ ...prev, technical_depth_score: v.toString() }))}
+                <StarRating 
+                  label="Technical Depth" 
+                  value={parseInt(feedbackForm.technical_depth_score) || 0} 
+                  onChange={(v) => setFeedbackForm(prev => ({ ...prev, technical_depth_score: v.toString() }))} 
                 />
-                <StarRating
-                  label="Problem Solving"
-                  value={parseInt(feedbackForm.problem_solving_score) || 0}
-                  onChange={(v) => setFeedbackForm(prev => ({ ...prev, problem_solving_score: v.toString() }))}
+                <StarRating 
+                  label="Problem Solving" 
+                  value={parseInt(feedbackForm.problem_solving_score) || 0} 
+                  onChange={(v) => setFeedbackForm(prev => ({ ...prev, problem_solving_score: v.toString() }))} 
                 />
               </div>
             </div>
@@ -424,41 +566,29 @@ export function InterviewsPage() {
 
           {/* Comments */}
           <Textarea
-            label="General Comments"
+            label="General Comments *"
+            placeholder="Your observations about the candidate..."
             value={feedbackForm.general_comments}
             onChange={(e) => setFeedbackForm(prev => ({ ...prev, general_comments: e.target.value }))}
-            placeholder="Notes from the interview..."
             rows={3}
           />
 
           <Textarea
-            label="Recommendation"
+            label="Recommendation *"
+            placeholder="Your recommendation for next steps..."
             value={feedbackForm.recommendation}
             onChange={(e) => setFeedbackForm(prev => ({ ...prev, recommendation: e.target.value }))}
-            placeholder="Your recommendation for next steps..."
             rows={2}
           />
 
           {/* Actions */}
-          <div className="flex justify-between items-center pt-4 border-t border-brand-grey-200">
-            <Button
-              variant="ghost"
-              onClick={() => selectedCandidate && navigate(`/candidates/${selectedCandidate.id}`)}
-            >
-              View Candidate Profile
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+              Cancel
             </Button>
-            <div className="flex gap-3">
-              <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                variant="success" 
-                onClick={handleSubmitFeedback} 
-                isLoading={isSubmitting}
-              >
-                Save Feedback
-              </Button>
-            </div>
+            <Button variant="primary" onClick={handleSubmitFeedback} isLoading={isSubmitting}>
+              Save Feedback
+            </Button>
           </div>
         </div>
       </Modal>

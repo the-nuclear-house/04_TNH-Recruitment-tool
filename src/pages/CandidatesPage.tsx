@@ -17,14 +17,17 @@ import {
 import { formatDate, statusLabels } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
-import { candidatesService, type DbCandidate } from '@/lib/services';
+import { useAuthStore } from '@/lib/stores/auth-store';
+import { candidatesService, usersService, type DbCandidate } from '@/lib/services';
 import type { CandidateStatus } from '@/types';
 
 export function CandidatesPage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [candidates, setCandidates] = useState<DbCandidate[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,6 +42,7 @@ export function CandidatesPage() {
     phone: '',
     location: '',
     summary: '',
+    assigned_recruiter_id: '',
   });
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState('');
@@ -118,12 +122,16 @@ export function CandidatesPage() {
     }
   };
 
-  // Load candidates from database
+  // Load candidates and users from database
   const loadCandidates = async () => {
     try {
       setIsLoadingData(true);
-      const data = await candidatesService.getAll();
-      setCandidates(data);
+      const [candidatesData, usersData] = await Promise.all([
+        candidatesService.getAll(),
+        usersService.getAll(),
+      ]);
+      setCandidates(candidatesData);
+      setUsers(usersData);
     } catch (error) {
       console.error('Error loading candidates:', error);
       toast.error('Error', 'Failed to load candidates');
@@ -153,6 +161,7 @@ export function CandidatesPage() {
         summary: formData.summary || undefined,
         skills: skills.length > 0 ? skills : undefined,
         previous_companies: previousCompanies.length > 0 ? previousCompanies : undefined,
+        assigned_recruiter_id: formData.assigned_recruiter_id || undefined,
       });
       
       toast.success('Candidate Added', `${formData.first_name} ${formData.last_name} has been added to the database`);
@@ -164,6 +173,7 @@ export function CandidatesPage() {
         phone: '',
         location: '',
         summary: '',
+        assigned_recruiter_id: '',
       });
       setSkills([]);
       setPreviousCompanies([]);
@@ -289,12 +299,9 @@ export function CandidatesPage() {
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-1">
-                        {candidate.skills?.slice(0, 3).map(skill => (
+                        {candidate.skills?.map(skill => (
                           <Badge key={skill} variant="cyan" className="text-xs">{skill}</Badge>
                         ))}
-                        {candidate.skills && candidate.skills.length > 3 && (
-                          <span className="text-xs text-brand-grey-400">+{candidate.skills.length - 3}</span>
-                        )}
                       </div>
                     </td>
                     <td className="text-brand-slate-700">{candidate.location || '-'}</td>
@@ -490,6 +497,19 @@ export function CandidatesPage() {
             onChange={(e) => handleFormChange('summary', e.target.value)}
             placeholder="Brief overview of the candidate's background and experience..."
             rows={3}
+          />
+
+          {/* Assign Recruiter */}
+          <Select
+            label="Assign to Recruiter"
+            options={[
+              { value: '', label: '-- Select Recruiter --' },
+              ...users
+                .filter(u => u.role === 'recruiter' || u.role === 'admin')
+                .map(u => ({ value: u.id, label: u.name }))
+            ]}
+            value={formData.assigned_recruiter_id}
+            onChange={(e) => handleFormChange('assigned_recruiter_id', e.target.value)}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
