@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Upload, FileText, Filter, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, X, Upload, FileText, ChevronDown } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -42,12 +42,6 @@ export function CandidatesPage() {
   // Filter dropdowns open state
   const [openFilter, setOpenFilter] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
-  
-  // AI Search state
-  const [isAISearchOpen, setIsAISearchOpen] = useState(false);
-  const [aiQuery, setAiQuery] = useState('');
-  const [isAISearching, setIsAISearching] = useState(false);
-  const [aiSearchExplanation, setAiSearchExplanation] = useState('');
 
   // Form state - only fields we can get from CV
   const [formData, setFormData] = useState({
@@ -267,131 +261,6 @@ export function CandidatesPage() {
 
   const hasActiveFilters = searchQuery || skillsFilter.length > 0 || locationsFilter.length > 0 || experienceFilter || statusFilter.length > 0;
 
-  // AI Search handler
-  const handleAISearch = async () => {
-    if (!aiQuery.trim()) return;
-    
-    setIsAISearching(true);
-    
-    try {
-      // Build context about available data
-      const context = {
-        availableSkills: allSkills,
-        availableLocations: allLocations,
-        availableStatuses: allStatuses.map(s => statusLabels[s as CandidateStatus] || s),
-        experienceRanges: ['0-2', '3-5', '5-10', '10+'],
-      };
-      
-      // Call Claude API to parse the query
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [
-            {
-              role: 'user',
-              content: `You are a search assistant for a recruitment system. Parse the following natural language query and extract filter criteria.
-
-Available data:
-- Skills: ${context.availableSkills.join(', ')}
-- Locations: ${context.availableLocations.join(', ')}
-- Statuses: ${context.availableStatuses.join(', ')}
-- Experience ranges: 0-2 years, 3-5 years, 5-10 years, 10+ years
-
-User query: "${aiQuery}"
-
-Respond with ONLY a JSON object (no markdown, no explanation before or after) in this exact format:
-{
-  "skills": ["skill1", "skill2"],
-  "locations": ["location1"],
-  "experience": "5-10",
-  "statuses": ["status1"],
-  "searchText": "any text search",
-  "explanation": "Human readable explanation of what filters were applied"
-}
-
-Only include fields that are relevant to the query. Use empty arrays [] for filters not mentioned.
-Match skills and locations to the closest available options (case-insensitive).
-For experience, pick the most appropriate range.
-For statuses, match to the closest available status.`
-            }
-          ],
-        }),
-      });
-
-      const data = await response.json();
-      const content = data.content?.[0]?.text || '{}';
-      
-      // Parse the response
-      let parsed;
-      try {
-        // Clean up potential markdown formatting
-        const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        parsed = JSON.parse(cleanContent);
-      } catch (e) {
-        console.error('Failed to parse AI response:', content);
-        toast.error('AI Search Error', 'Could not understand the query. Please try rephrasing.');
-        return;
-      }
-      
-      // Apply filters
-      clearAllFilters();
-      
-      if (parsed.skills?.length > 0) {
-        // Match to available skills (case-insensitive)
-        const matchedSkills = parsed.skills
-          .map((s: string) => allSkills.find(as => as.toLowerCase() === s.toLowerCase()))
-          .filter(Boolean);
-        setSkillsFilter(matchedSkills);
-      }
-      
-      if (parsed.locations?.length > 0) {
-        // Match to available locations (case-insensitive)
-        const matchedLocations = parsed.locations
-          .map((l: string) => allLocations.find(al => al.toLowerCase().includes(l.toLowerCase())))
-          .filter(Boolean);
-        setLocationsFilter(matchedLocations);
-      }
-      
-      if (parsed.experience) {
-        setExperienceFilter(parsed.experience);
-      }
-      
-      if (parsed.statuses?.length > 0) {
-        // Convert status labels back to values
-        const matchedStatuses = parsed.statuses
-          .map((label: string) => {
-            const entry = Object.entries(statusLabels).find(
-              ([, v]) => v.toLowerCase() === label.toLowerCase()
-            );
-            return entry ? entry[0] : null;
-          })
-          .filter(Boolean);
-        setStatusFilter(matchedStatuses);
-      }
-      
-      if (parsed.searchText) {
-        setSearchQuery(parsed.searchText);
-      }
-      
-      setAiSearchExplanation(parsed.explanation || 'Filters applied based on your query');
-      setIsAISearchOpen(false);
-      setAiQuery('');
-      
-      toast.success('AI Search Applied', parsed.explanation || 'Filters have been set');
-      
-    } catch (error) {
-      console.error('AI Search error:', error);
-      toast.error('AI Search Error', 'Something went wrong. Please try again.');
-    } finally {
-      setIsAISearching(false);
-    }
-  };
-
   // Column filter dropdown component
   const ColumnFilter = ({ 
     column, 
@@ -522,14 +391,6 @@ For statuses, match to the closest available status.`
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsAISearchOpen(true)}
-              leftIcon={<Sparkles className="h-4 w-4" />}
-            >
-              AI Search
-            </Button>
             {hasActiveFilters && (
               <Button
                 variant="secondary"
@@ -541,20 +402,6 @@ For statuses, match to the closest available status.`
               </Button>
             )}
           </div>
-          
-          {/* AI Search Explanation */}
-          {aiSearchExplanation && (
-            <div className="mt-3 flex items-center gap-2 p-3 bg-brand-cyan/10 rounded-lg text-sm">
-              <Sparkles className="h-4 w-4 text-brand-cyan flex-shrink-0" />
-              <span className="text-brand-slate-700">{aiSearchExplanation}</span>
-              <button 
-                onClick={() => setAiSearchExplanation('')}
-                className="ml-auto text-brand-grey-400 hover:text-brand-slate-700"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
         </Card>
 
         {/* Candidates Table */}
@@ -684,64 +531,6 @@ For statuses, match to the closest available status.`
           </div>
         )}
       </div>
-
-      {/* AI Search Modal */}
-      <Modal
-        isOpen={isAISearchOpen}
-        onClose={() => {
-          setIsAISearchOpen(false);
-          setAiQuery('');
-        }}
-        title="AI Search"
-        description="Describe what you're looking for in natural language"
-        size="md"
-      >
-        <div className="space-y-4">
-          <Textarea
-            placeholder="e.g. Find Java developers in London with more than 5 years experience..."
-            value={aiQuery}
-            onChange={(e) => setAiQuery(e.target.value)}
-            rows={3}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleAISearch();
-              }
-            }}
-          />
-          
-          <div className="text-sm text-brand-grey-400">
-            <p className="font-medium mb-2">Try queries like:</p>
-            <ul className="space-y-1 text-xs">
-              <li>"Python developers with SC clearance"</li>
-              <li>"Candidates in Manchester with 3-5 years experience"</li>
-              <li>"Senior engineers who know React and TypeScript"</li>
-              <li>"New candidates from London"</li>
-            </ul>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
-            <Button 
-              variant="secondary" 
-              onClick={() => {
-                setIsAISearchOpen(false);
-                setAiQuery('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleAISearch}
-              isLoading={isAISearching}
-              disabled={!aiQuery.trim()}
-              leftIcon={isAISearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            >
-              {isAISearching ? 'Searching...' : 'Search'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Add Candidate Modal */}
       <Modal
