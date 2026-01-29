@@ -11,6 +11,7 @@ import {
   RequirementDetailPage,
   RequirementFormPage,
   InterviewsPage,
+  CustomerAssessmentsPage,
   ContractsPage,
   OrganisationPage,
   SettingsPage,
@@ -60,6 +61,7 @@ function App() {
           <Route path="/requirements/:id" element={<RequirementDetailPage />} />
           <Route path="/requirements/:id/edit" element={<RequirementFormPage />} />
           <Route path="/interviews" element={<InterviewsPage />} />
+          <Route path="/customer-assessments" element={<CustomerAssessmentsPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/organisation" element={<OrganisationPage />} />
           <Route path="/settings" element={<SettingsPage />} />

@@ -14,6 +14,7 @@ import {
   Plus,
   UserPlus,
   X,
+  CalendarPlus,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -28,12 +29,13 @@ import {
   Modal,
   Avatar,
   Input,
+  Textarea,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService, candidatesService, applicationsService, type DbApplication, type DbCandidate } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, type DbApplication, type DbCandidate } from '@/lib/services';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
@@ -91,6 +93,24 @@ export function RequirementDetailPage() {
   const [applicationNotes, setApplicationNotes] = useState('');
   const [isAddingCandidate, setIsAddingCandidate] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState('');
+  
+  // Schedule customer assessment modal
+  const [isScheduleAssessmentModalOpen, setIsScheduleAssessmentModalOpen] = useState(false);
+  const [selectedApplicationForAssessment, setSelectedApplicationForAssessment] = useState<DbApplication | null>(null);
+  const [assessmentForm, setAssessmentForm] = useState({
+    scheduled_date: '',
+    scheduled_time: '',
+    customer_contact: '',
+    location: '',
+    notes: '',
+  });
+  const [isSchedulingAssessment, setIsSchedulingAssessment] = useState(false);
+  
+  // Track which candidates have passed all interviews
+  const [candidateInterviewStatus, setCandidateInterviewStatus] = useState<Record<string, boolean>>({});
+  
+  // Check if user can schedule assessments (Manager, Director, Admin)
+  const canScheduleAssessments = ['admin', 'director', 'manager'].includes(user?.role || '');
 
   useEffect(() => {
     if (id) {
@@ -111,6 +131,22 @@ export function RequirementDetailPage() {
       setRequirement(reqData);
       setApplications(appsData);
       setAllCandidates(candidatesData);
+      
+      // Check interview status for each linked candidate
+      const interviewStatus: Record<string, boolean> = {};
+      for (const app of appsData) {
+        try {
+          const interviews = await interviewsService.getByCandidate(app.candidate_id);
+          // Check if all 3 interviews passed
+          const phonePass = interviews.some(i => i.stage === 'phone_qualification' && i.outcome === 'pass');
+          const techPass = interviews.some(i => i.stage === 'technical_interview' && i.outcome === 'pass');
+          const directorPass = interviews.some(i => i.stage === 'director_interview' && i.outcome === 'pass');
+          interviewStatus[app.candidate_id] = phonePass && techPass && directorPass;
+        } catch (e) {
+          interviewStatus[app.candidate_id] = false;
+        }
+      }
+      setCandidateInterviewStatus(interviewStatus);
       
       if (reqData?.manager_id) {
         const mgr = usersData.find(u => u.id === reqData.manager_id);
@@ -195,6 +231,39 @@ export function RequirementDetailPage() {
     } catch (error) {
       console.error('Error removing candidate:', error);
       toast.error('Error', 'Failed to remove candidate');
+    }
+  };
+
+  const handleScheduleAssessment = async () => {
+    if (!selectedApplicationForAssessment || !user || !assessmentForm.scheduled_date) return;
+    
+    setIsSchedulingAssessment(true);
+    try {
+      await customerAssessmentsService.create({
+        application_id: selectedApplicationForAssessment.id,
+        scheduled_date: assessmentForm.scheduled_date,
+        scheduled_time: assessmentForm.scheduled_time || undefined,
+        customer_contact: assessmentForm.customer_contact || undefined,
+        location: assessmentForm.location || undefined,
+        notes: assessmentForm.notes || undefined,
+        created_by: user.id,
+      });
+      
+      toast.success('Assessment Scheduled', 'Customer assessment has been scheduled');
+      setIsScheduleAssessmentModalOpen(false);
+      setSelectedApplicationForAssessment(null);
+      setAssessmentForm({
+        scheduled_date: '',
+        scheduled_time: '',
+        customer_contact: '',
+        location: '',
+        notes: '',
+      });
+    } catch (error) {
+      console.error('Error scheduling assessment:', error);
+      toast.error('Error', 'Failed to schedule assessment');
+    } finally {
+      setIsSchedulingAssessment(false);
     }
   };
 
@@ -289,14 +358,9 @@ export function RequirementDetailPage() {
         <Card className={requirement.status === 'active' ? 'bg-green-50' : ''}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-2xl font-bold text-brand-slate-900">
-                  {requirement.customer}
-                </h1>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bgColour} ${config.colour}`}>
-                  {config.label}
-                </span>
-              </div>
+              <h1 className="text-2xl font-bold text-brand-slate-900 mb-2">
+                {requirement.customer}
+              </h1>
               
               <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
                 <span className="flex items-center gap-1">
@@ -463,7 +527,10 @@ export function RequirementDetailPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {applications.map((app) => (
+              {applications.map((app) => {
+                const hasPassedAllInterviews = candidateInterviewStatus[app.candidate_id];
+                
+                return (
                 <div 
                   key={app.id}
                   className="flex items-center justify-between p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan transition-colors"
@@ -485,12 +552,32 @@ export function RequirementDetailPage() {
                   </div>
                   
                   <div className="flex items-center gap-3">
+                    {hasPassedAllInterviews && (
+                      <Badge variant="green">Interviews Complete</Badge>
+                    )}
                     <Badge variant={app.status === 'applied' ? 'grey' : 'green'}>
                       {app.status.replace('_', ' ')}
                     </Badge>
                     <span className="text-xs text-brand-grey-400">
                       Added {formatDate(app.created_at)}
                     </span>
+                    
+                    {/* Schedule Client Meeting - only for Manager/Director/Admin and if interviews passed */}
+                    {canScheduleAssessments && hasPassedAllInterviews && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        leftIcon={<CalendarPlus className="h-3.5 w-3.5" />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedApplicationForAssessment(app);
+                          setIsScheduleAssessmentModalOpen(true);
+                        }}
+                      >
+                        Client Meeting
+                      </Button>
+                    )}
+                    
                     {canEditThisRequirement && (
                       <button
                         onClick={() => handleRemoveCandidate(app.id)}
@@ -502,7 +589,8 @@ export function RequirementDetailPage() {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
@@ -605,6 +693,87 @@ export function RequirementDetailPage() {
               disabled={!selectedCandidateId}
             >
               Add Candidate
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Schedule Customer Assessment Modal */}
+      <Modal
+        isOpen={isScheduleAssessmentModalOpen}
+        onClose={() => {
+          setIsScheduleAssessmentModalOpen(false);
+          setSelectedApplicationForAssessment(null);
+          setAssessmentForm({
+            scheduled_date: '',
+            scheduled_time: '',
+            customer_contact: '',
+            location: '',
+            notes: '',
+          });
+        }}
+        title="Schedule Client Meeting"
+        description={selectedApplicationForAssessment?.candidate 
+          ? `Schedule a customer meeting for ${selectedApplicationForAssessment.candidate.first_name} ${selectedApplicationForAssessment.candidate.last_name}`
+          : 'Schedule customer assessment'
+        }
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Date *"
+              type="date"
+              value={assessmentForm.scheduled_date}
+              onChange={(e) => setAssessmentForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+            />
+            <Input
+              label="Time"
+              type="time"
+              value={assessmentForm.scheduled_time}
+              onChange={(e) => setAssessmentForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+            />
+          </div>
+          
+          <Input
+            label="Customer Contact"
+            placeholder="Name of customer contact..."
+            value={assessmentForm.customer_contact}
+            onChange={(e) => setAssessmentForm(prev => ({ ...prev, customer_contact: e.target.value }))}
+          />
+          
+          <Input
+            label="Location"
+            placeholder="Meeting location or video call link..."
+            value={assessmentForm.location}
+            onChange={(e) => setAssessmentForm(prev => ({ ...prev, location: e.target.value }))}
+          />
+          
+          <Textarea
+            label="Notes"
+            placeholder="Any preparation notes or context..."
+            value={assessmentForm.notes}
+            onChange={(e) => setAssessmentForm(prev => ({ ...prev, notes: e.target.value }))}
+            rows={3}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                setIsScheduleAssessmentModalOpen(false);
+                setSelectedApplicationForAssessment(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleScheduleAssessment}
+              isLoading={isSchedulingAssessment}
+              disabled={!assessmentForm.scheduled_date}
+            >
+              Schedule Meeting
             </Button>
           </div>
         </div>

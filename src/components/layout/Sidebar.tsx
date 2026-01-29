@@ -10,6 +10,7 @@ import {
   Building2,
   ChevronLeft,
   LogOut,
+  UserCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useUIStore } from '@/lib/stores/ui-store';
@@ -22,12 +23,16 @@ export function Sidebar() {
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const permissions = usePermissions();
 
+  // Customer assessments only visible to Manager, Director, Admin
+  const canViewCustomerAssessments = ['admin', 'director', 'manager'].includes(user?.role || '');
+
   // Build navigation based on permissions
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, show: true },
     { name: 'Candidates', href: '/candidates', icon: Users, show: permissions.canViewCandidates },
     { name: 'Requirements', href: '/requirements', icon: Briefcase, show: permissions.canViewRequirements },
     { name: 'Interviews', href: '/interviews', icon: Calendar, show: permissions.canViewInterviews },
+    { name: 'Client Meetings', href: '/customer-assessments', icon: UserCheck, show: canViewCustomerAssessments },
     { name: 'Contracts', href: '/contracts', icon: FileText, show: permissions.canViewContracts },
   ].filter(item => item.show);
 

@@ -650,3 +650,127 @@ export const applicationsService = {
     if (error) throw error;
   },
 };
+
+// ============ CUSTOMER ASSESSMENTS SERVICE ============
+
+export interface DbCustomerAssessment {
+  id: string;
+  application_id: string;
+  scheduled_date: string;
+  scheduled_time: string | null;
+  customer_contact: string | null;
+  location: string | null;
+  notes: string | null;
+  outcome: 'pending' | 'go' | 'nogo' | null;
+  outcome_notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  application?: DbApplication & {
+    candidate?: DbCandidate;
+    requirement?: DbRequirement;
+  };
+}
+
+export interface CreateCustomerAssessmentInput {
+  application_id: string;
+  scheduled_date: string;
+  scheduled_time?: string;
+  customer_contact?: string;
+  location?: string;
+  notes?: string;
+  created_by: string;
+}
+
+export const customerAssessmentsService = {
+  // Get all customer assessments
+  async getAll(): Promise<DbCustomerAssessment[]> {
+    const { data, error } = await supabase
+      .from('customer_assessments')
+      .select(`
+        *,
+        application:applications(
+          *,
+          candidate:candidates(*),
+          requirement:requirements(*)
+        )
+      `)
+      .order('scheduled_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get assessments for a specific application
+  async getByApplication(applicationId: string): Promise<DbCustomerAssessment[]> {
+    const { data, error } = await supabase
+      .from('customer_assessments')
+      .select(`
+        *,
+        application:applications(
+          *,
+          candidate:candidates(*),
+          requirement:requirements(*)
+        )
+      `)
+      .eq('application_id', applicationId)
+      .order('scheduled_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Create a new customer assessment
+  async create(input: CreateCustomerAssessmentInput): Promise<DbCustomerAssessment> {
+    const { data, error } = await supabase
+      .from('customer_assessments')
+      .insert(input)
+      .select(`
+        *,
+        application:applications(
+          *,
+          candidate:candidates(*),
+          requirement:requirements(*)
+        )
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update assessment outcome
+  async updateOutcome(id: string, outcome: 'go' | 'nogo', outcomeNotes?: string): Promise<DbCustomerAssessment> {
+    const { data, error } = await supabase
+      .from('customer_assessments')
+      .update({ 
+        outcome, 
+        outcome_notes: outcomeNotes,
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        application:applications(
+          *,
+          candidate:candidates(*),
+          requirement:requirements(*)
+        )
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Delete assessment
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('customer_assessments')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};

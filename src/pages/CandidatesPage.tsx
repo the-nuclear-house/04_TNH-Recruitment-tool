@@ -431,7 +431,7 @@ export function CandidatesPage() {
               Previous Companies
             </label>
             <Input
-              placeholder="Type company name, press Enter or comma to add..."
+              placeholder="Type company name, use comma to separate, Enter to add..."
               value={companyInput}
               onChange={(e) => handleCompanyInputChange(e.target.value)}
               onKeyDown={handleCompanyKeyDown}
@@ -461,7 +461,7 @@ export function CandidatesPage() {
               Skills
             </label>
             <Input
-              placeholder="Type skill, press Enter or comma to add..."
+              placeholder="Type skill, use comma to separate, Enter to add..."
               value={skillInput}
               onChange={(e) => handleSkillInputChange(e.target.value)}
               onKeyDown={handleSkillKeyDown}

@@ -482,7 +482,7 @@ export function RequirementsPage() {
               Required Skills
             </label>
             <Input
-              placeholder="Type skill, press Enter or comma to add..."
+              placeholder="Type skill, use comma to separate, Enter to add..."
               value={skillInput}
               onChange={(e) => handleSkillInputChange(e.target.value)}
               onKeyDown={handleSkillKeyDown}

@@ -1253,9 +1253,9 @@ export function CandidateProfilePage() {
           {/* Skills Section */}
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Skills (add or remove)</h4>
-            <div className="flex gap-2 mb-2">
+            <div className="mb-2">
               <Input
-                placeholder="Add a skill..."
+                placeholder="Type skills, use comma to separate, Enter to add..."
                 value={phoneSkillInput}
                 onChange={(e) => setPhoneSkillInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1265,12 +1265,6 @@ export function CandidateProfilePage() {
                   }
                 }}
               />
-              <Button
-                variant="secondary"
-                onClick={() => handleSkillAdd(phoneSkills, setPhoneSkills, phoneSkillInput, setPhoneSkillInput)}
-              >
-                Add
-              </Button>
             </div>
             <div className="flex flex-wrap gap-2">
               {phoneSkills.map(skill => (
@@ -1358,9 +1352,9 @@ export function CandidateProfilePage() {
           {/* Skills Section */}
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Technical Skills (add or remove based on interview)</h4>
-            <div className="flex gap-2 mb-2">
+            <div className="mb-2">
               <Input
-                placeholder="Add a skill..."
+                placeholder="Type skills, use comma to separate, Enter to add..."
                 value={techSkillInput}
                 onChange={(e) => setTechSkillInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1370,12 +1364,6 @@ export function CandidateProfilePage() {
                   }
                 }}
               />
-              <Button
-                variant="secondary"
-                onClick={() => handleSkillAdd(techSkills, setTechSkills, techSkillInput, setTechSkillInput)}
-              >
-                Add
-              </Button>
             </div>
             <div className="flex flex-wrap gap-2">
               {techSkills.map(skill => (
