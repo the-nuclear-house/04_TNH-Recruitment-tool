@@ -1,16 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Edit,
-  Building2,
   Users,
+  Building2,
+  Calendar,
   MapPin,
   PoundSterling,
-  Calendar,
-  Clock,
-  User,
-  ChevronDown,
+  Shield,
+  Briefcase,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -19,68 +18,15 @@ import {
   CardTitle,
   Button,
   Badge,
-  Avatar,
+  EmptyState,
   Select,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
-import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
+import { usePermissions } from '@/hooks/usePermissions';
+import { requirementsService, usersService } from '@/lib/services';
 
-// Types
-type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';
-type SecurityClearance = 'none' | 'bpss' | 'ctc' | 'sc' | 'esc' | 'dv' | 'edv' | 'doe_q' | 'doe_l';
-type EngineeringDiscipline = 'electrical' | 'mechanical' | 'civil' | 'software' | 'systems' | 'nuclear' | 'chemical' | 'structural' | 'other';
-
-interface Requirement {
-  id: string;
-  customer: string;
-  industry: string;
-  location: string;
-  fte_count: number;
-  day_rate_min: number | null;
-  day_rate_max: number | null;
-  skills: string[];
-  description: string | null;
-  status: RequirementStatus;
-  clearance_required: SecurityClearance;
-  engineering_discipline: EngineeringDiscipline;
-  manager_id: string;
-  manager_name: string;
-  created_by_id: string;
-  created_by_name: string;
-  created_at: string;
-  updated_at: string;
-}
-
-// Mock data
-const mockRequirement: Requirement = {
-  id: 'req-1',
-  customer: 'BAE Systems',
-  industry: 'Defence',
-  location: 'London',
-  fte_count: 3,
-  day_rate_min: 450,
-  day_rate_max: 550,
-  skills: ['Python', 'AWS', 'Kubernetes', 'Security Clearance SC', 'Microservices', 'Docker'],
-  description: 'Looking for senior backend engineers to work on mission-critical defence systems. The role involves designing and implementing secure, scalable backend services for classified projects. Candidates must be eligible for SC clearance and have strong experience with cloud infrastructure.',
-  status: 'active',
-  clearance_required: 'sc',
-  engineering_discipline: 'software',
-  manager_id: 'user-manager-001',
-  manager_name: 'James Wilson',
-  created_by_id: 'user-director-001',
-  created_by_name: 'Sarah Thompson',
-  created_at: '2025-01-05T09:00:00Z',
-  updated_at: '2025-01-20T14:30:00Z',
-};
-
-// Mock linked candidates
-const mockLinkedCandidates = [
-  { id: '1', name: 'Sarah Chen', status: 'director_interview', match_score: 92 },
-  { id: '2', name: 'James Wilson', status: 'technical_interview', match_score: 85 },
-];
-
-const statusConfig: Record<RequirementStatus, { label: string; colour: string; bgColour: string }> = {
+const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
   opportunity: { label: 'Opportunity', colour: 'text-amber-700', bgColour: 'bg-amber-100' },
   won: { label: 'Won', colour: 'text-green-600', bgColour: 'bg-green-50' },
@@ -88,16 +34,8 @@ const statusConfig: Record<RequirementStatus, { label: string; colour: string; b
   cancelled: { label: 'Cancelled', colour: 'text-slate-500', bgColour: 'bg-slate-100' },
 };
 
-const statusOptions = [
-  { value: 'opportunity', label: 'Opportunity' },
-  { value: 'active', label: 'Active' },
-  { value: 'won', label: 'Won' },
-  { value: 'lost', label: 'Lost' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-
-const clearanceLabels: Record<SecurityClearance, string> = {
-  none: 'None',
+const clearanceLabels: Record<string, string> = {
+  none: 'None Required',
   bpss: 'BPSS',
   ctc: 'CTC',
   sc: 'SC',
@@ -108,293 +46,264 @@ const clearanceLabels: Record<SecurityClearance, string> = {
   doe_l: 'DOE L',
 };
 
-const disciplineLabels: Record<EngineeringDiscipline, string> = {
-  electrical: 'Electrical',
-  mechanical: 'Mechanical',
-  civil: 'Civil',
-  software: 'Software',
-  systems: 'Systems',
-  nuclear: 'Nuclear',
-  chemical: 'Chemical',
-  structural: 'Structural',
+const disciplineLabels: Record<string, string> = {
+  electrical: 'Electrical Engineering',
+  mechanical: 'Mechanical Engineering',
+  civil: 'Civil Engineering',
+  software: 'Software Engineering',
+  systems: 'Systems Engineering',
+  nuclear: 'Nuclear Engineering',
+  chemical: 'Chemical Engineering',
+  structural: 'Structural Engineering',
   other: 'Other',
-};
-
-function getDaysOpen(createdAt: string): number {
-  const created = new Date(createdAt);
-  const now = new Date();
-  const diffTime = Math.abs(now.getTime() - created.getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-}
-
-const candidateStatusLabels: Record<string, string> = {
-  technical_interview: 'Technical Interview',
-  director_interview: 'Director Interview',
-  offer: 'Offer Stage',
 };
 
 export function RequirementDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const permissions = usePermissions();
   const toast = useToast();
+  const permissions = usePermissions();
+  
+  const [requirement, setRequirement] = useState<any>(null);
+  const [manager, setManager] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // In real app, fetch by id
-  const [requirement, setRequirement] = useState(mockRequirement);
-  const daysOpen = getDaysOpen(requirement.created_at);
+  useEffect(() => {
+    if (id) {
+      loadData();
+    }
+  }, [id]);
 
-  const handleStatusChange = (newStatus: string) => {
-    setRequirement(prev => ({ ...prev, status: newStatus as RequirementStatus }));
-    toast.success('Status Updated', `Requirement status changed to ${statusConfig[newStatus as RequirementStatus].label}`);
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [reqData, usersData] = await Promise.all([
+        requirementsService.getById(id!),
+        usersService.getAll(),
+      ]);
+      
+      setRequirement(reqData);
+      if (reqData?.manager_id) {
+        const mgr = usersData.find(u => u.id === reqData.manager_id);
+        setManager(mgr);
+      }
+    } catch (error) {
+      console.error('Error loading requirement:', error);
+      toast.error('Error', 'Failed to load requirement');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      await requirementsService.update(id!, { status: newStatus });
+      setRequirement((prev: any) => ({ ...prev, status: newStatus }));
+      toast.success('Status Updated', `Requirement status changed to ${statusConfig[newStatus]?.label || newStatus}`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Error', 'Failed to update status');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Loading..." />
+        <div className="p-6">
+          <Card>
+            <div className="text-center py-8 text-brand-grey-400">Loading requirement...</div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (!requirement) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Requirement Not Found" />
+        <div className="p-6">
+          <EmptyState
+            title="Requirement not found"
+            description="The requirement you're looking for doesn't exist."
+            action={{
+              label: 'Back to Requirements',
+              onClick: () => navigate('/requirements'),
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const config = statusConfig[requirement.status] || statusConfig.opportunity;
+
   return (
-    <div className={`min-h-screen ${requirement.status === 'active' ? 'bg-green-50' : 'bg-brand-grey-100'}`}>
+    <div className="min-h-screen bg-brand-grey-100">
       <Header
         title="Requirement Details"
         actions={
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              leftIcon={<ArrowLeft className="h-4 w-4" />}
-              onClick={() => navigate('/requirements')}
-            >
-              Back
-            </Button>
-            {permissions.canEditRequirements && (
-              <Button
-                variant="secondary"
-                leftIcon={<Edit className="h-4 w-4" />}
-                onClick={() => navigate(`/requirements/${id}/edit`)}
-              >
-                Edit Details
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="ghost"
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
+            onClick={() => navigate('/requirements')}
+          >
+            Back
+          </Button>
         }
       />
 
-      <div className="p-6 max-w-6xl mx-auto space-y-6">
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
         {/* Header Card */}
-        <Card className={requirement.status === 'active' ? 'bg-green-50 border-green-200' : requirement.status === 'won' ? 'bg-green-50/50' : ''}>
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <Card className={requirement.status === 'active' ? 'bg-green-50' : ''}>
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold text-brand-slate-900">
                   {requirement.customer}
                 </h1>
-                {/* Quick Status Change */}
-                {permissions.canEditRequirements ? (
-                  <select
-                    value={requirement.status}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                    className={`px-3 py-1 rounded-full text-sm font-medium border-0 cursor-pointer ${statusConfig[requirement.status].bgColour} ${statusConfig[requirement.status].colour}`}
-                  >
-                    {statusOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusConfig[requirement.status].bgColour} ${statusConfig[requirement.status].colour}`}>
-                    {statusConfig[requirement.status].label}
-                  </span>
-                )}
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bgColour} ${config.colour}`}>
+                  {config.label}
+                </span>
               </div>
-
+              
               <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
-                <span className="flex items-center gap-1">
-                  <Building2 className="h-4 w-4" />
-                  {requirement.industry}
-                </span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
-                  {requirement.location}
-                </span>
                 <span className="flex items-center gap-1">
                   <Users className="h-4 w-4" />
                   {requirement.fte_count} FTE{requirement.fte_count !== 1 ? 's' : ''}
                 </span>
-                {requirement.day_rate_min && requirement.day_rate_max && (
+                {requirement.location && (
                   <span className="flex items-center gap-1">
-                    <PoundSterling className="h-4 w-4" />
-                    £{requirement.day_rate_min} - £{requirement.day_rate_max}/day
+                    <MapPin className="h-4 w-4" />
+                    {requirement.location}
                   </span>
                 )}
-                {requirement.clearance_required !== 'none' && (
-                  <Badge variant="orange">
-                    {clearanceLabels[requirement.clearance_required]} Required
-                  </Badge>
-                )}
-                <Badge variant="grey">
-                  {disciplineLabels[requirement.engineering_discipline]}
-                </Badge>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  Created {formatDate(requirement.created_at)}
+                </span>
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2">
-              {['active', 'opportunity'].includes(requirement.status) && (
-                <div className="text-right">
-                  <span className="text-2xl font-bold text-amber-600">{daysOpen}</span>
-                  <span className="text-sm text-brand-grey-400 ml-1">days open</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Skills */}
-          <div className="mt-6 pt-6 border-t border-brand-grey-200">
-            <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Required Skills</h3>
-            <div className="flex flex-wrap gap-2">
-              {requirement.skills.map(skill => (
-                <Badge key={skill} variant="cyan">
-                  {skill}
-                </Badge>
-              ))}
-            </div>
+            {/* Quick Status Change - only for managers */}
+            {permissions.canEditRequirements ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-brand-grey-400">Status:</span>
+                <Select
+                  options={[
+                    { value: 'opportunity', label: 'Opportunity' },
+                    { value: 'active', label: 'Active' },
+                    { value: 'won', label: 'Won' },
+                    { value: 'lost', label: 'Lost' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                  ]}
+                  value={requirement.status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                />
+              </div>
+            ) : (
+              <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${config.bgColour} ${config.colour}`}>
+                {config.label}
+              </span>
+            )}
           </div>
         </Card>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Description and Candidates */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Description */}
-            {requirement.description && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Description</CardTitle>
-                </CardHeader>
-                <p className="text-brand-slate-600 leading-relaxed whitespace-pre-wrap">
-                  {requirement.description}
-                </p>
-              </Card>
-            )}
-
-            {/* Linked Candidates */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Linked Candidates</CardTitle>
-                <Button variant="secondary" size="sm" onClick={() => navigate('/search')}>
-                  Find Candidates
-                </Button>
-              </CardHeader>
-
-              {mockLinkedCandidates.length === 0 ? (
-                <p className="text-brand-grey-400 text-sm">
-                  No candidates linked to this requirement yet.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {mockLinkedCandidates.map(candidate => (
-                    <div
-                      key={candidate.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-brand-grey-100/50 hover:bg-brand-grey-100 cursor-pointer transition-colors"
-                      onClick={() => navigate(`/candidates/${candidate.id}`)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar name={candidate.name} size="sm" />
-                        <div>
-                          <p className="font-medium text-brand-slate-900">{candidate.name}</p>
-                          <p className="text-sm text-brand-grey-400">
-                            {candidateStatusLabels[candidate.status] || candidate.status}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-sm font-medium text-brand-green">
-                          {candidate.match_score}% match
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+        {/* Details Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Details</CardTitle>
+            </CardHeader>
+            <div className="space-y-4">
+              {requirement.industry && (
+                <div className="flex items-center gap-3">
+                  <Building2 className="h-4 w-4 text-brand-grey-400" />
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Industry</p>
+                    <p className="text-sm text-brand-slate-700 capitalize">{requirement.industry}</p>
+                  </div>
                 </div>
               )}
-            </Card>
-          </div>
+              
+              <div className="flex items-center gap-3">
+                <Briefcase className="h-4 w-4 text-brand-grey-400" />
+                <div>
+                  <p className="text-xs text-brand-grey-400">Engineering Discipline</p>
+                  <p className="text-sm text-brand-slate-700">
+                    {disciplineLabels[requirement.engineering_discipline] || requirement.engineering_discipline}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <Shield className="h-4 w-4 text-brand-grey-400" />
+                <div>
+                  <p className="text-xs text-brand-grey-400">Clearance Required</p>
+                  <p className="text-sm text-brand-slate-700">
+                    {clearanceLabels[requirement.clearance_required] || 'None'}
+                  </p>
+                </div>
+              </div>
+              
+              {requirement.max_day_rate && (
+                <div className="flex items-center gap-3">
+                  <PoundSterling className="h-4 w-4 text-brand-grey-400" />
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Max Day Rate</p>
+                    <p className="text-sm text-brand-slate-700">£{requirement.max_day_rate}/day</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
 
-          {/* Right Column - Meta Info */}
-          <div className="space-y-6">
-            {/* Assignment */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Assignment</CardTitle>
-              </CardHeader>
-              <div className="space-y-4">
+          {/* Right Column */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Assignment</CardTitle>
+            </CardHeader>
+            <div className="space-y-4">
+              {manager ? (
                 <div>
                   <p className="text-xs text-brand-grey-400 mb-1">Assigned Manager</p>
-                  <div className="flex items-center gap-2">
-                    <Avatar name={requirement.manager_name} size="sm" />
-                    <span className="font-medium text-brand-slate-900">{requirement.manager_name}</span>
-                  </div>
+                  <p className="text-sm font-medium text-brand-slate-700">{manager.full_name}</p>
+                  <p className="text-xs text-brand-grey-400">{manager.email}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-brand-grey-400 mb-1">Created By</p>
-                  <div className="flex items-center gap-2">
-                    <Avatar name={requirement.created_by_name} size="sm" />
-                    <span className="font-medium text-brand-slate-900">{requirement.created_by_name}</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Timeline */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Timeline</CardTitle>
-              </CardHeader>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-sm">
-                  <Calendar className="h-4 w-4 text-brand-grey-400" />
-                  <div>
-                    <p className="text-brand-grey-400">Created</p>
-                    <p className="text-brand-slate-700">{formatDate(requirement.created_at)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Clock className="h-4 w-4 text-brand-grey-400" />
-                  <div>
-                    <p className="text-brand-grey-400">Last Updated</p>
-                    <p className="text-brand-slate-700">{formatDate(requirement.updated_at)}</p>
-                  </div>
-                </div>
-                {['active', 'opportunity'].includes(requirement.status) && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <User className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-brand-grey-400">Time Open</p>
-                      <p className="text-brand-orange font-medium">{daysOpen} days</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Quick Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Progress</CardTitle>
-              </CardHeader>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-brand-grey-400">Positions</span>
-                  <span className="font-medium text-brand-slate-900">{requirement.fte_count} FTEs</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-brand-grey-400">Candidates Linked</span>
-                  <span className="font-medium text-brand-slate-900">{mockLinkedCandidates.length}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-brand-grey-400">In Interview</span>
-                  <span className="font-medium text-brand-slate-900">{mockLinkedCandidates.length}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-brand-grey-400">Offers Made</span>
-                  <span className="font-medium text-brand-slate-900">0</span>
-                </div>
-              </div>
-            </Card>
-          </div>
+              ) : (
+                <p className="text-sm text-brand-grey-400">No manager assigned</p>
+              )}
+            </div>
+          </Card>
         </div>
+
+        {/* Skills */}
+        {requirement.skills && requirement.skills.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Required Skills</CardTitle>
+            </CardHeader>
+            <div className="flex flex-wrap gap-2">
+              {requirement.skills.map((skill: string) => (
+                <Badge key={skill} variant="cyan">{skill}</Badge>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Description */}
+        {requirement.description && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Description</CardTitle>
+            </CardHeader>
+            <p className="text-brand-slate-600 leading-relaxed whitespace-pre-wrap">
+              {requirement.description}
+            </p>
+          </Card>
+        )}
       </div>
     </div>
   );

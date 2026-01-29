@@ -57,13 +57,34 @@ export const useAuthStore = create<AuthState>()(
               });
             } else {
               // User doesn't exist in our users table - create one
+              // Determine role based on email
+              const email = session.user.email || '';
+              let role: 'admin' | 'director' | 'manager' | 'recruiter' | 'interviewer' = 'recruiter';
+              
+              if (email.includes('admin')) {
+                role = 'admin';
+              } else if (email.includes('director')) {
+                role = 'director';
+              } else if (email.includes('manager')) {
+                role = 'manager';
+              } else if (email.includes('interviewer')) {
+                role = 'interviewer';
+              }
+              
+              // Get a friendly name from email
+              const namePart = email.split('@')[0] || 'Unknown';
+              const fullName = namePart
+                .split(/[._-]/)
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ');
+              
               const newProfile = {
                 id: session.user.id,
-                email: session.user.email || '',
+                email: email,
                 full_name: session.user.user_metadata?.full_name || 
                            session.user.user_metadata?.name ||
-                           session.user.email?.split('@')[0] || 'Unknown',
-                role: 'recruiter' as const,
+                           fullName,
+                role: role,
                 avatar_url: session.user.user_metadata?.avatar_url || null,
                 is_active: true,
               };
