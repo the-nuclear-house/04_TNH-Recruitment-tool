@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal, X } from 'lucide-react';
+import { Plus, MoreHorizontal, X, Upload, FileText } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -47,9 +47,43 @@ export function CandidatesPage() {
   const [previousCompanies, setPreviousCompanies] = useState<string[]>([]);
   const [companyInput, setCompanyInput] = useState('');
   const [cvFile, setCvFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFormChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const validExtensions = ['.pdf', '.doc', '.docx'];
+      const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+      
+      if (validTypes.includes(file.type) || hasValidExtension) {
+        if (file.size <= 10 * 1024 * 1024) { // 10MB limit
+          setCvFile(file);
+        } else {
+          toast.error('File too large', 'Please upload a file smaller than 10MB');
+        }
+      } else {
+        toast.error('Invalid file type', 'Please upload a PDF, DOC, or DOCX file');
+      }
+    }
   };
 
   const handleSkillInputChange = (value: string) => {
@@ -382,7 +416,20 @@ export function CandidatesPage() {
             <label className="block text-sm font-medium text-brand-slate-700 mb-1">
               CV / Resume
             </label>
-            <div className="border-2 border-dashed border-brand-grey-200 rounded-lg p-4 text-center hover:border-brand-cyan transition-colors">
+            <div 
+              className={`
+                border-2 border-dashed rounded-lg p-6 text-center transition-all
+                ${isDragging 
+                  ? 'border-brand-cyan bg-brand-cyan/5' 
+                  : cvFile 
+                    ? 'border-green-300 bg-green-50' 
+                    : 'border-brand-grey-200 hover:border-brand-cyan'
+                }
+              `}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <input
                 type="file"
                 accept=".pdf,.doc,.docx"
@@ -390,22 +437,32 @@ export function CandidatesPage() {
                 className="hidden"
                 id="cv-upload"
               />
-              <label htmlFor="cv-upload" className="cursor-pointer">
+              <label htmlFor="cv-upload" className="cursor-pointer block">
                 {cvFile ? (
-                  <div className="flex items-center justify-center gap-2 text-brand-cyan">
-                    <span className="font-medium">{cvFile.name}</span>
+                  <div className="flex items-center justify-center gap-3">
+                    <FileText className="h-8 w-8 text-green-600" />
+                    <div className="text-left">
+                      <p className="font-medium text-brand-slate-900">{cvFile.name}</p>
+                      <p className="text-sm text-brand-grey-400">
+                        {(cvFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={(e) => { e.preventDefault(); setCvFile(null); }}
-                      className="text-brand-grey-400 hover:text-red-500"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCvFile(null); }}
+                      className="p-1 rounded-full hover:bg-red-100 text-brand-grey-400 hover:text-red-500 transition-colors"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-5 w-5" />
                     </button>
                   </div>
                 ) : (
-                  <div className="text-brand-grey-400">
-                    <p className="font-medium">Click to upload CV</p>
-                    <p className="text-sm">PDF, DOC, DOCX (max 10MB)</p>
+                  <div className={`${isDragging ? 'text-brand-cyan' : 'text-brand-grey-400'}`}>
+                    <Upload className={`h-10 w-10 mx-auto mb-2 ${isDragging ? 'text-brand-cyan' : 'text-brand-grey-300'}`} />
+                    <p className="font-medium">
+                      {isDragging ? 'Drop your CV here' : 'Drag & drop your CV here'}
+                    </p>
+                    <p className="text-sm mt-1">or click to browse</p>
+                    <p className="text-xs mt-2 text-brand-grey-300">PDF, DOC, DOCX (max 10MB)</p>
                   </div>
                 )}
               </label>
