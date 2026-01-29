@@ -259,7 +259,6 @@ export function CandidatesPage() {
     setLocationsFilter([]);
     setExperienceFilter('');
     setStatusFilter([]);
-    setAiSearchExplanation('');
   };
 
   const hasActiveFilters = searchQuery || skillsFilter.length > 0 || locationsFilter.length > 0 || experienceFilter || statusFilter.length > 0;

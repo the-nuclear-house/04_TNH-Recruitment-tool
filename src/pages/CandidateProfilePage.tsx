@@ -1187,7 +1187,7 @@ export function CandidateProfilePage() {
                           {comment.user?.full_name || 'Unknown User'}
                         </span>
                         <span className="text-xs text-brand-grey-400">
-                          {comment.user?.roles?.length > 0 && `(${comment.user.roles.join(', ')})`}
+                          {comment.user?.roles && comment.user.roles.length > 0 && `(${comment.user.roles.join(', ')})`}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
