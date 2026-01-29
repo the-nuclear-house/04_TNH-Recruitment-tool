@@ -15,6 +15,7 @@ import {
   UserPlus,
   X,
   CalendarPlus,
+  ChevronDown,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -82,6 +83,7 @@ export function RequirementDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   
   // Applications (linked candidates)
   const [applications, setApplications] = useState<DbApplication[]>([]);
@@ -113,7 +115,7 @@ export function RequirementDetailPage() {
   const [candidateInterviewStatus, setCandidateInterviewStatus] = useState<Record<string, boolean>>({});
   
   // Check if user can schedule assessments (Manager, Director, Admin)
-  const canScheduleAssessments = ['admin', 'director', 'manager'].includes(user?.role || '');
+  const canScheduleAssessments = user?.roles?.some(r => ['admin', 'director', 'manager'].includes(r)) ?? false;
 
   useEffect(() => {
     if (id) {
@@ -213,9 +215,8 @@ export function RequirementDetailPage() {
         created_by: user.id,
       });
       
-      // Reload applications
-      const appsData = await applicationsService.getByRequirement(id!);
-      setApplications(appsData);
+      // Reload all data including interview status
+      await loadData();
       
       setIsAddCandidateModalOpen(false);
       setSelectedCandidateId('');
@@ -394,27 +395,42 @@ export function RequirementDetailPage() {
               </div>
             </div>
 
-            {/* Quick Status Change - only for managers */}
+            {/* Quick Status Change - clickable tag */}
             {permissions.canEditRequirements ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-brand-grey-400">Status:</span>
-                <Select
-                  options={[
-                    { value: 'opportunity', label: 'Opportunity' },
-                    { value: 'active', label: 'Active' },
-                    { value: 'won', label: 'Won' },
-                    { value: 'lost', label: 'Lost' },
-                    { value: 'cancelled', label: 'Cancelled' },
-                  ]}
-                  value={requirement.status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                />
+              <div className="relative">
+                <button
+                  onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium ${config.bgColour} ${config.colour} hover:opacity-80 transition-opacity flex items-center gap-2`}
+                >
+                  {config.label}
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isStatusMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {isStatusMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-lg border border-brand-grey-200 z-20 min-w-[160px] overflow-hidden">
+                    {Object.entries(statusConfig).map(([key, conf]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          handleStatusChange(key);
+                          setIsStatusMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-brand-grey-50 flex items-center gap-2 ${
+                          requirement.status === key ? 'bg-brand-grey-50' : ''
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${conf.bgColour.replace('bg-', 'bg-').replace('-100', '-500').replace('-50', '-400')}`} />
+                        {conf.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${config.bgColour} ${config.colour}`}>
                 {config.label}
               </span>
-            )}
+            )}}
           </div>
         </Card>
 

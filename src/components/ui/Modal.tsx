@@ -10,6 +10,7 @@ interface ModalProps {
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   showCloseButton?: boolean;
+  shake?: boolean;
 }
 
 export function Modal({
@@ -20,6 +21,7 @@ export function Modal({
   children,
   size = 'md',
   showCloseButton = true,
+  shake = false,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -77,6 +79,7 @@ export function Modal({
         className={`
           w-full ${sizes[size]} bg-white rounded-2xl shadow-strong
           animate-slide-up overflow-hidden
+          ${shake ? 'animate-shake' : ''}
         `}
       >
         {/* Header */}

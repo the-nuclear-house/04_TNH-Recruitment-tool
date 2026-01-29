@@ -175,17 +175,14 @@ export function InterviewsPage() {
     
     // Apply "My Candidates" filter
     if (showMyCandidatesOnly && user) {
-      if (user.role === 'recruiter') {
-        // Recruiters see interviews for candidates they're assigned to
+      if (user.roles?.includes('recruiter') && !user.roles?.some(r => ['manager', 'director', 'admin'].includes(r))) {
+        // Pure recruiters see interviews for candidates they're assigned to
         filtered = filtered.filter(i => {
           const candidate = candidates[i.candidate_id];
           return candidate?.assigned_recruiter_id === user.id;
         });
-      } else if (user.role === 'manager') {
-        // Managers see interviews where they are the interviewer
-        filtered = filtered.filter(i => i.interviewer_id === user.id);
       } else {
-        // Admin/Director - show interviews where they are the interviewer
+        // Managers/Directors/Admin - show interviews where they are the interviewer
         filtered = filtered.filter(i => i.interviewer_id === user.id);
       }
     }

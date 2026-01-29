@@ -50,6 +50,7 @@ export function CandidatesPage() {
     email: '',
     phone: '',
     location: '',
+    linkedin_url: '',
     summary: '',
     assigned_recruiter_id: '',
   });
@@ -178,6 +179,7 @@ export function CandidatesPage() {
         email: formData.email,
         phone: formData.phone || undefined,
         location: formData.location || undefined,
+        linkedin_url: formData.linkedin_url || undefined,
         summary: formData.summary || undefined,
         skills: skills.length > 0 ? skills : undefined,
         previous_companies: previousCompanies.length > 0 ? previousCompanies : undefined,
@@ -192,6 +194,7 @@ export function CandidatesPage() {
         email: '',
         phone: '',
         location: '',
+        linkedin_url: '',
         summary: '',
         assigned_recruiter_id: '',
       });
@@ -579,6 +582,13 @@ export function CandidatesPage() {
             placeholder="London"
           />
 
+          <Input
+            label="LinkedIn URL"
+            value={formData.linkedin_url}
+            onChange={(e) => handleFormChange('linkedin_url', e.target.value)}
+            placeholder="https://linkedin.com/in/..."
+          />
+
           {/* CV Upload */}
           <div>
             <label className="block text-sm font-medium text-brand-slate-700 mb-1">
@@ -710,8 +720,8 @@ export function CandidatesPage() {
             options={[
               { value: '', label: '-- Select Recruiter --' },
               ...users
-                .filter(u => u.role === 'recruiter' || u.role === 'admin')
-                .map(u => ({ value: u.id, label: u.name }))
+                .filter(u => u.roles?.some((r: string) => ['recruiter', 'admin'].includes(r)))
+                .map(u => ({ value: u.id, label: u.full_name }))
             ]}
             value={formData.assigned_recruiter_id}
             onChange={(e) => handleFormChange('assigned_recruiter_id', e.target.value)}

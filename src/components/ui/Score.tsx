@@ -123,9 +123,6 @@ export function StarRating({ value, onChange, maxRating = 5, label }: StarRating
             </button>
           );
         })}
-        <span className="ml-2 text-sm text-brand-grey-400">
-          {value > 0 ? `${value}/5` : 'Not rated'}
-        </span>
       </div>
     </div>
   );

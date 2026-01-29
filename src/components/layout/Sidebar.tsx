@@ -24,7 +24,7 @@ export function Sidebar() {
   const permissions = usePermissions();
 
   // Customer assessments only visible to Manager, Director, Admin
-  const canViewCustomerAssessments = ['admin', 'director', 'manager'].includes(user?.role || '');
+  const canViewCustomerAssessments = user?.roles?.some(r => ['admin', 'director', 'manager'].includes(r)) ?? false;
 
   // Build navigation based on permissions
   const navigation = [
@@ -148,7 +148,7 @@ export function Sidebar() {
                 {user?.full_name}
               </p>
               <p className="text-xs text-brand-grey-400 truncate capitalize">
-                {user?.role?.replace('_', ' ')}
+                {user?.roles?.join(', ') || 'No role'}
               </p>
             </div>
           )}

@@ -2,15 +2,15 @@
 // USER & ORGANISATION TYPES
 // ============================================
 
-export type UserRole = 'admin' | 'director' | 'manager' | 'recruiter' | 'interviewer';
+export type UserRole = 'admin' | 'director' | 'manager' | 'recruiter';
 
 export interface User {
   id: string;
   email: string;
   full_name: string;
-  role: UserRole;
-  business_unit_id: string | null;
-  reports_to: string | null;
+  roles: UserRole[];  // Changed from role to roles array
+  business_unit_id?: string | null;
+  reports_to?: string | null;
   avatar_url: string | null;
   is_active: boolean;
   created_at: string;

@@ -144,4 +144,24 @@
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* Shake animation for validation errors */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+    20%, 40%, 60%, 80% { transform: translateX(4px); }
+  }
+  
+  .animate-shake {
+    animation: shake 0.5s ease-in-out;
+  }
+  
+  /* Validation error highlight */
+  .validation-error {
+    @apply ring-2 ring-red-500 ring-offset-1;
+  }
+  
+  .validation-error-text {
+    @apply border-red-500 bg-red-50;
+  }
 }

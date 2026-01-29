@@ -292,6 +292,9 @@ export interface DbInterview {
   cultural_fit_score: number | null;
   technical_depth_score: number | null;
   problem_solving_score: number | null;
+  contract_preference: string | null;
+  salary_proposed: number | null;
+  warnings: string | null;
   general_comments: string | null;
   recommendation: string | null;
   created_at: string;
@@ -316,6 +319,9 @@ export interface UpdateInterviewInput {
   cultural_fit_score?: number;
   technical_depth_score?: number;
   problem_solving_score?: number;
+  contract_preference?: string;
+  salary_proposed?: number;
+  warnings?: string;
   general_comments?: string;
   recommendation?: string;
 }
@@ -429,7 +435,7 @@ export interface DbUser {
   id: string;
   email: string;
   full_name: string;
-  role: string;
+  roles: string[];  // Changed from role to roles array
   avatar_url: string | null;
   is_active: boolean;
   created_at: string;
@@ -461,12 +467,25 @@ export const usersService = {
     return data;
   },
 
-  // Get users by role
+  // Get users by role (checks if role is in roles array)
   async getByRole(role: string): Promise<DbUser[]> {
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('role', role)
+      .contains('roles', [role])
+      .eq('is_active', true)
+      .order('full_name');
+
+    if (error) throw error;
+    return data || [];
+  },
+  
+  // Get users who have ANY of the specified roles
+  async getByRoles(roles: string[]): Promise<DbUser[]> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .overlaps('roles', roles)
       .eq('is_active', true)
       .order('full_name');
 

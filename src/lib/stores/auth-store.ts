@@ -61,18 +61,16 @@ export const useAuthStore = create<AuthState>()(
               });
             } else {
               // User doesn't exist in our users table - create one
-              // Determine role based on email
+              // Determine roles based on email (for demo/testing)
               const email = session.user.email || '';
-              let role: 'admin' | 'director' | 'manager' | 'recruiter' | 'interviewer' = 'recruiter';
+              let roles: string[] = ['recruiter'];
               
               if (email.includes('admin')) {
-                role = 'admin';
+                roles = ['admin'];
               } else if (email.includes('director')) {
-                role = 'director';
+                roles = ['director'];
               } else if (email.includes('manager')) {
-                role = 'manager';
-              } else if (email.includes('interviewer')) {
-                role = 'interviewer';
+                roles = ['manager'];
               }
               
               // Get a friendly name from email
@@ -88,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
                 full_name: session.user.user_metadata?.full_name || 
                            session.user.user_metadata?.name ||
                            fullName,
-                role: role,
+                roles: roles,
                 avatar_url: session.user.user_metadata?.avatar_url || null,
                 is_active: true,
               };
@@ -146,15 +144,10 @@ export const useAuthStore = create<AuthState>()(
 );
 
 // Listen for auth state changes
-// Note: We only react to actual sign-in/sign-out events, not token refreshes
-// This prevents modals from closing when switching tabs
 supabase.auth.onAuthStateChange(async (event, session) => {
-  // Only handle actual auth events, ignore TOKEN_REFRESHED and other events
   if (event === 'SIGNED_IN' && session && !useAuthStore.getState().isAuthenticated) {
-    // Only check auth if we weren't already authenticated
     useAuthStore.getState().checkAuth();
   } else if (event === 'SIGNED_OUT') {
     useAuthStore.getState().setUser(null);
   }
-  // Ignore TOKEN_REFRESHED, INITIAL_SESSION, etc. to prevent re-renders
 });
