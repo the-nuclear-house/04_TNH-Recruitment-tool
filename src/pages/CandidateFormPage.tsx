@@ -13,7 +13,7 @@ import {
   Badge,
 } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
-import type { Candidate, RightToWork, SecurityVetting } from '@/types';
+import type { RightToWork, SecurityVetting } from '@/types';
 
 const rightToWorkOptions = [
   { value: 'british_citizen', label: 'British Citizen' },

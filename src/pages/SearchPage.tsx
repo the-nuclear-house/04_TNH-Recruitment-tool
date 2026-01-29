@@ -10,8 +10,6 @@ import {
   Shield,
   PoundSterling,
   Sparkles,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -20,8 +18,7 @@ import {
   Button, 
   Badge, 
   getStatusVariant, 
-  Avatar, 
-  Select,
+  Avatar,
   EmptyState,
   Skeleton,
 } from '@/components/ui';

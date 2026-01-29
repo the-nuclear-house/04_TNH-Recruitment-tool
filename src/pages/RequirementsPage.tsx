@@ -1,10 +1,8 @@
 import { Header } from '@/components/layout';
 import { Card, EmptyState, Button } from '@/components/ui';
 import { Briefcase, Plus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 export function RequirementsPage() {
-  const navigate = useNavigate();
   
   return (
     <div className="min-h-screen">

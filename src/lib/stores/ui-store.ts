@@ -40,9 +40,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
-  openModal: (modalId, data = null) => set({ 
+  openModal: (modalId, data) => set({ 
     activeModal: modalId, 
-    modalData: data 
+    modalData: data || null
   }),
 
   closeModal: () => set({ 

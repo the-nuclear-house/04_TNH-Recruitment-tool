@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Filter, Download, MoreHorizontal } from 'lucide-react';
+import { Plus, Download, MoreHorizontal } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 

@@ -1,4 +1,4 @@
-import { Bell, Search } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Input, Avatar } from '@/components/ui';
 import { useAuthStore } from '@/lib/stores/auth-store';

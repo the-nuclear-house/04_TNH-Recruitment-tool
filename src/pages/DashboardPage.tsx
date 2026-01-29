@@ -7,8 +7,6 @@ import {
   TrendingUp,
   ArrowRight,
   Clock,
-  CheckCircle,
-  AlertCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardHeader, CardTitle, Button, Badge, getStatusVariant, Avatar, Skeleton } from '@/components/ui';
