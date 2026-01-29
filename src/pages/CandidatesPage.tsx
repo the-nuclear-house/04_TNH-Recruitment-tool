@@ -16,7 +16,7 @@ import { formatDate, statusLabels, formatCurrency } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { Candidate } from '@/types';
 
-// Mock data
+// Mock data - sorted by created_at descending (newest first)
 const mockCandidates: Candidate[] = [
   {
     id: '1',
@@ -42,7 +42,7 @@ const mockCandidates: Candidate[] = [
     salary_currency: 'GBP',
     sector_flexibility: 'Defence, Finance',
     scope_flexibility: 'Backend, Full-stack',
-    status: 'technical_interview',
+    status: 'director_interview',
     source: 'LinkedIn',
     created_by: 'user-1',
     created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
@@ -72,7 +72,7 @@ const mockCandidates: Candidate[] = [
     salary_currency: 'GBP',
     sector_flexibility: 'Any',
     scope_flexibility: 'DevOps, SRE',
-    status: 'phone_qualification',
+    status: 'technical_interview',
     source: 'Referral',
     created_by: 'user-1',
     created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
@@ -102,13 +102,13 @@ const mockCandidates: Candidate[] = [
     salary_currency: 'GBP',
     sector_flexibility: 'Finance, Tech',
     scope_flexibility: 'Data Engineering',
-    status: 'new',
+    status: 'phone_qualification',
     source: 'Job Board',
     created_by: 'user-1',
     created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
-];
+].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
 export function CandidatesPage() {
   const navigate = useNavigate();

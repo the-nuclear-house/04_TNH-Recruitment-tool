@@ -5,6 +5,7 @@ import {
   DashboardPage,
   SearchPage,
   CandidatesPage,
+  CandidateProfilePage,
   CandidateFormPage,
   RequirementsPage,
   InterviewsPage,
@@ -74,7 +75,8 @@ function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/candidates" element={<CandidatesPage />} />
           <Route path="/candidates/new" element={<CandidateFormPage />} />
-          <Route path="/candidates/:id" element={<CandidateFormPage />} />
+          <Route path="/candidates/:id" element={<CandidateProfilePage />} />
+          <Route path="/candidates/:id/edit" element={<CandidateFormPage />} />
           <Route path="/requirements" element={<RequirementsPage />} />
           <Route path="/interviews" element={<InterviewsPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
