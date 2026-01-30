@@ -29,6 +29,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     ref
   ) => {
     const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Check if options already include an empty value option
+    const hasEmptyOption = options.some(opt => opt.value === '');
 
     return (
       <div className="w-full">
@@ -58,9 +61,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             `}
             {...props}
           >
-            <option value="" disabled>
-              {placeholder}
-            </option>
+            {!hasEmptyOption && (
+              <option value="" disabled>
+                {placeholder}
+              </option>
+            )}
             {options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}

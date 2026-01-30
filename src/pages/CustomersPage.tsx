@@ -381,18 +381,24 @@ export function CustomersPage() {
 
     setIsSubmitting(true);
     try {
+      // If there's a new logo file, use the preview (data URL)
+      const formData = {
+        ...companyForm,
+        logo_url: logoPreview || companyForm.logo_url || null,
+      };
+      
       if (isEditingCompany && selectedCompany) {
-        await companiesService.update(selectedCompany.id, companyForm);
+        await companiesService.update(selectedCompany.id, formData);
         toast.success('Company Updated', 'Company details have been saved');
-        loadCompanyDetails(selectedCompany.id);
+        await loadCompanyDetails(selectedCompany.id);
       } else {
-        const newCompany = await companiesService.create(companyForm);
+        const newCompany = await companiesService.create(formData);
         toast.success('Company Created', `${companyForm.name} has been added`);
         setSelectedCompany(newCompany);
-        loadCompanyDetails(newCompany.id);
+        await loadCompanyDetails(newCompany.id);
       }
       setIsCompanyModalOpen(false);
-      loadCompanies();
+      await loadCompanies();
     } catch (error: any) {
       console.error('Error saving company:', error);
       toast.error('Error', error.message || 'Failed to save company');
@@ -594,56 +600,49 @@ export function CustomersPage() {
       return contacts.filter(c => c.reports_to_id === contactId);
     };
 
-    const renderOrgNode = (contact: DbContact, level: number = 0): JSX.Element => {
+    const renderOrgNode = (contact: DbContact, level: number = 0, isLast: boolean = false, isFirst: boolean = false): JSX.Element => {
       const directReports = getDirectReports(contact.id);
 
       return (
-        <div key={contact.id} className="flex flex-col items-center">
+        <li key={contact.id} className="relative flex flex-col items-center pt-5">
           {/* Contact Card */}
           <div
-            className="bg-white border-2 border-brand-grey-200 rounded-xl p-4 shadow-sm hover:shadow-lg hover:border-brand-cyan transition-all cursor-pointer min-w-[220px]"
+            className="relative bg-white border-2 border-brand-grey-200 rounded-xl p-4 shadow-sm hover:shadow-lg hover:border-brand-cyan transition-all cursor-pointer min-w-[200px] z-10"
             onClick={() => loadContactDetails(contact)}
           >
             <div className="flex items-center gap-3">
               <Avatar name={`${contact.first_name} ${contact.last_name}`} size="md" />
               <div>
-                <p className="font-semibold text-brand-slate-900">
+                <p className="font-semibold text-brand-slate-900 text-sm">
                   {contact.first_name} {contact.last_name}
                 </p>
-                <p className="text-sm text-brand-cyan font-medium">{contact.role || 'No role'}</p>
+                <p className="text-xs text-brand-cyan font-medium">{contact.role || 'No role'}</p>
               </div>
             </div>
           </div>
 
-          {/* Connection lines to children */}
+          {/* Children */}
           {directReports.length > 0 && (
-            <div className="flex flex-col items-center">
+            <ul className="relative flex flex-row gap-0 pt-5">
               {/* Vertical line down from parent */}
-              <div className="w-0.5 h-8 bg-brand-cyan" />
+              <div className="absolute top-0 left-1/2 w-0.5 h-5 bg-brand-cyan -translate-x-1/2" />
               
-              {/* Horizontal connector line */}
-              {directReports.length > 1 && (
-                <div 
-                  className="h-0.5 bg-brand-cyan" 
-                  style={{ 
-                    width: `${(directReports.length - 1) * 260 + 20}px`,
-                  }} 
-                />
-              )}
-              
-              {/* Children with their vertical connectors */}
-              <div className="flex gap-10">
-                {directReports.map((report, index) => (
-                  <div key={report.id} className="flex flex-col items-center">
-                    {/* Vertical line up to horizontal connector */}
-                    <div className="w-0.5 h-8 bg-brand-cyan" />
-                    {renderOrgNode(report, level + 1)}
-                  </div>
-                ))}
-              </div>
-            </div>
+              {directReports.map((report, index) => (
+                <li key={report.id} className="relative px-4">
+                  {/* Horizontal line */}
+                  <div className={`absolute top-0 h-0.5 bg-brand-cyan ${
+                    index === 0 && directReports.length > 1 ? 'left-1/2 right-0' :
+                    index === directReports.length - 1 && directReports.length > 1 ? 'left-0 right-1/2' :
+                    directReports.length === 1 ? 'hidden' : 'left-0 right-0'
+                  }`} />
+                  {/* Vertical line to child */}
+                  <div className="absolute top-0 left-1/2 w-0.5 h-5 bg-brand-cyan -translate-x-1/2" />
+                  {renderOrgNode(report, level + 1)}
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
+        </li>
       );
     };
 
@@ -689,12 +688,12 @@ export function CustomersPage() {
 
         {/* Scrollable container */}
         <div className="overflow-auto max-h-[600px] py-8 px-4">
-          <div 
-            className="flex justify-center gap-16 min-w-max transition-transform duration-200"
+          <ul 
+            className="flex justify-center gap-8 min-w-max transition-transform duration-200 list-none m-0 p-0"
             style={{ transform: `scale(${orgChartZoom})`, transformOrigin: 'top center' }}
           >
             {topLevel.map(contact => renderOrgNode(contact))}
-          </div>
+          </ul>
         </div>
       </div>
     );
@@ -856,9 +855,20 @@ export function CustomersPage() {
               <div className="bg-gradient-to-r from-brand-slate-900 to-brand-slate-800 rounded-2xl p-6 text-white">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="p-3 bg-white/10 rounded-xl">
-                      <Building2 className="h-8 w-8" />
-                    </div>
+                    {/* Logo or default icon */}
+                    {selectedCompany.logo_url ? (
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-white flex items-center justify-center">
+                        <img 
+                          src={selectedCompany.logo_url} 
+                          alt={`${selectedCompany.name} logo`}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-white/10 rounded-xl">
+                        <Building2 className="h-8 w-8" />
+                      </div>
+                    )}
                     <div>
                       <h2 className="text-2xl font-bold">{selectedCompany.name}</h2>
                       {selectedCompany.trading_name && (

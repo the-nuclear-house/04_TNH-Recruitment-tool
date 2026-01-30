@@ -885,7 +885,7 @@ export interface CreateCompanyInput {
   main_phone?: string;
   main_email?: string;
   website?: string;
-  logo_url?: string;
+  logo_url?: string | null;
   status?: string;
   notes?: string;
   assigned_manager_id?: string;
