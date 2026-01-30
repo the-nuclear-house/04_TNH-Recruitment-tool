@@ -210,8 +210,9 @@ export function CustomersPage() {
 
       // Load requirements based on whether this is a parent or subcompany
       await loadRequirements(company);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading company details:', error);
+      toast.error('Error', error.message || 'Failed to load company details');
     }
   };
 
@@ -1336,12 +1337,14 @@ export function CustomersPage() {
             />
           </div>
 
-          {!companyForm.parent_company_id && parentCompanies.length > 0 && (
+          {parentCompanies.length > 0 && (
             <Select
-              label="Parent Company (if subsidiary)"
+              label="Parent Company (leave empty if this is a parent company)"
               options={[
                 { value: '', label: 'None - This is a parent company' },
-                ...parentCompanies.map(c => ({ value: c.id, label: c.name }))
+                ...parentCompanies
+                  .filter(c => !isEditingCompany || c.id !== selectedCompany?.id) // Can't be parent of itself
+                  .map(c => ({ value: c.id, label: c.name }))
               ]}
               value={companyForm.parent_company_id}
               onChange={(e) => setCompanyForm(prev => ({ ...prev, parent_company_id: e.target.value }))}
