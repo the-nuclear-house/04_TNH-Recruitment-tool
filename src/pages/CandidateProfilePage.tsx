@@ -15,6 +15,7 @@ import {
   XCircle,
   User,
   Plus,
+  Minus,
   Building2,
   ChevronDown,
   ChevronUp,
@@ -25,6 +26,7 @@ import {
   Edit,
   Download,
   Settings,
+  Flag,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -144,6 +146,28 @@ const noticePeriodOptions = [
   { value: '6_months', label: '6 Months' },
 ];
 
+// Countries list for nationality
+const countries = [
+  'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan',
+  'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia',
+  'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada',
+  'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa Rica', 'Croatia', 'Cuba',
+  'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea',
+  'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany',
+  'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland',
+  'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Ivory Coast', 'Jamaica', 'Japan',
+  'Jordan', 'Kazakhstan', 'Kenya', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia',
+  'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta',
+  'Mauritania', 'Mauritius', 'Mexico', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar',
+  'Namibia', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'North Macedonia', 'Norway',
+  'Oman', 'Pakistan', 'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal',
+  'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saudi Arabia', 'Senegal', 'Serbia', 'Sierra Leone', 'Singapore', 'Slovakia',
+  'Slovenia', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden',
+  'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Togo', 'Trinidad and Tobago', 'Tunisia', 'Turkey',
+  'Turkmenistan', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan', 'Vatican City', 'Venezuela',
+  'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe'
+];
+
 export function CandidateProfilePage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -194,6 +218,7 @@ export function CandidateProfilePage() {
     outcome: '',
     years_experience: '',
     minimum_salary_expected: '',
+    expected_day_rate: '',
     right_to_work: '',
     right_to_work_other: '',
     security_vetting: '',
@@ -201,7 +226,6 @@ export function CandidateProfilePage() {
     open_to_relocate: '',
     relocation_preferences: '',
     contract_preference: '', // contractor, permanent, open_to_both
-    salary_proposed: '',
     communication_score: '',
     professionalism_score: '',
     enthusiasm_score: '',
@@ -209,6 +233,7 @@ export function CandidateProfilePage() {
     warnings: '',
     general_comments: '',
   });
+  const [phoneNationalities, setPhoneNationalities] = useState<string[]>(['']);
   const [phoneSkills, setPhoneSkills] = useState<string[]>([]);
   const [phoneSkillInput, setPhoneSkillInput] = useState('');
   
@@ -388,14 +413,14 @@ export function CandidateProfilePage() {
         outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
         years_experience: candidate?.years_experience?.toString() || '',
         minimum_salary_expected: candidate?.minimum_salary_expected?.toString() || '',
+        expected_day_rate: candidate?.expected_day_rate?.toString() || '',
         right_to_work: candidate?.right_to_work || '',
         right_to_work_other: '',
         security_vetting: candidate?.security_vetting || '',
-        notice_period: '',
-        open_to_relocate: '',
-        relocation_preferences: '',
-        contract_preference: interview.contract_preference || '',
-        salary_proposed: interview.salary_proposed?.toString() || '',
+        notice_period: candidate?.notice_period || '',
+        open_to_relocate: candidate?.open_to_relocate || '',
+        relocation_preferences: candidate?.relocation_preferences || '',
+        contract_preference: candidate?.contract_preference || '',
         communication_score: interview.communication_score?.toString() || '',
         professionalism_score: interview.professionalism_score?.toString() || '',
         enthusiasm_score: interview.enthusiasm_score?.toString() || '',
@@ -403,6 +428,9 @@ export function CandidateProfilePage() {
         warnings: interview.warnings || '',
         general_comments: interview.general_comments || '',
       });
+      // Initialize nationalities - at least one empty field if none exist
+      const existingNationalities = candidate?.nationalities || [];
+      setPhoneNationalities(existingNationalities.length > 0 ? existingNationalities : ['']);
       setPhoneSkills(candidate?.skills || []);
     } else if (interview.stage === 'technical_interview') {
       setTechForm({
@@ -454,12 +482,21 @@ export function CandidateProfilePage() {
     setValidationErrors([]);
     setIsSubmitting(true);
     try {
+      // Filter out empty nationalities
+      const validNationalities = phoneNationalities.filter(n => n.trim() !== '');
+      
       // Update candidate with admin info from phone call
       await candidatesService.update(id!, {
         years_experience: phoneForm.years_experience ? parseInt(phoneForm.years_experience) : undefined,
         minimum_salary_expected: phoneForm.minimum_salary_expected ? parseInt(phoneForm.minimum_salary_expected) : undefined,
+        expected_day_rate: phoneForm.expected_day_rate ? parseFloat(phoneForm.expected_day_rate) : undefined,
         right_to_work: phoneForm.right_to_work || undefined,
         security_vetting: phoneForm.security_vetting || undefined,
+        notice_period: phoneForm.notice_period || undefined,
+        contract_preference: phoneForm.contract_preference || undefined,
+        open_to_relocate: phoneForm.open_to_relocate || undefined,
+        relocation_preferences: phoneForm.relocation_preferences || undefined,
+        nationalities: validNationalities.length > 0 ? validNationalities : undefined,
         skills: phoneSkills.length > 0 ? phoneSkills : undefined,
       });
       
@@ -472,7 +509,7 @@ export function CandidateProfilePage() {
         enthusiasm_score: parseInt(phoneForm.enthusiasm_score),
         cultural_fit_score: parseInt(phoneForm.cultural_fit_score),
         contract_preference: phoneForm.contract_preference || undefined,
-        salary_proposed: phoneForm.salary_proposed ? parseFloat(phoneForm.salary_proposed) : undefined,
+        salary_proposed: phoneForm.expected_day_rate ? parseFloat(phoneForm.expected_day_rate) : undefined,
         warnings: phoneForm.warnings || undefined,
         general_comments: phoneForm.general_comments,
       });
@@ -693,11 +730,6 @@ export function CandidateProfilePage() {
               />
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  {candidate.reference_id && (
-                    <span className="text-sm font-mono text-brand-grey-400 bg-brand-grey-100 px-2 py-1 rounded">
-                      {candidate.reference_id}
-                    </span>
-                  )}
                   <h1 className="text-2xl font-bold text-brand-slate-900">
                     {candidate.first_name} {candidate.last_name}
                   </h1>
@@ -706,6 +738,9 @@ export function CandidateProfilePage() {
                   </Badge>
                 </div>
                 <p className="text-brand-grey-400">{candidate.email}</p>
+                {candidate.reference_id && (
+                  <p className="text-xs text-brand-grey-400 mt-1">ID: {candidate.reference_id}</p>
+                )}
               </div>
             </div>
 
@@ -1040,6 +1075,69 @@ export function CandidateProfilePage() {
                     </div>
                   </div>
                 )}
+
+                {candidate.expected_day_rate && (
+                  <div className="flex items-center gap-3">
+                    <PoundSterling className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Expected Day Rate</p>
+                      <p className="text-sm text-brand-slate-700">£{candidate.expected_day_rate}/day</p>
+                    </div>
+                  </div>
+                )}
+
+                {candidate.contract_preference && (
+                  <div className="flex items-center gap-3">
+                    <Briefcase className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Contract Preference</p>
+                      <p className="text-sm text-brand-slate-700">
+                        {candidate.contract_preference === 'contractor' ? 'Contractor' :
+                         candidate.contract_preference === 'permanent' ? 'Permanent' :
+                         candidate.contract_preference === 'open_to_both' ? 'Open to Both' :
+                         candidate.contract_preference}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {candidate.notice_period && (
+                  <div className="flex items-center gap-3">
+                    <Clock className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Notice Period</p>
+                      <p className="text-sm text-brand-slate-700">{candidate.notice_period}</p>
+                    </div>
+                  </div>
+                )}
+
+                {candidate.open_to_relocate && (
+                  <div className="flex items-center gap-3">
+                    <MapPin className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Open to Relocate</p>
+                      <p className="text-sm text-brand-slate-700">
+                        {candidate.open_to_relocate === 'yes' ? 'Yes' :
+                         candidate.open_to_relocate === 'no' ? 'No' :
+                         candidate.open_to_relocate === 'maybe' ? 'Maybe / Depends' :
+                         candidate.open_to_relocate}
+                        {candidate.relocation_preferences && ` - ${candidate.relocation_preferences}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {candidate.nationalities && candidate.nationalities.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <Flag className="h-4 w-4 text-brand-grey-400" />
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Nationality</p>
+                      <p className="text-sm text-brand-slate-700">
+                        {candidate.nationalities.join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -1325,51 +1423,17 @@ export function CandidateProfilePage() {
         shake={isShaking}
       >
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-          {/* Outcome */}
-          <div className={validationErrors.includes('outcome') ? 'validation-error rounded-lg p-1' : ''}>
-            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setPhoneForm(prev => ({ ...prev, outcome: 'pass' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  phoneForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
-                }`}
-              >
-                <CheckCircle className="h-5 w-5" /> Pass
-              </button>
-              <button
-                type="button"
-                onClick={() => setPhoneForm(prev => ({ ...prev, outcome: 'fail' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  phoneForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
-                }`}
-              >
-                <XCircle className="h-5 w-5" /> Fail
-              </button>
-            </div>
-          </div>
-
           {/* Admin Questions Section */}
-          <div className="border-t border-brand-grey-200 pt-4">
+          <div>
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-4">Candidate Information</h4>
             
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Years of Experience"
-                type="number"
-                value={phoneForm.years_experience}
-                onChange={(e) => setPhoneForm(prev => ({ ...prev, years_experience: e.target.value }))}
-                placeholder="e.g., 5"
-              />
-              <Input
-                label="Minimum Salary Expected (£)"
-                type="number"
-                value={phoneForm.minimum_salary_expected}
-                onChange={(e) => setPhoneForm(prev => ({ ...prev, minimum_salary_expected: e.target.value }))}
-                placeholder="e.g., 75000"
-              />
-            </div>
+            <Input
+              label="Years of Experience"
+              type="number"
+              value={phoneForm.years_experience}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, years_experience: e.target.value }))}
+              placeholder="e.g., 5"
+            />
 
             <div className="grid grid-cols-2 gap-4 mt-4">
               <Select
@@ -1426,7 +1490,8 @@ export function CandidateProfilePage() {
               />
             )}
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            {/* Contract Preference with dynamic salary/rate */}
+            <div className="mt-4">
               <Select
                 label="Contract Preference"
                 options={[
@@ -1438,13 +1503,81 @@ export function CandidateProfilePage() {
                 value={phoneForm.contract_preference}
                 onChange={(e) => setPhoneForm(prev => ({ ...prev, contract_preference: e.target.value }))}
               />
-              <Input
-                label="Minimum Salary Expected (£)"
-                type="number"
-                value={phoneForm.salary_proposed}
-                onChange={(e) => setPhoneForm(prev => ({ ...prev, salary_proposed: e.target.value }))}
-                placeholder="e.g., 65000"
-              />
+              
+              {/* Show salary field for permanent or both */}
+              {(phoneForm.contract_preference === 'permanent' || phoneForm.contract_preference === 'open_to_both') && (
+                <Input
+                  label="Minimum Salary Expected (£)"
+                  type="number"
+                  value={phoneForm.minimum_salary_expected}
+                  onChange={(e) => setPhoneForm(prev => ({ ...prev, minimum_salary_expected: e.target.value }))}
+                  placeholder="e.g., 75000"
+                  className="mt-3"
+                />
+              )}
+              
+              {/* Show day rate field for contractor or both */}
+              {(phoneForm.contract_preference === 'contractor' || phoneForm.contract_preference === 'open_to_both') && (
+                <Input
+                  label="Expected Day Rate (£)"
+                  type="number"
+                  value={phoneForm.expected_day_rate}
+                  onChange={(e) => setPhoneForm(prev => ({ ...prev, expected_day_rate: e.target.value }))}
+                  placeholder="e.g., 550"
+                  className="mt-3"
+                />
+              )}
+            </div>
+
+            {/* Nationality */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-brand-slate-700 mb-2">Nationality</label>
+              {phoneNationalities.map((nationality, index) => (
+                <div key={index} className="flex items-center gap-2 mb-2">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      list={`countries-list-${index}`}
+                      value={nationality}
+                      onChange={(e) => {
+                        const updated = [...phoneNationalities];
+                        updated[index] = e.target.value;
+                        setPhoneNationalities(updated);
+                      }}
+                      placeholder="Type to search country..."
+                      className="w-full px-3 py-2 border border-brand-grey-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
+                    />
+                    <datalist id={`countries-list-${index}`}>
+                      {countries.map(country => (
+                        <option key={country} value={country} />
+                      ))}
+                    </datalist>
+                  </div>
+                  {index === phoneNationalities.length - 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setPhoneNationalities([...phoneNationalities, ''])}
+                      className="p-2 text-brand-cyan hover:bg-brand-cyan/10 rounded-lg transition-colors"
+                      title="Add another nationality"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                  {phoneNationalities.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = phoneNationalities.filter((_, i) => i !== index);
+                        setPhoneNationalities(updated);
+                      }}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove this nationality"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1516,6 +1649,31 @@ export function CandidateProfilePage() {
             />
           </div>
 
+          {/* Outcome - at bottom */}
+          <div className={`border-t border-brand-grey-200 pt-4 ${validationErrors.includes('outcome') ? 'validation-error rounded-lg p-1' : ''}`}>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setPhoneForm(prev => ({ ...prev, outcome: 'pass' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  phoneForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5" /> Pass
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhoneForm(prev => ({ ...prev, outcome: 'fail' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  phoneForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5" /> Fail
+              </button>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}>Cancel</Button>
             <Button variant="success" onClick={handleSubmitPhoneFeedback} isLoading={isSubmitting}>Save Feedback</Button>
@@ -1533,33 +1691,8 @@ export function CandidateProfilePage() {
         shake={isShaking}
       >
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-          {/* Outcome */}
-          <div className={validationErrors.includes('tech_outcome') ? 'validation-error rounded-lg p-1' : ''}>
-            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setTechForm(prev => ({ ...prev, outcome: 'pass' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  techForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
-                }`}
-              >
-                <CheckCircle className="h-5 w-5" /> Pass
-              </button>
-              <button
-                type="button"
-                onClick={() => setTechForm(prev => ({ ...prev, outcome: 'fail' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  techForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
-                }`}
-              >
-                <XCircle className="h-5 w-5" /> Fail
-              </button>
-            </div>
-          </div>
-
           {/* Skills Section */}
-          <div className="border-t border-brand-grey-200 pt-4">
+          <div>
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Technical Skills (add or remove based on interview)</h4>
             <div className="mb-2">
               <Input
@@ -1633,6 +1766,31 @@ export function CandidateProfilePage() {
             />
           </div>
 
+          {/* Outcome - at bottom */}
+          <div className={`border-t border-brand-grey-200 pt-4 ${validationErrors.includes('tech_outcome') ? 'validation-error rounded-lg p-1' : ''}`}>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setTechForm(prev => ({ ...prev, outcome: 'pass' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  techForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5" /> Pass
+              </button>
+              <button
+                type="button"
+                onClick={() => setTechForm(prev => ({ ...prev, outcome: 'fail' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  techForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5" /> Fail
+              </button>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}>Cancel</Button>
             <Button variant="success" onClick={handleSubmitTechFeedback} isLoading={isSubmitting}>Save Feedback</Button>
@@ -1650,33 +1808,8 @@ export function CandidateProfilePage() {
         shake={isShaking}
       >
         <div className="space-y-6">
-          {/* Outcome */}
-          <div className={validationErrors.includes('director_outcome') ? 'validation-error rounded-lg p-1' : ''}>
-            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setDirectorForm(prev => ({ ...prev, outcome: 'pass' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  directorForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
-                }`}
-              >
-                <CheckCircle className="h-5 w-5" /> Pass
-              </button>
-              <button
-                type="button"
-                onClick={() => setDirectorForm(prev => ({ ...prev, outcome: 'fail' }))}
-                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                  directorForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
-                }`}
-              >
-                <XCircle className="h-5 w-5" /> Fail
-              </button>
-            </div>
-          </div>
-
           {/* Scores */}
-          <div className="border-t border-brand-grey-200 pt-4">
+          <div>
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Soft Skills Assessment *</h4>
             <div className="grid grid-cols-2 gap-4">
               <div className={validationErrors.includes('director_communication_score') ? 'validation-error rounded-lg p-2' : ''}>
@@ -1717,6 +1850,31 @@ export function CandidateProfilePage() {
               placeholder="Notes from the interview..."
               rows={3}
             />
+          </div>
+
+          {/* Outcome - at bottom */}
+          <div className={`border-t border-brand-grey-200 pt-4 ${validationErrors.includes('director_outcome') ? 'validation-error rounded-lg p-1' : ''}`}>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Outcome *</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDirectorForm(prev => ({ ...prev, outcome: 'pass' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  directorForm.outcome === 'pass' ? 'border-green-500 bg-green-50 text-green-700' : 'border-brand-grey-200 hover:border-green-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5" /> Pass
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirectorForm(prev => ({ ...prev, outcome: 'fail' }))}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  directorForm.outcome === 'fail' ? 'border-red-500 bg-red-50 text-red-700' : 'border-brand-grey-200 hover:border-red-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5" /> Fail
+              </button>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">

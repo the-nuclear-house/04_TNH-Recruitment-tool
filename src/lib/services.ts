@@ -18,6 +18,12 @@ export interface DbCandidate {
   minimum_salary_expected: number | null;
   right_to_work: string;
   security_vetting: string;
+  notice_period: string | null;
+  contract_preference: string | null;
+  open_to_relocate: string | null;
+  relocation_preferences: string | null;
+  expected_day_rate: number | null;
+  nationalities: string[] | null;
   status: string;
   source: string | null;
   cv_url: string | null;
@@ -43,6 +49,12 @@ export interface CreateCandidateInput {
   minimum_salary_expected?: number;
   right_to_work?: string;
   security_vetting?: string;
+  notice_period?: string;
+  contract_preference?: string;
+  open_to_relocate?: string;
+  relocation_preferences?: string;
+  expected_day_rate?: number;
+  nationalities?: string[];
   source?: string;
   cv_url?: string;
   assigned_recruiter_id?: string;

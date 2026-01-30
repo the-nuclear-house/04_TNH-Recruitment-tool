@@ -213,9 +213,15 @@ export function RequirementsPage() {
   };
 
   const filteredRequirements = requirements.filter(req => {
+    const query = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
-      req.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.location?.toLowerCase().includes(searchQuery.toLowerCase());
+      req.title?.toLowerCase().includes(query) ||
+      req.customer?.toLowerCase().includes(query) ||
+      req.location?.toLowerCase().includes(query) ||
+      req.description?.toLowerCase().includes(query) ||
+      req.reference_id?.toLowerCase().includes(query) ||
+      req.skills?.some(skill => skill.toLowerCase().includes(query)) ||
+      req.engineering_discipline?.toLowerCase().includes(query);
     const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
     return matchesSearch && matchesStatus;
   });

@@ -374,16 +374,9 @@ export function RequirementDetailPage() {
         <Card className={requirement.status === 'active' ? 'bg-green-50' : ''}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                {requirement.reference_id && (
-                  <span className="text-sm font-mono text-brand-grey-400 bg-brand-grey-100 px-2 py-1 rounded">
-                    {requirement.reference_id}
-                  </span>
-                )}
-                <h1 className="text-2xl font-bold text-brand-slate-900">
-                  {requirement.title || requirement.customer}
-                </h1>
-              </div>
+              <h1 className="text-2xl font-bold text-brand-slate-900 mb-1">
+                {requirement.title || requirement.customer}
+              </h1>
               {requirement.title && (
                 <p className="text-brand-grey-500 mb-2">{requirement.customer}</p>
               )}
@@ -405,6 +398,9 @@ export function RequirementDetailPage() {
                   <Calendar className="h-4 w-4" />
                   Created {formatDate(requirement.created_at)}
                 </span>
+                {requirement.reference_id && (
+                  <span className="text-xs text-brand-grey-400">ID: {requirement.reference_id}</span>
+                )}
               </div>
             </div>
 
