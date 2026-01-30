@@ -895,12 +895,16 @@ export const companiesService = {
   async create(input: CreateCompanyInput): Promise<DbCompany> {
     const { data: { user } } = await supabase.auth.getUser();
     
+    // Convert empty strings to null for UUID fields
+    const cleanedInput = {
+      ...input,
+      parent_company_id: input.parent_company_id || null,
+      created_by: user?.id,
+    };
+    
     const { data, error } = await supabase
       .from('companies')
-      .insert({
-        ...input,
-        created_by: user?.id,
-      })
+      .insert(cleanedInput)
       .select()
       .single();
 
@@ -909,12 +913,16 @@ export const companiesService = {
   },
 
   async update(id: string, input: Partial<CreateCompanyInput>): Promise<DbCompany> {
+    // Convert empty strings to null for UUID fields
+    const cleanedInput = {
+      ...input,
+      parent_company_id: input.parent_company_id === '' ? null : input.parent_company_id,
+      updated_at: new Date().toISOString(),
+    };
+    
     const { data, error } = await supabase
       .from('companies')
-      .update({
-        ...input,
-        updated_at: new Date().toISOString(),
-      })
+      .update(cleanedInput)
       .eq('id', id)
       .select()
       .single();
