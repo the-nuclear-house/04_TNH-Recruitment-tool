@@ -183,12 +183,16 @@ export interface DbRequirement {
   // Customer module fields
   company_id: string | null;
   contact_id: string | null;
+  // Winning candidate (set when assessment = GO)
+  winning_candidate_id: string | null;
+  won_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;  // Soft delete timestamp
   // Joined
   company?: DbCompany;
   contact?: DbContact;
+  winning_candidate?: DbCandidate;
 }
 
 export interface CreateRequirementInput {
@@ -219,7 +223,8 @@ export const requirementsService = {
       .select(`
         *,
         company:company_id(*),
-        contact:contact_id(*)
+        contact:contact_id(*),
+        winning_candidate:winning_candidate_id(*)
       `)
       .is('deleted_at', null)  // Exclude soft-deleted records
       .order('created_at', { ascending: false });
@@ -235,7 +240,8 @@ export const requirementsService = {
       .select(`
         *,
         company:company_id(*),
-        contact:contact_id(*)
+        contact:contact_id(*),
+        winning_candidate:winning_candidate_id(*)
       `)
       .eq('id', id)
       .single();
@@ -340,6 +346,29 @@ export const requirementsService = {
 
     if (error) throw error;
     return data || [];
+  },
+
+  // Mark requirement as won with winning candidate
+  async markAsWon(requirementId: string, candidateId: string): Promise<DbRequirement> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .update({
+        status: 'won',
+        winning_candidate_id: candidateId,
+        won_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', requirementId)
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*),
+        winning_candidate:winning_candidate_id(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
   },
 };
 
@@ -751,6 +780,7 @@ export const applicationsService = {
 export interface DbCustomerAssessment {
   id: string;
   application_id: string | null;
+  requirement_id: string | null;  // Direct link to requirement
   contact_id: string | null;
   candidate_id: string | null;
   scheduled_date: string;
@@ -768,12 +798,14 @@ export interface DbCustomerAssessment {
     candidate?: DbCandidate;
     requirement?: DbRequirement;
   };
+  requirement?: DbRequirement;
   contact?: DbContact;
   candidate?: DbCandidate;
 }
 
 export interface CreateCustomerAssessmentInput {
   application_id?: string;
+  requirement_id?: string;  // Direct link to requirement
   contact_id?: string;
   candidate_id?: string;
   scheduled_date: string;
@@ -796,6 +828,7 @@ export const customerAssessmentsService = {
           candidate:candidates(*),
           requirement:requirements(*)
         ),
+        requirement:requirement_id(*),
         contact:contacts(*),
         candidate:candidates(*)
       `)
@@ -815,9 +848,26 @@ export const customerAssessmentsService = {
           *,
           candidate:candidates(*),
           requirement:requirements(*)
-        )
+        ),
+        requirement:requirement_id(*)
       `)
       .eq('application_id', applicationId)
+      .order('scheduled_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get assessments for a specific requirement
+  async getByRequirement(requirementId: string): Promise<DbCustomerAssessment[]> {
+    const { data, error } = await supabase
+      .from('customer_assessments')
+      .select(`
+        *,
+        candidate:candidates(*),
+        contact:contacts(*)
+      `)
+      .eq('requirement_id', requirementId)
       .order('scheduled_date', { ascending: false });
 
     if (error) throw error;
@@ -835,7 +885,8 @@ export const customerAssessmentsService = {
           *,
           candidate:candidates(*),
           requirement:requirements(*)
-        )
+        ),
+        requirement:requirement_id(*)
       `)
       .single();
 
@@ -844,7 +895,9 @@ export const customerAssessmentsService = {
   },
 
   // Update assessment outcome
+  // If outcome is GO, this also marks the requirement as WON
   async updateOutcome(id: string, outcome: 'go' | 'nogo', outcomeNotes?: string): Promise<DbCustomerAssessment> {
+    // First update the assessment
     const { data, error } = await supabase
       .from('customer_assessments')
       .update({ 
@@ -859,11 +912,32 @@ export const customerAssessmentsService = {
           *,
           candidate:candidates(*),
           requirement:requirements(*)
-        )
+        ),
+        requirement:requirement_id(*),
+        candidate:candidates(*)
       `)
       .single();
 
     if (error) throw error;
+    
+    // If outcome is GO, mark the requirement as won
+    if (outcome === 'go' && data) {
+      const requirementId = data.requirement_id || data.application?.requirement?.id;
+      const candidateId = data.candidate_id || data.application?.candidate?.id;
+      
+      if (requirementId && candidateId) {
+        await supabase
+          .from('requirements')
+          .update({
+            status: 'won',
+            winning_candidate_id: candidateId,
+            won_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', requirementId);
+      }
+    }
+    
     return data;
   },
 

@@ -317,8 +317,13 @@ export function ClientMeetingsPage() {
       
       setIsSubmitting(true);
       try {
+        // Find the selected application to get candidate_id
+        const selectedApp = requirementCandidates.find(rc => rc.id === assessmentForm.application_id);
+        
         await customerAssessmentsService.create({
           application_id: assessmentForm.application_id,
+          requirement_id: assessmentForm.requirement_id, // Direct link to requirement
+          candidate_id: selectedApp?.candidate?.id, // Direct link to candidate
           contact_id: assessmentForm.contact_id,
           scheduled_date: assessmentForm.scheduled_date,
           scheduled_time: assessmentForm.scheduled_time || undefined,

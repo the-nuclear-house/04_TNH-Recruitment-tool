@@ -17,6 +17,8 @@ import {
   X,
   CalendarPlus,
   ChevronDown,
+  Trophy,
+  XCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -43,6 +45,14 @@ const statusConfig: Record<string, { label: string; colour: string; bgColour: st
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
   opportunity: { label: 'Opportunity', colour: 'text-amber-700', bgColour: 'bg-amber-100' },
   won: { label: 'Won', colour: 'text-green-600', bgColour: 'bg-green-50' },
+  lost: { label: 'Lost', colour: 'text-red-700', bgColour: 'bg-red-100' },
+  cancelled: { label: 'Cancelled', colour: 'text-slate-500', bgColour: 'bg-slate-100' },
+};
+
+// Statuses that can be manually selected (Won is excluded - only via Customer Assessment GO)
+const manualStatusOptions: Record<string, { label: string; colour: string; bgColour: string }> = {
+  active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
+  opportunity: { label: 'Opportunity', colour: 'text-amber-700', bgColour: 'bg-amber-100' },
   lost: { label: 'Lost', colour: 'text-red-700', bgColour: 'bg-red-100' },
   cancelled: { label: 'Cancelled', colour: 'text-slate-500', bgColour: 'bg-slate-100' },
 };
@@ -113,6 +123,9 @@ export function RequirementDetailPage() {
   // Track scheduled assessments per application
   const [scheduledAssessments, setScheduledAssessments] = useState<Record<string, boolean>>({});
   
+  // Track assessment outcomes per candidate (for showing NOGO badge)
+  const [candidateAssessmentOutcomes, setCandidateAssessmentOutcomes] = useState<Record<string, 'pending' | 'go' | 'nogo' | null>>({});
+  
   // Add candidate modal
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<DbCandidate[]>([]);
@@ -162,6 +175,7 @@ export function RequirementDetailPage() {
       // Check interview status and scheduled assessments for each linked candidate
       const interviewStatus: Record<string, boolean> = {};
       const assessmentStatus: Record<string, boolean> = {};
+      const assessmentOutcomes: Record<string, 'pending' | 'go' | 'nogo' | null> = {};
       
       for (const app of appsData) {
         try {
@@ -175,6 +189,12 @@ export function RequirementDetailPage() {
           // Check if assessment is already scheduled for this application
           const assessments = await customerAssessmentsService.getByApplication(app.id);
           assessmentStatus[app.id] = assessments.length > 0;
+          
+          // Track assessment outcome for showing NOGO badge
+          if (assessments.length > 0) {
+            const latestAssessment = assessments[0]; // Already sorted by date desc
+            assessmentOutcomes[app.candidate_id] = latestAssessment.outcome;
+          }
         } catch (e) {
           interviewStatus[app.candidate_id] = false;
           assessmentStatus[app.id] = false;
@@ -182,6 +202,7 @@ export function RequirementDetailPage() {
       }
       setCandidateInterviewStatus(interviewStatus);
       setScheduledAssessments(assessmentStatus);
+      setCandidateAssessmentOutcomes(assessmentOutcomes);
       
       if (reqData?.manager_id) {
         const mgr = usersData.find(u => u.id === reqData.manager_id);
@@ -373,12 +394,14 @@ export function RequirementDetailPage() {
   };
 
   const handleScheduleAssessment = async () => {
-    if (!selectedApplicationForAssessment || !user || !assessmentForm.scheduled_date) return;
+    if (!selectedApplicationForAssessment || !user || !assessmentForm.scheduled_date || !id) return;
     
     setIsSchedulingAssessment(true);
     try {
       await customerAssessmentsService.create({
         application_id: selectedApplicationForAssessment.id,
+        requirement_id: id, // Link directly to requirement
+        candidate_id: selectedApplicationForAssessment.candidate_id, // Link directly to candidate
         scheduled_date: assessmentForm.scheduled_date,
         scheduled_time: assessmentForm.scheduled_time || undefined,
         customer_contact: assessmentForm.customer_contact || undefined,
@@ -518,7 +541,7 @@ export function RequirementDetailPage() {
             </div>
 
             {/* Quick Status Change - clickable tag */}
-            {permissions.canEditRequirements ? (
+            {permissions.canEditRequirements && requirement.status !== 'won' ? (
               <div className="relative">
                 <button
                   onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
@@ -530,7 +553,7 @@ export function RequirementDetailPage() {
                 
                 {isStatusMenuOpen && (
                   <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-lg border border-brand-grey-200 z-20 min-w-[160px] overflow-hidden">
-                    {Object.entries(statusConfig).map(([key, conf]) => (
+                    {Object.entries(manualStatusOptions).map(([key, conf]) => (
                       <button
                         key={key}
                         onClick={() => {
@@ -555,6 +578,41 @@ export function RequirementDetailPage() {
             )}
           </div>
         </Card>
+
+        {/* Winning Candidate Banner - shown when requirement is won */}
+        {requirement.status === 'won' && requirement.winning_candidate && (
+          <Card className="border-green-200 bg-green-50">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-green-100 rounded-full">
+                <Trophy className="h-6 w-6 text-green-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-green-700 font-medium">Requirement Won</p>
+                <div 
+                  className="flex items-center gap-3 mt-1 cursor-pointer hover:opacity-80"
+                  onClick={() => navigate(`/candidates/${requirement.winning_candidate_id}`)}
+                >
+                  <Avatar 
+                    name={`${requirement.winning_candidate.first_name} ${requirement.winning_candidate.last_name}`}
+                    size="sm"
+                  />
+                  <div>
+                    <p className="font-semibold text-brand-slate-900">
+                      {requirement.winning_candidate.first_name} {requirement.winning_candidate.last_name}
+                    </p>
+                    <p className="text-sm text-brand-grey-500">{requirement.winning_candidate.email}</p>
+                  </div>
+                </div>
+              </div>
+              {requirement.won_at && (
+                <div className="text-right">
+                  <p className="text-xs text-green-600">Won on</p>
+                  <p className="text-sm font-medium text-green-700">{formatDate(requirement.won_at)}</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* Details Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -682,11 +740,19 @@ export function RequirementDetailPage() {
               {applications.map((app) => {
                 const hasPassedAllInterviews = candidateInterviewStatus[app.candidate_id];
                 const hasScheduledAssessment = scheduledAssessments[app.id];
+                const assessmentOutcome = candidateAssessmentOutcomes[app.candidate_id];
+                const isWinningCandidate = requirement.winning_candidate_id === app.candidate_id;
                 
                 return (
                 <div 
                   key={app.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan transition-colors"
+                  className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                    isWinningCandidate 
+                      ? 'border-green-300 bg-green-50' 
+                      : assessmentOutcome === 'nogo'
+                        ? 'border-red-200 bg-red-50/50'
+                        : 'border-brand-grey-200 hover:border-brand-cyan'
+                  }`}
                 >
                   <div 
                     className="flex items-center gap-3 flex-1 cursor-pointer"
@@ -697,26 +763,52 @@ export function RequirementDetailPage() {
                       size="sm"
                     />
                     <div>
-                      <p className="font-medium text-brand-slate-900">
-                        {app.candidate?.first_name} {app.candidate?.last_name}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-brand-slate-900">
+                          {app.candidate?.first_name} {app.candidate?.last_name}
+                        </p>
+                        {isWinningCandidate && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            <Trophy className="h-3 w-3" />
+                            Winner
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-brand-grey-400">{app.candidate?.email}</p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    {hasPassedAllInterviews && (
-                      <Badge variant="green">Interviews Complete</Badge>
+                    {/* Assessment outcome badges */}
+                    {assessmentOutcome === 'go' && !isWinningCandidate && (
+                      <Badge variant="green">GO</Badge>
                     )}
-                    {hasScheduledAssessment && (
-                      <Badge variant="cyan">Assessment Planned</Badge>
+                    {assessmentOutcome === 'nogo' && (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
+                        <XCircle className="h-3 w-3" />
+                        NOGO
+                      </span>
                     )}
+                    {assessmentOutcome === 'pending' && (
+                      <Badge variant="orange">Assessment Pending</Badge>
+                    )}
+                    
+                    {/* Interview status */}
+                    {hasPassedAllInterviews && !assessmentOutcome && (
+                      <Badge variant="cyan">Interviews Complete</Badge>
+                    )}
+                    
+                    {/* Assessment scheduled but no outcome yet */}
+                    {hasScheduledAssessment && !assessmentOutcome && (
+                      <Badge variant="grey">Assessment Planned</Badge>
+                    )}
+                    
                     <span className="text-xs text-brand-grey-400">
                       Added {formatDate(app.created_at)}
                     </span>
                     
-                    {/* Schedule Client Assessment - only for Manager/Director/Admin and if interviews passed and no assessment yet */}
-                    {canScheduleAssessments && hasPassedAllInterviews && !hasScheduledAssessment && (
+                    {/* Schedule Client Assessment - available for any candidate, not just those with all interviews */}
+                    {canScheduleAssessments && !hasScheduledAssessment && assessmentOutcome !== 'nogo' && !isWinningCandidate && (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -731,7 +823,7 @@ export function RequirementDetailPage() {
                       </Button>
                     )}
                     
-                    {canEditThisRequirement && (
+                    {canEditThisRequirement && !isWinningCandidate && (
                       <button
                         onClick={() => handleRemoveCandidate(app.id)}
                         className="p-1 text-brand-grey-400 hover:text-red-500 rounded transition-colors"
