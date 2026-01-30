@@ -483,6 +483,9 @@ export function CustomersPage() {
 
   // Meeting handlers - now from contact level
   const handleOpenAddMeeting = (contact?: DbContact) => {
+    // Close contact detail modal if open
+    setIsContactDetailOpen(false);
+    
     setMeetingForm({
       contact_id: contact?.id || selectedContact?.id || '',
       meeting_type: 'call',
@@ -582,6 +585,9 @@ export function CustomersPage() {
   };
 
   const handleCreateRequirement = (contact?: DbContact) => {
+    // Close contact detail modal if open
+    setIsContactDetailOpen(false);
+    
     if (selectedCompany) {
       let url = `/requirements/new?company_id=${selectedCompany.id}&company_name=${encodeURIComponent(selectedCompany.name)}`;
       if (contact) {
@@ -1228,13 +1234,13 @@ export function CustomersPage() {
       </div>
 
       {/* Contact Detail Modal */}
-      <Modal
-        isOpen={isContactDetailOpen}
-        onClose={() => setIsContactDetailOpen(false)}
-        title={selectedContact ? `${selectedContact.first_name} ${selectedContact.last_name}` : 'Contact'}
-        size="xl"
-      >
-        {selectedContact && (
+      {selectedContact && (
+        <Modal
+          isOpen={isContactDetailOpen}
+          onClose={() => { setIsContactDetailOpen(false); }}
+          title={`${selectedContact.first_name} ${selectedContact.last_name}`}
+          size="xl"
+        >
           <div className="space-y-6">
             {/* Contact Header */}
             <div className="flex items-start gap-4">
@@ -1372,8 +1378,8 @@ export function CustomersPage() {
               </div>
             )}
           </div>
-        )}
-      </Modal>
+        </Modal>
+      )}
 
       {/* Company Modal */}
       <Modal
