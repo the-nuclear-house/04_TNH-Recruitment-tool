@@ -19,6 +19,7 @@ import {
   Search,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
   MapPin,
   Phone,
   Mail,
@@ -34,6 +35,8 @@ import {
   GitBranch,
   FolderTree,
   Network,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -115,6 +118,7 @@ export function CustomersPage() {
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
   const [sidebarSearch, setSidebarSearch] = useState('');
   const [contactSearch, setContactSearch] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Company modal
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
@@ -407,7 +411,7 @@ export function CustomersPage() {
     setContactForm({
       first_name: contact.first_name,
       last_name: contact.last_name,
-      job_title: contact.job_title || '',
+      job_title: '',
       department: contact.department || '',
       email: contact.email || '',
       phone: contact.phone || '',
@@ -581,7 +585,7 @@ export function CustomersPage() {
                 <p className="font-medium text-brand-slate-900">
                   {contact.first_name} {contact.last_name}
                 </p>
-                <p className="text-sm text-brand-cyan">{contact.role || contact.job_title || 'No role'}</p>
+                <p className="text-sm text-brand-cyan">{contact.role || 'No role'}</p>
               </div>
             </div>
           </div>
@@ -649,31 +653,51 @@ export function CustomersPage() {
 
       <div className="flex h-[calc(100vh-80px)]">
         {/* Left Sidebar - Company List (Collapsible) */}
-        <div className="w-80 border-r border-brand-grey-200 bg-white flex flex-col">
-          {/* Search */}
-          <div className="p-4 border-b border-brand-grey-200">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-grey-400" />
-              <input
-                type="text"
-                placeholder="Search companies..."
-                value={sidebarSearch}
-                onChange={(e) => setSidebarSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-brand-grey-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 focus:border-brand-cyan"
-              />
-            </div>
+        <div className={`${sidebarCollapsed ? 'w-12' : 'w-80'} border-r border-brand-grey-200 bg-white flex flex-col transition-all duration-300`}>
+          {/* Collapse Toggle */}
+          <div className="p-2 border-b border-brand-grey-200 flex items-center justify-between">
+            {!sidebarCollapsed && (
+              <span className="text-sm font-medium text-brand-slate-700 px-2">Companies</span>
+            )}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-2 hover:bg-brand-grey-100 rounded-lg transition-colors"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? (
+                <PanelLeft className="h-4 w-4 text-brand-grey-500" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4 text-brand-grey-500" />
+              )}
+            </button>
           </div>
 
-          {/* Company Tree */}
-          <div className="flex-1 overflow-y-auto p-2">
-            {isLoading ? (
-              <div className="text-center py-8 text-brand-grey-400">Loading...</div>
-            ) : parentCompanies.length === 0 ? (
-              <div className="text-center py-8">
-                <Building2 className="h-10 w-10 mx-auto text-brand-grey-300 mb-2" />
-                <p className="text-sm text-brand-grey-400">No companies yet</p>
+          {!sidebarCollapsed && (
+            <>
+              {/* Search */}
+              <div className="p-4 border-b border-brand-grey-200">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-grey-400" />
+                  <input
+                    type="text"
+                    placeholder="Search companies..."
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-brand-grey-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 focus:border-brand-cyan"
+                  />
+                </div>
               </div>
-            ) : (
+
+              {/* Company Tree */}
+              <div className="flex-1 overflow-y-auto p-2">
+                {isLoading ? (
+                  <div className="text-center py-8 text-brand-grey-400">Loading...</div>
+                ) : parentCompanies.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Building2 className="h-10 w-10 mx-auto text-brand-grey-300 mb-2" />
+                    <p className="text-sm text-brand-grey-400">No companies yet</p>
+                  </div>
+                ) : (
               <div className="space-y-1">
                 {parentCompanies.map(company => {
                   const subsidiaries = getSubsidiaries(company.id);
@@ -747,6 +771,8 @@ export function CustomersPage() {
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
 
         {/* Main Content Area */}
@@ -925,8 +951,8 @@ export function CustomersPage() {
                                       <Badge variant="cyan">Primary</Badge>
                                     )}
                                   </div>
-                                  {(contact.role || contact.job_title) && (
-                                    <p className="text-sm text-brand-cyan">{contact.role || contact.job_title}</p>
+                                  {contact.role && (
+                                    <p className="text-sm text-brand-cyan">{contact.role}</p>
                                   )}
                                   {contact.department && (
                                     <p className="text-sm text-brand-grey-500">{contact.department}</p>
@@ -1139,8 +1165,8 @@ export function CustomersPage() {
                     <Badge variant="cyan">Primary Contact</Badge>
                   )}
                 </div>
-                {(selectedContact.role || selectedContact.job_title) && (
-                  <p className="text-brand-cyan">{selectedContact.role || selectedContact.job_title}</p>
+                {selectedContact.role && (
+                  <p className="text-brand-cyan">{selectedContact.role}</p>
                 )}
                 {selectedContact.department && (
                   <p className="text-brand-grey-500">{selectedContact.department}</p>
@@ -1422,24 +1448,19 @@ export function CustomersPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Role (for org chart)"
+              label="Role / Job Title"
               value={contactForm.role}
               onChange={(e) => setContactForm(prev => ({ ...prev, role: e.target.value }))}
-              placeholder="e.g., CEO, Director, Manager"
+              placeholder="e.g., CEO, Engineering Director, Account Manager"
             />
-            <Input
-              label="Job Title"
-              value={contactForm.job_title}
-              onChange={(e) => setContactForm(prev => ({ ...prev, job_title: e.target.value }))}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <Input
               label="Department"
               value={contactForm.department}
               onChange={(e) => setContactForm(prev => ({ ...prev, department: e.target.value }))}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Reports To (Direct Manager)"
               options={[
@@ -1448,12 +1469,13 @@ export function CustomersPage() {
                   .filter(c => c.id !== editingContactId) // Can't report to self
                   .map(c => ({
                     value: c.id,
-                    label: `${c.first_name} ${c.last_name}${c.role ? ` (${c.role})` : c.job_title ? ` (${c.job_title})` : ''}`
+                    label: `${c.first_name} ${c.last_name}${c.role ? ` (${c.role})` : ''}`
                   }))
               ]}
               value={contactForm.reports_to_id}
               onChange={(e) => setContactForm(prev => ({ ...prev, reports_to_id: e.target.value }))}
             />
+            <div /> {/* Empty spacer */}
           </div>
 
           <Input

@@ -1071,9 +1071,15 @@ export const contactsService = {
   },
 
   async create(input: CreateContactInput): Promise<DbContact> {
+    // Convert empty strings to null for UUID fields
+    const cleanedInput = {
+      ...input,
+      reports_to_id: input.reports_to_id || null,
+    };
+    
     const { data, error } = await supabase
       .from('contacts')
-      .insert(input)
+      .insert(cleanedInput)
       .select()
       .single();
 
