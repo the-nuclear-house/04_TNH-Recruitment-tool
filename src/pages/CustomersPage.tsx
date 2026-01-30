@@ -219,6 +219,7 @@ export function CustomersPage() {
 
   // Meeting modal
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+  const [lockedMeetingContact, setLockedMeetingContact] = useState<DbContact | null>(null); // When booking from contact card
   const [meetingForm, setMeetingForm] = useState({
     contact_id: '',
     meeting_type: 'call',
@@ -549,8 +550,11 @@ export function CustomersPage() {
     // Close contact detail modal if open
     setIsContactDetailOpen(false);
     
+    // If contact provided, lock it (coming from contact card)
+    setLockedMeetingContact(contact || null);
+    
     setMeetingForm({
-      contact_id: contact?.id || selectedContact?.id || '',
+      contact_id: contact?.id || '',
       meeting_type: 'call',
       subject: '',
       scheduled_at: '',
@@ -1798,11 +1802,44 @@ export function CustomersPage() {
       {/* Meeting Modal */}
       <Modal
         isOpen={isMeetingModalOpen}
-        onClose={() => setIsMeetingModalOpen(false)}
+        onClose={() => { setIsMeetingModalOpen(false); setLockedMeetingContact(null); }}
         title="Book Meeting"
+        description={lockedMeetingContact ? `Schedule a meeting with ${lockedMeetingContact.first_name} ${lockedMeetingContact.last_name}` : undefined}
         size="md"
       >
         <div className="space-y-4">
+          {/* Contact - locked if coming from contact card */}
+          {lockedMeetingContact ? (
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
+                With Contact
+              </label>
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
+                <Avatar name={`${lockedMeetingContact.first_name} ${lockedMeetingContact.last_name}`} size="sm" />
+                <div>
+                  <span className="font-medium text-brand-slate-900">
+                    {lockedMeetingContact.first_name} {lockedMeetingContact.last_name}
+                  </span>
+                  {lockedMeetingContact.role && (
+                    <span className="text-sm text-brand-grey-500 ml-2">{lockedMeetingContact.role}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : contacts.length > 0 ? (
+            <SearchableSelect
+              label="With Contact"
+              placeholder="Type to search contacts..."
+              options={contacts.map(c => ({ 
+                value: c.id, 
+                label: `${c.first_name} ${c.last_name}`,
+                sublabel: c.role || undefined
+              }))}
+              value={meetingForm.contact_id}
+              onChange={(val) => setMeetingForm(prev => ({ ...prev, contact_id: val }))}
+            />
+          ) : null}
+
           <Input
             label="Subject *"
             value={meetingForm.subject}
@@ -1816,18 +1853,6 @@ export function CustomersPage() {
             value={meetingForm.meeting_type}
             onChange={(e) => setMeetingForm(prev => ({ ...prev, meeting_type: e.target.value }))}
           />
-
-          {contacts.length > 0 && (
-            <Select
-              label="With Contact"
-              options={[
-                { value: '', label: 'Select contact' },
-                ...contacts.map(c => ({ value: c.id, label: `${c.first_name} ${c.last_name}` }))
-              ]}
-              value={meetingForm.contact_id}
-              onChange={(e) => setMeetingForm(prev => ({ ...prev, contact_id: e.target.value }))}
-            />
-          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Input
@@ -1944,22 +1969,13 @@ export function CustomersPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Industry"
-              options={reqIndustryOptions}
-              value={requirementForm.industry}
-              onChange={(e) => setRequirementForm(prev => ({ ...prev, industry: e.target.value }))}
-            />
+          <div className="grid grid-cols-3 gap-4">
             <Input
               label="Location"
               value={requirementForm.location}
               onChange={(e) => setRequirementForm(prev => ({ ...prev, location: e.target.value }))}
               placeholder="e.g., London, Remote"
             />
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
             <Input
               label="FTE Count *"
               type="number"

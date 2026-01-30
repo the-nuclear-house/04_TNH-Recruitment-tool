@@ -452,11 +452,11 @@ export function RequirementsPage() {
               value={formData.contact_id}
               onChange={(val) => handleContactSelect(val)}
             />
-            <Select
-              label="Industry"
-              options={industryOptions}
-              value={formData.industry}
-              onChange={(e) => handleFormChange('industry', e.target.value)}
+            <Input
+              label="Location"
+              value={formData.location}
+              onChange={(e) => handleFormChange('location', e.target.value)}
+              placeholder="e.g., London, Remote"
             />
           </div>
 
@@ -475,15 +475,15 @@ export function RequirementsPage() {
               onChange={(e) => handleFormChange('max_day_rate', e.target.value)}
               placeholder="550"
             />
-            <Input
-              label="Location"
-              value={formData.location}
-              onChange={(e) => handleFormChange('location', e.target.value)}
-              placeholder="e.g., London, Remote"
+            <Select
+              label="Status"
+              options={statusOptions}
+              value={formData.status}
+              onChange={(e) => handleFormChange('status', e.target.value)}
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Engineering Discipline"
               options={engineeringOptions}
@@ -495,12 +495,6 @@ export function RequirementsPage() {
               options={clearanceOptions}
               value={formData.clearance_required}
               onChange={(e) => handleFormChange('clearance_required', e.target.value)}
-            />
-            <Select
-              label="Status"
-              options={statusOptions}
-              value={formData.status}
-              onChange={(e) => handleFormChange('status', e.target.value)}
             />
           </div>
 

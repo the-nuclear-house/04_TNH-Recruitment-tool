@@ -716,7 +716,9 @@ export const applicationsService = {
 
 export interface DbCustomerAssessment {
   id: string;
-  application_id: string;
+  application_id: string | null;
+  contact_id: string | null;
+  candidate_id: string | null;
   scheduled_date: string;
   scheduled_time: string | null;
   customer_contact: string | null;
@@ -724,7 +726,7 @@ export interface DbCustomerAssessment {
   notes: string | null;
   outcome: 'pending' | 'go' | 'nogo' | null;
   outcome_notes: string | null;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   // Joined fields
@@ -732,16 +734,20 @@ export interface DbCustomerAssessment {
     candidate?: DbCandidate;
     requirement?: DbRequirement;
   };
+  contact?: DbContact;
+  candidate?: DbCandidate;
 }
 
 export interface CreateCustomerAssessmentInput {
-  application_id: string;
+  application_id?: string;
+  contact_id?: string;
+  candidate_id?: string;
   scheduled_date: string;
   scheduled_time?: string;
   customer_contact?: string;
   location?: string;
   notes?: string;
-  created_by: string;
+  created_by?: string;
 }
 
 export const customerAssessmentsService = {
@@ -755,7 +761,9 @@ export const customerAssessmentsService = {
           *,
           candidate:candidates(*),
           requirement:requirements(*)
-        )
+        ),
+        contact:contacts(*),
+        candidate:candidates(*)
       `)
       .order('scheduled_date', { ascending: true });
 
@@ -1155,6 +1163,20 @@ export interface CreateCustomerMeetingInput {
 }
 
 export const customerMeetingsService = {
+  async getAll(): Promise<DbCustomerMeeting[]> {
+    const { data, error } = await supabase
+      .from('customer_meetings')
+      .select(`
+        *,
+        contact:contact_id(id, first_name, last_name, role, company_id),
+        creator:created_by(id, full_name)
+      `)
+      .order('scheduled_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async getByCompany(companyId: string): Promise<DbCustomerMeeting[]> {
     const { data, error } = await supabase
       .from('customer_meetings')

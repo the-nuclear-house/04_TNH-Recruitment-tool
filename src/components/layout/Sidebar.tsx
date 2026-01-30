@@ -34,7 +34,7 @@ export function Sidebar() {
     { name: 'Candidates', href: '/candidates', icon: Users, show: permissions.canViewCandidates },
     { name: 'Requirements', href: '/requirements', icon: Briefcase, show: permissions.canViewRequirements },
     { name: 'Interviews', href: '/interviews', icon: Calendar, show: permissions.canViewInterviews },
-    { name: 'Client Meetings', href: '/customer-assessments', icon: UserCheck, show: canViewCustomers },
+    { name: 'Client Meetings', href: '/client-meetings', icon: UserCheck, show: canViewCustomers },
     { name: 'Contracts', href: '/contracts', icon: FileText, show: permissions.canViewContracts },
   ].filter(item => item.show);
 
