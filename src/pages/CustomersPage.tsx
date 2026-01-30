@@ -680,51 +680,53 @@ export function CustomersPage() {
                   const hasSubsidiaries = subsidiaries.length > 0;
                   const isExpanded = expandedCompanies.has(company.id);
 
+                  const handleParentClick = () => {
+                    loadCompanyDetails(company.id);
+                    if (hasSubsidiaries) {
+                      toggleCompanyExpanded(company.id);
+                    }
+                  };
+
                   return (
                     <div key={company.id}>
-                      {/* Parent Company */}
-                      <div className="flex items-center">
-                        {hasSubsidiaries && (
-                          <button
-                            onClick={() => toggleCompanyExpanded(company.id)}
-                            className="p-1 hover:bg-brand-grey-100 rounded"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 text-brand-grey-400" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-brand-grey-400" />
-                            )}
-                          </button>
+                      {/* Parent Company - clicking selects AND expands */}
+                      <button
+                        onClick={handleParentClick}
+                        className={`w-full text-left p-3 rounded-lg transition-colors flex items-center gap-2 ${
+                          selectedCompany?.id === company.id
+                            ? 'bg-brand-cyan/10 text-brand-cyan'
+                            : 'hover:bg-brand-grey-100'
+                        }`}
+                      >
+                        {hasSubsidiaries ? (
+                          isExpanded ? (
+                            <ChevronDown className="h-4 w-4 flex-shrink-0 text-brand-grey-400" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 flex-shrink-0 text-brand-grey-400" />
+                          )
+                        ) : (
+                          <div className="w-4" />
                         )}
-                        <button
-                          onClick={() => loadCompanyDetails(company.id)}
-                          className={`flex-1 text-left p-3 rounded-lg transition-colors flex items-center gap-3 ${
-                            selectedCompany?.id === company.id
-                              ? 'bg-brand-cyan/10 text-brand-cyan'
-                              : 'hover:bg-brand-grey-100'
-                          } ${!hasSubsidiaries ? 'ml-6' : ''}`}
-                        >
-                          <Building2 className="h-5 w-5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{company.name}</p>
-                            {company.city && (
-                              <p className="text-xs text-brand-grey-400 truncate">{company.city}</p>
-                            )}
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${statusColours[company.status]}`}>
-                            {company.status}
-                          </span>
-                        </button>
-                      </div>
+                        <Building2 className="h-5 w-5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{company.name}</p>
+                          {company.city && (
+                            <p className="text-xs text-brand-grey-400 truncate">{company.city}</p>
+                          )}
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${statusColours[company.status]}`}>
+                          {company.status}
+                        </span>
+                      </button>
 
-                      {/* Subsidiaries (Collapsible) */}
+                      {/* Subsidiaries/Locations (shown when expanded) */}
                       {hasSubsidiaries && isExpanded && (
-                        <div className="ml-6 border-l-2 border-brand-grey-200 pl-2">
+                        <div className="ml-6 border-l-2 border-brand-grey-200">
                           {subsidiaries.map(sub => (
                             <button
                               key={sub.id}
                               onClick={() => loadCompanyDetails(sub.id)}
-                              className={`w-full text-left p-3 rounded-lg transition-colors flex items-center gap-3 ${
+                              className={`w-full text-left p-3 pl-4 rounded-r-lg transition-colors flex items-center gap-3 ${
                                 selectedCompany?.id === sub.id
                                   ? 'bg-brand-cyan/10 text-brand-cyan'
                                   : 'hover:bg-brand-grey-100'
