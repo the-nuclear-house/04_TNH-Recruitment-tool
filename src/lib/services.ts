@@ -21,7 +21,6 @@ export interface DbCandidate {
   notice_period: string | null;
   contract_preference: string | null;
   open_to_relocate: string | null;
-  relocation_preferences: string | null;
   expected_day_rate: number | null;
   nationalities: string[] | null;
   status: string;
@@ -52,7 +51,6 @@ export interface CreateCandidateInput {
   notice_period?: string;
   contract_preference?: string;
   open_to_relocate?: string;
-  relocation_preferences?: string;
   expected_day_rate?: number;
   nationalities?: string[];
   source?: string;

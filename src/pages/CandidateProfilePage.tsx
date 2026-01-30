@@ -217,6 +217,7 @@ export function CandidateProfilePage() {
   const [phoneForm, setPhoneForm] = useState({
     outcome: '',
     years_experience: '',
+    location: '',
     minimum_salary_expected: '',
     expected_day_rate: '',
     right_to_work: '',
@@ -224,7 +225,6 @@ export function CandidateProfilePage() {
     security_vetting: '',
     notice_period: '',
     open_to_relocate: '',
-    relocation_preferences: '',
     contract_preference: '', // contractor, permanent, open_to_both
     communication_score: '',
     professionalism_score: '',
@@ -412,6 +412,7 @@ export function CandidateProfilePage() {
       setPhoneForm({
         outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
         years_experience: candidate?.years_experience?.toString() || '',
+        location: candidate?.location || '',
         minimum_salary_expected: candidate?.minimum_salary_expected?.toString() || '',
         expected_day_rate: candidate?.expected_day_rate?.toString() || '',
         right_to_work: candidate?.right_to_work || '',
@@ -419,7 +420,6 @@ export function CandidateProfilePage() {
         security_vetting: candidate?.security_vetting || '',
         notice_period: candidate?.notice_period || '',
         open_to_relocate: candidate?.open_to_relocate || '',
-        relocation_preferences: candidate?.relocation_preferences || '',
         contract_preference: candidate?.contract_preference || '',
         communication_score: interview.communication_score?.toString() || '',
         professionalism_score: interview.professionalism_score?.toString() || '',
@@ -488,6 +488,7 @@ export function CandidateProfilePage() {
       // Update candidate with admin info from phone call
       await candidatesService.update(id!, {
         years_experience: phoneForm.years_experience ? parseInt(phoneForm.years_experience) : undefined,
+        location: phoneForm.location || undefined,
         minimum_salary_expected: phoneForm.minimum_salary_expected ? parseInt(phoneForm.minimum_salary_expected) : undefined,
         expected_day_rate: phoneForm.expected_day_rate ? parseFloat(phoneForm.expected_day_rate) : undefined,
         right_to_work: phoneForm.right_to_work || undefined,
@@ -495,7 +496,6 @@ export function CandidateProfilePage() {
         notice_period: phoneForm.notice_period || undefined,
         contract_preference: phoneForm.contract_preference || undefined,
         open_to_relocate: phoneForm.open_to_relocate || undefined,
-        relocation_preferences: phoneForm.relocation_preferences || undefined,
         nationalities: validNationalities.length > 0 ? validNationalities : undefined,
         skills: phoneSkills.length > 0 ? phoneSkills : undefined,
       });
@@ -1121,7 +1121,6 @@ export function CandidateProfilePage() {
                          candidate.open_to_relocate === 'no' ? 'No' :
                          candidate.open_to_relocate === 'maybe' ? 'Maybe / Depends' :
                          candidate.open_to_relocate}
-                        {candidate.relocation_preferences && ` - ${candidate.relocation_preferences}`}
                       </p>
                     </div>
                   </div>
@@ -1460,7 +1459,13 @@ export function CandidateProfilePage() {
               />
             )}
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-3 gap-4 mt-4">
+              <Input
+                label="Location"
+                value={phoneForm.location}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="e.g., London"
+              />
               <Select
                 label="Notice Period"
                 options={noticePeriodOptions}
@@ -1480,16 +1485,6 @@ export function CandidateProfilePage() {
               />
             </div>
 
-            {phoneForm.open_to_relocate === 'yes' && (
-              <Input
-                label="Relocation Preferences"
-                value={phoneForm.relocation_preferences}
-                onChange={(e) => setPhoneForm(prev => ({ ...prev, relocation_preferences: e.target.value }))}
-                placeholder="e.g., London, Manchester, Remote only"
-                className="mt-4"
-              />
-            )}
-
             {/* Contract Preference with dynamic salary/rate */}
             <div className="mt-4">
               <Select
@@ -1504,8 +1499,27 @@ export function CandidateProfilePage() {
                 onChange={(e) => setPhoneForm(prev => ({ ...prev, contract_preference: e.target.value }))}
               />
               
-              {/* Show salary field for permanent or both */}
-              {(phoneForm.contract_preference === 'permanent' || phoneForm.contract_preference === 'open_to_both') && (
+              {/* Show salary/rate fields inline when open_to_both */}
+              {phoneForm.contract_preference === 'open_to_both' && (
+                <div className="grid grid-cols-2 gap-4 mt-3">
+                  <Input
+                    label="Min Salary (£)"
+                    type="number"
+                    value={phoneForm.minimum_salary_expected}
+                    onChange={(e) => setPhoneForm(prev => ({ ...prev, minimum_salary_expected: e.target.value }))}
+                    placeholder="e.g., 75000"
+                  />
+                  <Input
+                    label="Day Rate (£)"
+                    type="number"
+                    value={phoneForm.expected_day_rate}
+                    onChange={(e) => setPhoneForm(prev => ({ ...prev, expected_day_rate: e.target.value }))}
+                    placeholder="e.g., 550"
+                  />
+                </div>
+              )}
+              
+              {phoneForm.contract_preference === 'permanent' && (
                 <Input
                   label="Minimum Salary Expected (£)"
                   type="number"
@@ -1516,8 +1530,7 @@ export function CandidateProfilePage() {
                 />
               )}
               
-              {/* Show day rate field for contractor or both */}
-              {(phoneForm.contract_preference === 'contractor' || phoneForm.contract_preference === 'open_to_both') && (
+              {phoneForm.contract_preference === 'contractor' && (
                 <Input
                   label="Expected Day Rate (£)"
                   type="number"
