@@ -252,7 +252,7 @@ export function CustomersPage() {
     location: '',
     max_day_rate: '',
     description: '',
-    status: 'opportunity',
+    status: 'active',
     clearance_required: 'none',
     engineering_discipline: 'software',
   });
@@ -728,7 +728,7 @@ export function CustomersPage() {
         location: selectedCompany.city || '',
         max_day_rate: '',
         description: '',
-        status: 'opportunity',
+        status: 'active',
         clearance_required: 'none',
         engineering_discipline: 'software',
       });
@@ -1004,7 +1004,14 @@ export function CustomersPage() {
                         >
                           <Building2 className="h-5 w-5 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{company.name}</p>
+                            <div className="flex items-center gap-2">
+                              {company.reference_id && (
+                                <span className="text-xs font-mono text-brand-grey-400 bg-brand-grey-100 px-1 py-0.5 rounded">
+                                  {company.reference_id}
+                                </span>
+                              )}
+                              <p className="font-medium truncate">{company.name}</p>
+                            </div>
                             {company.city && (
                               <p className="text-xs text-brand-grey-400 truncate">{company.city}</p>
                             )}
@@ -1072,7 +1079,14 @@ export function CustomersPage() {
                       </div>
                     )}
                     <div>
-                      <h2 className="text-2xl font-bold">{selectedCompany.name}</h2>
+                      <div className="flex items-center gap-3">
+                        {selectedCompany.reference_id && (
+                          <span className="text-sm font-mono bg-white/20 px-2 py-1 rounded">
+                            {selectedCompany.reference_id}
+                          </span>
+                        )}
+                        <h2 className="text-2xl font-bold">{selectedCompany.name}</h2>
+                      </div>
                       {selectedCompany.trading_name && (
                         <p className="text-white/70">Trading as: {selectedCompany.trading_name}</p>
                       )}
@@ -1437,6 +1451,11 @@ export function CustomersPage() {
               <Avatar name={`${selectedContact.first_name} ${selectedContact.last_name}`} size="xl" />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
+                  {selectedContact.reference_id && (
+                    <span className="text-sm font-mono text-brand-grey-400 bg-brand-grey-100 px-2 py-1 rounded">
+                      {selectedContact.reference_id}
+                    </span>
+                  )}
                   <h3 className="text-xl font-semibold text-brand-slate-900">
                     {selectedContact.first_name} {selectedContact.last_name}
                   </h3>

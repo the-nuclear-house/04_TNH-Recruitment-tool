@@ -495,9 +495,16 @@ export function CandidatesPage() {
                           size="sm"
                         />
                         <div>
-                          <p className="font-medium text-brand-slate-900">
-                            {candidate.first_name} {candidate.last_name}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            {candidate.reference_id && (
+                              <span className="text-xs font-mono text-brand-grey-400 bg-brand-grey-100 px-1.5 py-0.5 rounded">
+                                {candidate.reference_id}
+                              </span>
+                            )}
+                            <p className="font-medium text-brand-slate-900">
+                              {candidate.first_name} {candidate.last_name}
+                            </p>
+                          </div>
                           <p className="text-sm text-brand-grey-400">
                             {candidate.email}
                           </p>

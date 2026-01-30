@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Edit,
   Users,
+  User,
   Building2,
   Calendar,
   MapPin,
@@ -373,15 +374,27 @@ export function RequirementDetailPage() {
         <Card className={requirement.status === 'active' ? 'bg-green-50' : ''}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-brand-slate-900 mb-2">
-                {requirement.customer}
-              </h1>
+              <div className="flex items-center gap-3 mb-2">
+                {requirement.reference_id && (
+                  <span className="text-sm font-mono text-brand-grey-400 bg-brand-grey-100 px-2 py-1 rounded">
+                    {requirement.reference_id}
+                  </span>
+                )}
+                <h1 className="text-2xl font-bold text-brand-slate-900">
+                  {requirement.title || requirement.customer}
+                </h1>
+              </div>
+              {requirement.title && (
+                <p className="text-brand-grey-500 mb-2">{requirement.customer}</p>
+              )}
               
               <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
-                <span className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  {requirement.fte_count} FTE{requirement.fte_count !== 1 ? 's' : ''}
-                </span>
+                {requirement.contact && (
+                  <span className="flex items-center gap-1 text-brand-cyan">
+                    <User className="h-4 w-4" />
+                    {requirement.contact.first_name} {requirement.contact.last_name}
+                  </span>
+                )}
                 {requirement.location && (
                   <span className="flex items-center gap-1">
                     <MapPin className="h-4 w-4" />

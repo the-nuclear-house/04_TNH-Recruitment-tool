@@ -693,6 +693,11 @@ export function CandidateProfilePage() {
               />
               <div>
                 <div className="flex items-center gap-3 mb-1">
+                  {candidate.reference_id && (
+                    <span className="text-sm font-mono text-brand-grey-400 bg-brand-grey-100 px-2 py-1 rounded">
+                      {candidate.reference_id}
+                    </span>
+                  )}
                   <h1 className="text-2xl font-bold text-brand-slate-900">
                     {candidate.first_name} {candidate.last_name}
                   </h1>

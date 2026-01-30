@@ -204,7 +204,11 @@ export const requirementsService = {
   async getAll(): Promise<DbRequirement[]> {
     const { data, error } = await supabase
       .from('requirements')
-      .select('*')
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*)
+      `)
       .is('deleted_at', null)  // Exclude soft-deleted records
       .order('created_at', { ascending: false });
 
@@ -216,7 +220,11 @@ export const requirementsService = {
   async getById(id: string): Promise<DbRequirement | null> {
     const { data, error } = await supabase
       .from('requirements')
-      .select('*')
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*)
+      `)
       .eq('id', id)
       .single();
 
@@ -349,6 +357,7 @@ export interface DbInterview {
   recommendation: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface CreateInterviewInput {
@@ -382,6 +391,7 @@ export const interviewsService = {
     const { data, error } = await supabase
       .from('interviews')
       .select('*')
+      .is('deleted_at', null)
       .order('scheduled_at', { ascending: false });
 
     if (error) throw error;
@@ -394,6 +404,7 @@ export const interviewsService = {
       .from('interviews')
       .select('*')
       .eq('candidate_id', candidateId)
+      .is('deleted_at', null)
       .order('scheduled_at', { ascending: true });
 
     if (error) throw error;
@@ -406,6 +417,7 @@ export const interviewsService = {
       .from('interviews')
       .select('*')
       .eq('interviewer_id', interviewerId)
+      .is('deleted_at', null)
       .order('scheduled_at', { ascending: false });
 
     if (error) throw error;
@@ -440,11 +452,11 @@ export const interviewsService = {
     return data;
   },
 
-  // Delete interview
+  // Delete interview (soft delete)
   async delete(id: string): Promise<void> {
     const { error } = await supabase
       .from('interviews')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) throw error;

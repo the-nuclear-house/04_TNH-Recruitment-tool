@@ -87,11 +87,18 @@ export function RequirementsPage() {
     location: '',
     max_day_rate: '',
     description: '',
-    status: 'opportunity',
+    status: 'active',
     clearance_required: 'none',
     engineering_discipline: 'software',
     manager_id: '',
   });
+
+  // Set default manager to current user
+  useEffect(() => {
+    if (user?.id && !formData.manager_id) {
+      setFormData(prev => ({ ...prev, manager_id: user.id }));
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     loadData();
@@ -190,10 +197,10 @@ export function RequirementsPage() {
         location: '',
         max_day_rate: '',
         description: '',
-        status: 'opportunity',
+        status: 'active',
         clearance_required: 'none',
         engineering_discipline: 'software',
-        manager_id: '',
+        manager_id: user?.id || '',
       });
       setSkills([]);
       loadData();
@@ -245,9 +252,12 @@ export function RequirementsPage() {
   ];
 
   const managerOptions = [
-    { value: '', label: 'Select Manager (Optional)' },
+    // Current user first as "Myself"
+    ...(user ? [{ value: user.id, label: `${user.full_name || user.email} (Myself)` }] : []),
+    // Other managers
     ...users
       .filter(u => u.roles?.some((r: string) => ['recruiter', 'admin', 'director'].includes(r)))
+      .filter(u => u.id !== user?.id) // Exclude current user (already shown as Myself)
       .map(u => ({ value: u.id, label: u.full_name })),
   ];
 
