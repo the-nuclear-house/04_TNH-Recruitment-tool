@@ -13,6 +13,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   AlertCircle,
+  UserPlus,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -26,7 +27,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { offersService, usersService, type DbOffer } from '@/lib/services';
+import { offersService, usersService, candidatesService, consultantsService, type DbOffer } from '@/lib/services';
 
 const statusConfig: Record<string, { label: string; colour: string; icon: typeof Clock }> = {
   pending_approval: { label: 'Pending Approval', colour: 'bg-amber-100 text-amber-700', icon: Clock },
@@ -399,6 +400,26 @@ export function ContractsPage() {
                           onClick={() => handleMarkContractSigned(offer)}
                         >
                           Mark Contract Signed
+                        </Button>
+                      )}
+                      
+                      {offer.status === 'contract_signed' && offer.candidate?.status !== 'converted_to_consultant' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          leftIcon={<UserPlus className="h-4 w-4" />}
+                          onClick={async () => {
+                            try {
+                              const consultant = await consultantsService.convertFromCandidate(offer.candidate_id, offer);
+                              toast.success('Converted to Consultant', `Now consultant ${consultant.reference_id}`);
+                              loadData();
+                            } catch (error: any) {
+                              console.error('Error converting:', error);
+                              toast.error('Error', error.message || 'Failed to convert to consultant');
+                            }
+                          }}
+                        >
+                          Convert to Consultant
                         </Button>
                       )}
                       

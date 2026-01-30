@@ -203,12 +203,15 @@ export function RequirementDetailPage() {
       const assessmentOutcomes: Record<string, 'pending' | 'go' | 'nogo' | null> = {};
       
       for (const app of appsData) {
+        // Skip if no candidate_id (consultant applications)
+        if (!app.candidate_id) continue;
+        
         try {
           const interviews = interviewsByCandidate[app.candidate_id] || [];
           // Check if all 3 interviews passed
-          const phonePass = interviews.some(i => i.stage === 'phone_qualification' && i.outcome === 'pass');
-          const techPass = interviews.some(i => i.stage === 'technical_interview' && i.outcome === 'pass');
-          const directorPass = interviews.some(i => i.stage === 'director_interview' && i.outcome === 'pass');
+          const phonePass = interviews.some((i: any) => i.stage === 'phone_qualification' && i.outcome === 'pass');
+          const techPass = interviews.some((i: any) => i.stage === 'technical_interview' && i.outcome === 'pass');
+          const directorPass = interviews.some((i: any) => i.stage === 'director_interview' && i.outcome === 'pass');
           interviewStatus[app.candidate_id] = phonePass && techPass && directorPass;
           
           // Check if assessment is already scheduled for this application
@@ -446,7 +449,7 @@ export function RequirementDetailPage() {
       await customerAssessmentsService.create({
         application_id: selectedApplicationForAssessment.id,
         requirement_id: id,
-        candidate_id: selectedApplicationForAssessment.candidate_id,
+        candidate_id: selectedApplicationForAssessment.candidate_id || undefined,
         contact_id: contactId,
         scheduled_date: assessmentForm.scheduled_date,
         scheduled_time: assessmentForm.scheduled_time || undefined,
@@ -783,6 +786,9 @@ export function RequirementDetailPage() {
           ) : (
             <div className="space-y-3">
               {applications.map((app) => {
+                // Skip if no candidate (consultant applications handled separately later)
+                if (!app.candidate_id || !app.candidate) return null;
+                
                 const hasScheduledAssessment = scheduledAssessments[app.id];
                 const assessmentOutcome = candidateAssessmentOutcomes[app.candidate_id];
                 const isWinningCandidate = requirement.winning_candidate_id === app.candidate_id;

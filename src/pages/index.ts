@@ -11,7 +11,7 @@ export { CustomerAssessmentsPage } from './CustomerAssessmentsPage';
 export { ClientMeetingsPage } from './ClientMeetingsPage';
 export { CustomersPage } from './CustomersPage';
 export { ContractsPage } from './ContractsPage';
-export { ConsultantsPage } from './ConsultantsPage';
+export { ConsultantsPage, ConsultantProfilePage } from './ConsultantsPage';
 export { MissionsPage } from './MissionsPage';
 export { OrganisationPage } from './OrganisationPage';
 export { SettingsPage } from './SettingsPage';

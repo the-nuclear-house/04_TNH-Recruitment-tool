@@ -30,6 +30,7 @@ import {
   Gift,
   Upload,
   ArrowRight,
+  UserPlus,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -52,7 +53,7 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { candidatesService, interviewsService, usersService, commentsService, applicationsService, offersService, type DbComment, type DbApplication, type DbOffer } from '@/lib/services';
+import { candidatesService, interviewsService, usersService, commentsService, applicationsService, offersService, consultantsService, type DbComment, type DbApplication, type DbOffer } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
 
@@ -93,6 +94,7 @@ const statusLabels: Record<string, string> = {
   rejected: 'Rejected',
   withdrawn: 'Withdrawn',
   on_hold: 'On Hold',
+  converted_to_consultant: 'Converted to Consultant',
 };
 
 const clearanceLabels: Record<string, string> = {
@@ -213,9 +215,71 @@ export function CandidateProfilePage() {
   const [offerValidationErrors, setOfferValidationErrors] = useState<string[]>([]);
   const [isOfferShaking, setIsOfferShaking] = useState(false);
   
-  // Document drag state
+  // Document drag state for offer form
   const [isDraggingId, setIsDraggingId] = useState(false);
   const [isDraggingRtw, setIsDraggingRtw] = useState(false);
+  
+  // Document drag handlers for ID
+  const handleIdDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingId(true);
+  };
+  
+  const handleIdDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingId(false);
+  };
+  
+  const handleIdDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingId(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+      const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+      const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+      
+      if (validTypes.includes(file.type) || hasValidExtension) {
+        setIdDocumentFile(file);
+      }
+    }
+  };
+  
+  // Document drag handlers for RTW
+  const handleRtwDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingRtw(true);
+  };
+  
+  const handleRtwDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingRtw(false);
+  };
+  
+  const handleRtwDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingRtw(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+      const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+      const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+      
+      if (validTypes.includes(file.type) || hasValidExtension) {
+        setRtwDocumentFile(file);
+      }
+    }
+  };
   
   // Schedule interview modal
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -789,7 +853,7 @@ export function CandidateProfilePage() {
                   <h1 className="text-2xl font-bold text-brand-slate-900">
                     {candidate.first_name} {candidate.last_name}
                   </h1>
-                  <Badge variant="cyan">
+                  <Badge variant={candidate.status === 'converted_to_consultant' ? 'purple' : 'cyan'}>
                     {statusLabels[candidate.status] || candidate.status}
                   </Badge>
                 </div>
@@ -1178,6 +1242,61 @@ export function CandidateProfilePage() {
                             Approved on {formatDate(activeOffer.approved_at || '')}. HR to send contract.{' '}
                             <span className="underline font-medium">View in Contracts →</span>
                           </p>
+                        </div>
+                      )}
+                      
+                      {activeOffer.status === 'contract_sent' && (
+                        <div 
+                          className="p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors"
+                          onClick={() => navigate('/contracts')}
+                        >
+                          <p className="text-sm text-blue-700">
+                            Contract sent on {formatDate(activeOffer.contract_sent_at || '')}. Awaiting signature.{' '}
+                            <span className="underline font-medium">View in Contracts →</span>
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeOffer.status === 'contract_signed' && candidate?.status !== 'converted_to_consultant' && (
+                        <div className="space-y-3">
+                          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-sm text-green-700">
+                              Contract signed on {formatDate(activeOffer.contract_signed_at || '')}. Ready to convert to consultant.
+                            </p>
+                          </div>
+                          <Button
+                            variant="primary"
+                            className="w-full"
+                            leftIcon={<UserPlus className="h-4 w-4" />}
+                            onClick={async () => {
+                              try {
+                                const consultant = await consultantsService.convertFromCandidate(id!, activeOffer);
+                                toast.success('Converted to Consultant', `${consultant.first_name} ${consultant.last_name} is now consultant ${consultant.reference_id}`);
+                                loadData();
+                              } catch (error: any) {
+                                console.error('Error converting:', error);
+                                toast.error('Error', error.message || 'Failed to convert to consultant');
+                              }
+                            }}
+                          >
+                            Convert to Consultant
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {activeOffer.status === 'contract_signed' && candidate?.status === 'converted_to_consultant' && (
+                        <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                          <p className="text-sm text-purple-700 font-medium">
+                            ✓ Converted to Consultant
+                          </p>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => navigate('/consultants')}
+                          >
+                            View Consultants
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -2230,23 +2349,16 @@ export function CandidateProfilePage() {
           <div className="grid grid-cols-2 gap-4">
             {/* ID Document */}
             <div 
-              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors ${
+              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors cursor-pointer ${
                 idDocumentFile 
                   ? 'border-green-300 bg-green-50' 
                   : isDraggingId 
                     ? 'border-brand-cyan bg-brand-cyan/10' 
                     : 'border-brand-grey-300 hover:border-brand-grey-400'
               }`}
-              onDragOver={(e) => { e.preventDefault(); setIsDraggingId(true); }}
-              onDragLeave={() => setIsDraggingId(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDraggingId(false);
-                const file = e.dataTransfer.files[0];
-                if (file && (file.type === 'application/pdf' || file.type.startsWith('image/'))) {
-                  setIdDocumentFile(file);
-                }
-              }}
+              onDragOver={handleIdDragOver}
+              onDragLeave={handleIdDragLeave}
+              onDrop={handleIdDrop}
             >
               <Upload className={`h-8 w-8 mx-auto mb-2 ${idDocumentFile ? 'text-green-500' : isDraggingId ? 'text-brand-cyan' : 'text-brand-grey-400'}`} />
               <p className="text-sm font-medium text-brand-slate-700">ID Document</p>
@@ -2255,7 +2367,7 @@ export function CandidateProfilePage() {
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xs text-green-600 truncate max-w-[120px]">{idDocumentFile.name}</span>
                   <button 
-                    onClick={() => setIdDocumentFile(null)}
+                    onClick={(e) => { e.stopPropagation(); setIdDocumentFile(null); }}
                     className="text-red-500 hover:text-red-700"
                   >
                     <X className="h-4 w-4" />
@@ -2264,7 +2376,7 @@ export function CandidateProfilePage() {
               ) : (
                 <>
                   <p className="text-xs text-brand-grey-400 mb-2">Drag & drop or</p>
-                  <label className="cursor-pointer">
+                  <label className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
@@ -2281,23 +2393,16 @@ export function CandidateProfilePage() {
             
             {/* Right to Work Document */}
             <div 
-              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors ${
+              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors cursor-pointer ${
                 rtwDocumentFile 
                   ? 'border-green-300 bg-green-50' 
                   : isDraggingRtw 
                     ? 'border-brand-cyan bg-brand-cyan/10' 
                     : 'border-brand-grey-300 hover:border-brand-grey-400'
               }`}
-              onDragOver={(e) => { e.preventDefault(); setIsDraggingRtw(true); }}
-              onDragLeave={() => setIsDraggingRtw(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDraggingRtw(false);
-                const file = e.dataTransfer.files[0];
-                if (file && (file.type === 'application/pdf' || file.type.startsWith('image/'))) {
-                  setRtwDocumentFile(file);
-                }
-              }}
+              onDragOver={handleRtwDragOver}
+              onDragLeave={handleRtwDragLeave}
+              onDrop={handleRtwDrop}
             >
               <Upload className={`h-8 w-8 mx-auto mb-2 ${rtwDocumentFile ? 'text-green-500' : isDraggingRtw ? 'text-brand-cyan' : 'text-brand-grey-400'}`} />
               <p className="text-sm font-medium text-brand-slate-700">Right to Work</p>
@@ -2306,7 +2411,7 @@ export function CandidateProfilePage() {
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xs text-green-600 truncate max-w-[120px]">{rtwDocumentFile.name}</span>
                   <button 
-                    onClick={() => setRtwDocumentFile(null)}
+                    onClick={(e) => { e.stopPropagation(); setRtwDocumentFile(null); }}
                     className="text-red-500 hover:text-red-700"
                   >
                     <X className="h-4 w-4" />
@@ -2315,7 +2420,7 @@ export function CandidateProfilePage() {
               ) : (
                 <>
                   <p className="text-xs text-brand-grey-400 mb-2">Drag & drop or</p>
-                  <label className="cursor-pointer">
+                  <label className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"

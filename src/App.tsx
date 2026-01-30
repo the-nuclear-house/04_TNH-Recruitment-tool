@@ -16,6 +16,7 @@ import {
   CustomersPage,
   ContractsPage,
   ConsultantsPage,
+  ConsultantProfilePage,
   MissionsPage,
   OrganisationPage,
   SettingsPage,
@@ -70,6 +71,7 @@ function App() {
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/consultants" element={<ConsultantsPage />} />
+          <Route path="/consultants/:id" element={<ConsultantProfilePage />} />
           <Route path="/missions" element={<MissionsPage />} />
           <Route path="/organisation" element={<OrganisationPage />} />
           <Route path="/settings" element={<SettingsPage />} />

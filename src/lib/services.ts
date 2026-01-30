@@ -63,6 +63,72 @@ export interface UpdateCandidateInput extends Partial<CreateCandidateInput> {
 }
 
 // ============================================
+// CONSULTANT TYPES
+// ============================================
+
+export interface DbConsultant {
+  id: string;
+  reference_id: string | null;
+  candidate_id: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string | null;
+  location: string | null;
+  linkedin_url: string | null;
+  job_title: string | null;
+  skills: string[];
+  security_vetting: string | null;
+  nationalities: string[] | null;
+  contract_type: string | null;
+  salary_amount: number | null;
+  day_rate: number | null;
+  start_date: string;
+  end_date: string | null;
+  status: 'bench' | 'in_mission' | 'on_leave' | 'terminated';
+  id_document_url: string | null;
+  right_to_work_document_url: string | null;
+  assigned_manager_id: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  terminated_at: string | null;
+  termination_reason: string | null;
+  // Joined
+  candidate?: DbCandidate;
+  assigned_manager?: DbUser;
+}
+
+export interface CreateConsultantInput {
+  candidate_id?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  linkedin_url?: string;
+  job_title?: string;
+  skills?: string[];
+  security_vetting?: string;
+  nationalities?: string[];
+  contract_type?: string;
+  salary_amount?: number;
+  day_rate?: number;
+  start_date: string;
+  end_date?: string;
+  id_document_url?: string;
+  right_to_work_document_url?: string;
+  assigned_manager_id?: string;
+  created_by?: string;
+}
+
+export interface UpdateConsultantInput extends Partial<CreateConsultantInput> {
+  status?: 'bench' | 'in_mission' | 'on_leave' | 'terminated';
+  terminated_at?: string;
+  termination_reason?: string;
+}
+
+// ============================================
 // CANDIDATES SERVICE
 // ============================================
 
@@ -679,7 +745,8 @@ export const commentsService = {
 
 export interface DbApplication {
   id: string;
-  candidate_id: string;
+  candidate_id: string | null;
+  consultant_id: string | null;
   requirement_id: string;
   status: string;
   notes: string | null;
@@ -688,11 +755,13 @@ export interface DbApplication {
   updated_at: string;
   // Joined fields
   candidate?: DbCandidate;
+  consultant?: DbConsultant;
   requirement?: DbRequirement;
 }
 
 export interface CreateApplicationInput {
-  candidate_id: string;
+  candidate_id?: string;
+  consultant_id?: string;
   requirement_id: string;
   status?: string;
   notes?: string;
@@ -700,13 +769,14 @@ export interface CreateApplicationInput {
 }
 
 export const applicationsService = {
-  // Get all applications for a requirement
+  // Get all applications for a requirement (includes both candidates and consultants)
   async getByRequirement(requirementId: string): Promise<DbApplication[]> {
     const { data, error } = await supabase
       .from('applications')
       .select(`
         *,
-        candidate:candidates(*)
+        candidate:candidates(*),
+        consultant:consultants(*)
       `)
       .eq('requirement_id', requirementId)
       .order('created_at', { ascending: false });
@@ -730,14 +800,30 @@ export const applicationsService = {
     return data || [];
   },
 
-  // Create a new application (link candidate to requirement)
+  // Get all applications for a consultant
+  async getByConsultant(consultantId: string): Promise<DbApplication[]> {
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        requirement:requirements(*)
+      `)
+      .eq('consultant_id', consultantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Create a new application (link candidate or consultant to requirement)
   async create(input: CreateApplicationInput): Promise<DbApplication> {
     const { data, error } = await supabase
       .from('applications')
       .insert(input)
       .select(`
         *,
-        candidate:candidates(*)
+        candidate:candidates(*),
+        consultant:consultants(*)
       `)
       .single();
 
@@ -1856,5 +1942,151 @@ export const offersService = {
       .eq('id', id);
 
     if (error) throw error;
+  },
+};
+
+// ============================================
+// CONSULTANTS SERVICE
+// ============================================
+
+export const consultantsService = {
+  async getAll(): Promise<DbConsultant[]> {
+    const { data, error } = await supabase
+      .from('consultants')
+      .select(`
+        *,
+        candidate:candidates(*),
+        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
+      `)
+      .is('terminated_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbConsultant | null> {
+    const { data, error } = await supabase
+      .from('consultants')
+      .select(`
+        *,
+        candidate:candidates(*),
+        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByReferenceId(referenceId: string): Promise<DbConsultant | null> {
+    const { data, error } = await supabase
+      .from('consultants')
+      .select(`
+        *,
+        candidate:candidates(*),
+        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
+      `)
+      .eq('reference_id', referenceId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByCandidateId(candidateId: string): Promise<DbConsultant | null> {
+    const { data, error } = await supabase
+      .from('consultants')
+      .select(`
+        *,
+        candidate:candidates(*),
+        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
+      `)
+      .eq('candidate_id', candidateId)
+      .single();
+
+    if (error) return null; // May not exist
+    return data;
+  },
+
+  async create(input: CreateConsultantInput): Promise<DbConsultant> {
+    const { data, error } = await supabase
+      .from('consultants')
+      .insert({
+        ...input,
+        status: 'bench',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: UpdateConsultantInput): Promise<DbConsultant> {
+    const { data, error } = await supabase
+      .from('consultants')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async terminate(id: string, reason?: string): Promise<DbConsultant> {
+    const { data, error } = await supabase
+      .from('consultants')
+      .update({
+        status: 'terminated',
+        terminated_at: new Date().toISOString(),
+        termination_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Convert a candidate to consultant using offer data
+  async convertFromCandidate(candidateId: string, offer: DbOffer): Promise<DbConsultant> {
+    // Get the candidate data
+    const candidate = await candidatesService.getById(candidateId);
+    if (!candidate) throw new Error('Candidate not found');
+
+    // Create consultant record
+    const consultant = await this.create({
+      candidate_id: candidateId,
+      first_name: candidate.first_name,
+      last_name: candidate.last_name,
+      email: candidate.email,
+      phone: candidate.phone || undefined,
+      location: candidate.location || undefined,
+      linkedin_url: candidate.linkedin_url || undefined,
+      job_title: offer.job_title,
+      skills: candidate.skills || [],
+      security_vetting: candidate.security_vetting || undefined,
+      nationalities: candidate.nationalities || undefined,
+      contract_type: offer.contract_type,
+      salary_amount: offer.salary_amount || undefined,
+      day_rate: offer.day_rate || undefined,
+      start_date: offer.start_date,
+      end_date: offer.end_date || undefined,
+      id_document_url: offer.id_document_url || undefined,
+      right_to_work_document_url: offer.right_to_work_document_url || undefined,
+    });
+
+    // Update candidate status to archived
+    await candidatesService.update(candidateId, { status: 'converted_to_consultant' });
+
+    return consultant;
   },
 };
