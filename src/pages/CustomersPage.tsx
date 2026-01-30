@@ -43,6 +43,7 @@ import {
   Move,
   Upload,
   Image,
+  X,
 } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -93,6 +94,50 @@ const meetingTypeOptions = [
   { value: 'video', label: 'Video Call' },
   { value: 'in_person', label: 'In Person' },
   { value: 'email', label: 'Email' },
+];
+
+// Requirement options
+const reqIndustryOptions = [
+  { value: '', label: 'Select Industry' },
+  { value: 'defence', label: 'Defence' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'healthcare', label: 'Healthcare' },
+  { value: 'government', label: 'Government' },
+  { value: 'aerospace', label: 'Aerospace' },
+  { value: 'nuclear', label: 'Nuclear' },
+  { value: 'telecoms', label: 'Telecoms' },
+  { value: 'energy', label: 'Energy' },
+  { value: 'transport', label: 'Transport' },
+  { value: 'technology', label: 'Technology' },
+];
+
+const reqStatusOptions = [
+  { value: 'opportunity', label: 'Opportunity' },
+  { value: 'active', label: 'Active' },
+];
+
+const clearanceOptions = [
+  { value: 'none', label: 'None Required' },
+  { value: 'bpss', label: 'BPSS' },
+  { value: 'ctc', label: 'CTC' },
+  { value: 'sc', label: 'SC' },
+  { value: 'esc', label: 'eSC' },
+  { value: 'dv', label: 'DV' },
+  { value: 'edv', label: 'eDV' },
+  { value: 'doe_q', label: 'DOE Q (US)' },
+  { value: 'doe_l', label: 'DOE L (US)' },
+];
+
+const engineeringOptions = [
+  { value: 'software', label: 'Software Engineering' },
+  { value: 'electrical', label: 'Electrical Engineering' },
+  { value: 'mechanical', label: 'Mechanical Engineering' },
+  { value: 'civil', label: 'Civil Engineering' },
+  { value: 'systems', label: 'Systems Engineering' },
+  { value: 'nuclear', label: 'Nuclear Engineering' },
+  { value: 'chemical', label: 'Chemical Engineering' },
+  { value: 'structural', label: 'Structural Engineering' },
+  { value: 'other', label: 'Other' },
 ];
 
 const statusColours: Record<string, string> = {
@@ -187,6 +232,22 @@ export function CustomersPage() {
   // Contact detail modal
   const [isContactDetailOpen, setIsContactDetailOpen] = useState(false);
   const [contactMeetings, setContactMeetings] = useState<DbCustomerMeeting[]>([]);
+
+  // Requirement modal
+  const [isRequirementModalOpen, setIsRequirementModalOpen] = useState(false);
+  const [requirementForm, setRequirementForm] = useState({
+    customer: '',
+    industry: '',
+    location: '',
+    fte_count: '1',
+    max_day_rate: '',
+    description: '',
+    status: 'opportunity',
+    clearance_required: 'none',
+    engineering_discipline: 'software',
+  });
+  const [requirementSkills, setRequirementSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
 
   // Delete confirmation
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -589,11 +650,69 @@ export function CustomersPage() {
     setIsContactDetailOpen(false);
     
     if (selectedCompany) {
-      let url = `/requirements/new?company_id=${selectedCompany.id}&company_name=${encodeURIComponent(selectedCompany.name)}`;
-      if (contact) {
-        url += `&contact_id=${contact.id}&contact_name=${encodeURIComponent(`${contact.first_name} ${contact.last_name}`)}`;
+      // Pre-fill form with company info
+      setRequirementForm({
+        customer: selectedCompany.name,
+        industry: selectedCompany.industry || '',
+        location: selectedCompany.city || '',
+        fte_count: '1',
+        max_day_rate: '',
+        description: '',
+        status: 'opportunity',
+        clearance_required: 'none',
+        engineering_discipline: 'software',
+      });
+      setRequirementSkills([]);
+      setSkillInput('');
+      setIsRequirementModalOpen(true);
+    }
+  };
+
+  const handleSaveRequirement = async () => {
+    if (!requirementForm.customer) {
+      toast.error('Validation Error', 'Customer name is required');
+      return;
+    }
+    if (!selectedCompany) return;
+
+    setIsSubmitting(true);
+    try {
+      await requirementsService.create({
+        customer: requirementForm.customer,
+        company_id: selectedCompany.id,
+        industry: requirementForm.industry || undefined,
+        location: requirementForm.location || undefined,
+        fte_count: parseInt(requirementForm.fte_count) || 1,
+        max_day_rate: requirementForm.max_day_rate ? parseInt(requirementForm.max_day_rate) : undefined,
+        description: requirementForm.description || undefined,
+        status: requirementForm.status,
+        clearance_required: requirementForm.clearance_required,
+        engineering_discipline: requirementForm.engineering_discipline,
+        skills: requirementSkills.length > 0 ? requirementSkills : undefined,
+        created_by: user?.id,
+      });
+      
+      toast.success('Requirement Created', `${requirementForm.customer} requirement has been created`);
+      setIsRequirementModalOpen(false);
+      // Reload company details to show new requirement
+      await loadCompanyDetails(selectedCompany.id);
+    } catch (error: any) {
+      console.error('Error creating requirement:', error);
+      toast.error('Error', error.message || 'Failed to create requirement');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkillKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && skillInput.trim()) {
+      e.preventDefault();
+      const parts = skillInput.split(',').map(s => s.trim()).filter(s => s);
+      const newSkills = parts.filter(s => !requirementSkills.includes(s));
+      if (newSkills.length > 0) {
+        setRequirementSkills([...requirementSkills, ...newSkills]);
       }
-      navigate(url);
+      setSkillInput('');
     }
   };
 
@@ -1753,6 +1872,122 @@ export function CustomersPage() {
             <Button variant="secondary" onClick={() => setIsMeetingModalOpen(false)}>Cancel</Button>
             <Button variant="success" onClick={handleSaveMeeting} isLoading={isSubmitting}>
               Book Meeting
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Requirement Modal */}
+      <Modal
+        isOpen={isRequirementModalOpen}
+        onClose={() => setIsRequirementModalOpen(false)}
+        title="New Requirement"
+        description={`Create a new requirement for ${selectedCompany?.name || 'customer'}`}
+        size="xl"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Customer Name *"
+              value={requirementForm.customer}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, customer: e.target.value }))}
+              placeholder="e.g., BAE Systems"
+            />
+            <Select
+              label="Industry"
+              options={reqIndustryOptions}
+              value={requirementForm.industry}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, industry: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <Input
+              label="FTE Count *"
+              type="number"
+              min="1"
+              value={requirementForm.fte_count}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, fte_count: e.target.value }))}
+            />
+            <Input
+              label="Max Day Rate (£)"
+              type="number"
+              value={requirementForm.max_day_rate}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, max_day_rate: e.target.value }))}
+              placeholder="550"
+            />
+            <Input
+              label="Location"
+              value={requirementForm.location}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, location: e.target.value }))}
+              placeholder="e.g., London, Remote"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <Select
+              label="Engineering Discipline"
+              options={engineeringOptions}
+              value={requirementForm.engineering_discipline}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, engineering_discipline: e.target.value }))}
+            />
+            <Select
+              label="Clearance Required"
+              options={clearanceOptions}
+              value={requirementForm.clearance_required}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, clearance_required: e.target.value }))}
+            />
+            <Select
+              label="Status"
+              options={reqStatusOptions}
+              value={requirementForm.status}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, status: e.target.value }))}
+            />
+          </div>
+
+          {/* Skills */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+              Required Skills
+            </label>
+            <Input
+              placeholder="Type skill, use comma to separate, Enter to add..."
+              value={skillInput}
+              onChange={(e) => setSkillInput(e.target.value)}
+              onKeyDown={handleSkillKeyDown}
+            />
+            {requirementSkills.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {requirementSkills.map(skill => (
+                  <Badge key={skill} variant="cyan">
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => setRequirementSkills(requirementSkills.filter(s => s !== skill))}
+                      className="ml-1.5 hover:text-cyan-900"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Textarea
+            label="Description"
+            value={requirementForm.description}
+            onChange={(e) => setRequirementForm(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="Describe the requirement, project details, team structure..."
+            rows={3}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsRequirementModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" onClick={handleSaveRequirement} isLoading={isSubmitting}>
+              Create Requirement
             </Button>
           </div>
         </div>
