@@ -242,6 +242,7 @@ export function CustomersPage() {
   // Contact detail modal
   const [isContactDetailOpen, setIsContactDetailOpen] = useState(false);
   const [contactMeetings, setContactMeetings] = useState<DbCustomerMeeting[]>([]);
+  const [contactRequirements, setContactRequirements] = useState<DbRequirement[]>([]);
 
   // Requirement modal
   const [isRequirementModalOpen, setIsRequirementModalOpen] = useState(false);
@@ -330,6 +331,15 @@ export function CustomersPage() {
       setContactMeetings(contactMeetings);
     } catch (error) {
       console.error('Error loading contact meetings:', error);
+    }
+
+    // Load requirements for this contact
+    try {
+      const allRequirements = await requirementsService.getAll();
+      const contactReqs = allRequirements.filter(r => r.contact_id === contact.id);
+      setContactRequirements(contactReqs);
+    } catch (error) {
+      console.error('Error loading contact requirements:', error);
     }
   };
 
@@ -600,7 +610,8 @@ export function CustomersPage() {
   };
 
   const handleSaveMeeting = async () => {
-    if (!meetingForm.subject) {
+    // Subject only required for client meetings
+    if (meetingCategory === 'client_meeting' && !meetingForm.subject) {
       toast.error('Validation Error', 'Subject is required');
       return;
     }
@@ -640,6 +651,15 @@ export function CustomersPage() {
       } else {
         // Create candidate assessment
         const selectedApp = requirementCandidates.find(rc => rc.id === meetingForm.candidate_id);
+        const candidateName = selectedApp?.candidate 
+          ? `${selectedApp.candidate.first_name} ${selectedApp.candidate.last_name?.charAt(0)}.`
+          : 'Candidate';
+        const requirementTitle = requirements.find(r => r.id === meetingForm.requirement_id)?.title || 
+                                 requirements.find(r => r.id === meetingForm.requirement_id)?.customer ||
+                                 'Requirement';
+        
+        // Auto-generate title: "Requirement - Candidate F."
+        const autoTitle = `${requirementTitle} - ${candidateName}`;
         
         await customerAssessmentsService.create({
           application_id: meetingForm.candidate_id, // This is actually the application ID
@@ -647,7 +667,10 @@ export function CustomersPage() {
           scheduled_date: meetingForm.scheduled_at,
           scheduled_time: meetingForm.scheduled_time || undefined,
           location: meetingForm.location || undefined,
-          notes: meetingForm.subject ? `${meetingForm.subject}${meetingForm.notes ? '\n\n' + meetingForm.notes : ''}` : meetingForm.notes || undefined,
+          notes: meetingForm.subject && meetingForm.subject !== 'Technical Assessment' 
+            ? `${meetingForm.subject}${meetingForm.notes ? '\n\n' + meetingForm.notes : ''}` 
+            : `${autoTitle}${meetingForm.notes ? '\n\n' + meetingForm.notes : ''}`,
+          created_by: user?.id,
         });
         toast.success('Assessment Scheduled', 'Candidate assessment has been booked');
       }
@@ -1519,6 +1542,86 @@ export function CustomersPage() {
               </Button>
             </div>
 
+            {/* Requirements Stats */}
+            {contactRequirements.length > 0 && (
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-brand-grey-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-brand-slate-900">{contactRequirements.length}</p>
+                  <p className="text-xs text-brand-grey-500">Total</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {contactRequirements.filter(r => r.status === 'active').length}
+                  </p>
+                  <p className="text-xs text-green-600">Active</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-600">
+                    {contactRequirements.filter(r => r.status === 'filled').length}
+                  </p>
+                  <p className="text-xs text-blue-600">Filled</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-red-600">
+                    {contactRequirements.filter(r => r.status === 'lost' || r.status === 'cancelled').length}
+                  </p>
+                  <p className="text-xs text-red-600">Lost</p>
+                </div>
+              </div>
+            )}
+
+            {/* Requirements List */}
+            <div>
+              <h4 className="text-sm font-semibold text-brand-slate-900 mb-3 flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                Requirements ({contactRequirements.length})
+              </h4>
+
+              {contactRequirements.length === 0 ? (
+                <p className="text-sm text-brand-grey-400">No requirements from this contact</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {contactRequirements.map(req => {
+                    const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+                      opportunity: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Opportunity' },
+                      active: { bg: 'bg-green-100', text: 'text-green-700', label: 'Active' },
+                      on_hold: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'On Hold' },
+                      filled: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Filled' },
+                      lost: { bg: 'bg-red-100', text: 'text-red-700', label: 'Lost' },
+                      cancelled: { bg: 'bg-grey-100', text: 'text-grey-700', label: 'Cancelled' },
+                    };
+                    const config = statusConfig[req.status] || statusConfig.opportunity;
+                    
+                    return (
+                      <div 
+                        key={req.id} 
+                        className="flex items-center gap-3 p-3 bg-brand-grey-50 rounded-lg hover:bg-brand-grey-100 cursor-pointer transition-colors"
+                        onClick={() => {
+                          setIsContactDetailOpen(false);
+                          window.location.href = `/requirements/${req.id}`;
+                        }}
+                      >
+                        <div className={`px-2 py-1 rounded text-xs font-medium ${config.bg} ${config.text}`}>
+                          {config.label}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-brand-slate-900 truncate">
+                            {req.title || req.customer}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-brand-grey-400">
+                            {req.reference_id && <span>{req.reference_id}</span>}
+                            {req.location && <span>· {req.location}</span>}
+                            {req.max_day_rate && <span>· £{req.max_day_rate}/day</span>}
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-brand-grey-400" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Meetings History */}
             <div>
               <h4 className="text-sm font-semibold text-brand-slate-900 mb-3 flex items-center gap-2">
@@ -1996,15 +2099,15 @@ export function CustomersPage() {
             </>
           )}
 
-          <Input
-            label="Subject / Title *"
-            value={meetingForm.subject}
-            onChange={(e) => setMeetingForm(prev => ({ ...prev, subject: e.target.value }))}
-            placeholder={meetingCategory === 'client_meeting' 
-              ? "e.g., Introduction call, Requirements discussion" 
-              : "e.g., Technical assessment, Final interview"
-            }
-          />
+          {/* Subject only for client meetings - assessments get auto-generated title */}
+          {meetingCategory === 'client_meeting' && (
+            <Input
+              label="Subject / Title *"
+              value={meetingForm.subject}
+              onChange={(e) => setMeetingForm(prev => ({ ...prev, subject: e.target.value }))}
+              placeholder="e.g., Introduction call, Requirements discussion"
+            />
+          )}
 
           {meetingCategory === 'client_meeting' && (
             <Select

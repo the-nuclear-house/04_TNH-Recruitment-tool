@@ -88,17 +88,18 @@ export function RequirementDetailPage() {
   
   // Applications (linked candidates)
   const [applications, setApplications] = useState<DbApplication[]>([]);
-  const [allCandidates, setAllCandidates] = useState<DbCandidate[]>([]);
   
   // Track scheduled assessments per application
   const [scheduledAssessments, setScheduledAssessments] = useState<Record<string, boolean>>({});
   
   // Add candidate modal
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
-  const [selectedCandidateId, setSelectedCandidateId] = useState('');
+  const [selectedCandidates, setSelectedCandidates] = useState<DbCandidate[]>([]);
   const [applicationNotes, setApplicationNotes] = useState('');
   const [isAddingCandidate, setIsAddingCandidate] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<DbCandidate[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   
   // Schedule customer assessment modal
   const [isScheduleAssessmentModalOpen, setIsScheduleAssessmentModalOpen] = useState(false);
@@ -127,16 +128,14 @@ export function RequirementDetailPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [reqData, usersData, appsData, candidatesData] = await Promise.all([
+      const [reqData, usersData, appsData] = await Promise.all([
         requirementsService.getById(id!),
         usersService.getAll(),
         applicationsService.getByRequirement(id!),
-        candidatesService.getAll(),
       ]);
       
       setRequirement(reqData);
       setApplications(appsData);
-      setAllCandidates(candidatesData);
       
       // Check interview status and scheduled assessments for each linked candidate
       const interviewStatus: Record<string, boolean> = {};
@@ -178,6 +177,39 @@ export function RequirementDetailPage() {
     }
   };
 
+  // Search candidates with debounce
+  useEffect(() => {
+    if (!candidateSearch || candidateSearch.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const allCandidates = await candidatesService.getAll();
+        const linkedCandidateIds = applications.map(a => a.candidate_id);
+        const selectedIds = selectedCandidates.map(c => c.id);
+        const filtered = allCandidates
+          .filter(c => !linkedCandidateIds.includes(c.id))
+          .filter(c => !selectedIds.includes(c.id)) // Exclude already selected
+          .filter(c => 
+            `${c.first_name} ${c.last_name}`.toLowerCase().includes(candidateSearch.toLowerCase()) ||
+            c.email.toLowerCase().includes(candidateSearch.toLowerCase()) ||
+            c.reference_id?.toLowerCase().includes(candidateSearch.toLowerCase())
+          )
+          .slice(0, 10); // Limit to 10 results
+        setSearchResults(filtered);
+      } catch (error) {
+        console.error('Error searching candidates:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [candidateSearch, applications, selectedCandidates]);
+
   const handleStatusChange = async (newStatus: string) => {
     try {
       await requirementsService.update(id!, { status: newStatus });
@@ -205,31 +237,38 @@ export function RequirementDetailPage() {
   };
 
   const handleAddCandidate = async () => {
-    if (!selectedCandidateId || !user) return;
+    if (selectedCandidates.length === 0 || !user) return;
     
     setIsAddingCandidate(true);
     try {
-      await applicationsService.create({
-        candidate_id: selectedCandidateId,
-        requirement_id: id!,
-        notes: applicationNotes || undefined,
-        created_by: user.id,
-      });
+      // Add all selected candidates
+      for (const candidate of selectedCandidates) {
+        await applicationsService.create({
+          candidate_id: candidate.id,
+          requirement_id: id!,
+          notes: applicationNotes || undefined,
+          created_by: user.id,
+        });
+      }
       
       // Reload all data including interview status
       await loadData();
       
       setIsAddCandidateModalOpen(false);
-      setSelectedCandidateId('');
+      setSelectedCandidates([]);
       setApplicationNotes('');
       setCandidateSearch('');
-      toast.success('Candidate Added', 'Candidate has been linked to this requirement');
+      setSearchResults([]);
+      toast.success(
+        selectedCandidates.length === 1 ? 'Candidate Added' : 'Candidates Added', 
+        `${selectedCandidates.length} candidate${selectedCandidates.length > 1 ? 's have' : ' has'} been linked to this requirement`
+      );
     } catch (error: any) {
       console.error('Error adding candidate:', error);
       if (error.code === '23505') {
-        toast.error('Already Linked', 'This candidate is already linked to this requirement');
+        toast.error('Already Linked', 'One or more candidates are already linked to this requirement');
       } else {
-        toast.error('Error', 'Failed to add candidate');
+        toast.error('Error', 'Failed to add candidates');
       }
     } finally {
       setIsAddingCandidate(false);
@@ -282,18 +321,6 @@ export function RequirementDetailPage() {
       setIsSchedulingAssessment(false);
     }
   };
-
-  // Filter candidates not already linked
-  const linkedCandidateIds = applications.map(a => a.candidate_id);
-  const availableCandidates = allCandidates.filter(c => !linkedCandidateIds.includes(c.id));
-  
-  // Filter by search
-  const filteredAvailableCandidates = candidateSearch
-    ? availableCandidates.filter(c => 
-        `${c.first_name} ${c.last_name}`.toLowerCase().includes(candidateSearch.toLowerCase()) ||
-        c.email.toLowerCase().includes(candidateSearch.toLowerCase())
-      )
-    : availableCandidates;
 
   // Check if current user can edit this requirement
   const canEditThisRequirement = 
@@ -653,42 +680,80 @@ export function RequirementDetailPage() {
         isOpen={isAddCandidateModalOpen}
         onClose={() => {
           setIsAddCandidateModalOpen(false);
-          setSelectedCandidateId('');
+          setSelectedCandidates([]);
           setApplicationNotes('');
           setCandidateSearch('');
+          setSearchResults([]);
         }}
-        title="Add Candidate to Requirement"
-        description={`Link a candidate to ${requirement.customer}`}
+        title="Add Candidates to Requirement"
+        description={`Link candidates to ${requirement.customer}`}
         size="md"
       >
         <div className="space-y-4">
+          {/* Selected candidates display */}
+          {selectedCandidates.length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-brand-slate-700">
+                Selected ({selectedCandidates.length})
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {selectedCandidates.map(candidate => (
+                  <div 
+                    key={candidate.id}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-brand-cyan/10 border border-brand-cyan rounded-full text-sm"
+                  >
+                    <span className="font-medium text-brand-slate-900">
+                      {candidate.first_name} {candidate.last_name}
+                    </span>
+                    <button
+                      onClick={() => setSelectedCandidates(prev => prev.filter(c => c.id !== candidate.id))}
+                      className="text-brand-grey-400 hover:text-red-500"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search input - always visible */}
           <Input
-            placeholder="Search candidates by name or email..."
+            placeholder="Type at least 2 characters to search..."
             value={candidateSearch}
             onChange={(e) => setCandidateSearch(e.target.value)}
             isSearch
           />
           
-          <div className="max-h-64 overflow-y-auto border border-brand-grey-200 rounded-lg">
-            {filteredAvailableCandidates.length === 0 ? (
+          <div className="max-h-48 overflow-y-auto border border-brand-grey-200 rounded-lg">
+            {isSearching ? (
+              <p className="text-center py-4 text-brand-grey-400 text-sm">Searching...</p>
+            ) : candidateSearch.length < 2 ? (
               <p className="text-center py-4 text-brand-grey-400 text-sm">
-                {candidateSearch ? 'No matching candidates found' : 'No available candidates'}
+                Type to search candidates by name, email or ID
+              </p>
+            ) : searchResults.length === 0 ? (
+              <p className="text-center py-4 text-brand-grey-400 text-sm">
+                No matching candidates found
               </p>
             ) : (
-              filteredAvailableCandidates.map((candidate) => (
+              searchResults.map((candidate) => (
                 <div
                   key={candidate.id}
-                  className={`flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-brand-grey-100 last:border-b-0 ${
-                    selectedCandidateId === candidate.id 
-                      ? 'bg-brand-cyan/10 border-l-2 border-l-brand-cyan' 
-                      : 'hover:bg-brand-grey-50'
-                  }`}
-                  onClick={() => setSelectedCandidateId(candidate.id)}
+                  className="flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-brand-grey-100 last:border-b-0 hover:bg-brand-cyan/5"
+                  onClick={() => {
+                    setSelectedCandidates(prev => [...prev, candidate]);
+                    setCandidateSearch('');
+                    setSearchResults([]);
+                  }}
                 >
                   <Avatar name={`${candidate.first_name} ${candidate.last_name}`} size="sm" />
                   <div className="flex-1">
                     <p className="font-medium text-brand-slate-900">
                       {candidate.first_name} {candidate.last_name}
+                      {candidate.reference_id && (
+                        <span className="text-xs text-brand-grey-400 ml-2">[{candidate.reference_id}]</span>
+                      )}
                     </p>
                     <p className="text-sm text-brand-grey-400">{candidate.email}</p>
                   </div>
@@ -702,6 +767,7 @@ export function RequirementDetailPage() {
                       )}
                     </div>
                   )}
+                  <Plus className="h-4 w-4 text-brand-cyan" />
                 </div>
               ))
             )}
@@ -709,7 +775,7 @@ export function RequirementDetailPage() {
 
           <Input
             label="Notes (optional)"
-            placeholder="Why is this candidate a good fit?"
+            placeholder="Why are these candidates a good fit?"
             value={applicationNotes}
             onChange={(e) => setApplicationNotes(e.target.value)}
           />
@@ -719,9 +785,10 @@ export function RequirementDetailPage() {
               variant="secondary" 
               onClick={() => {
                 setIsAddCandidateModalOpen(false);
-                setSelectedCandidateId('');
+                setSelectedCandidates([]);
                 setApplicationNotes('');
                 setCandidateSearch('');
+                setSearchResults([]);
               }}
             >
               Cancel
@@ -730,9 +797,9 @@ export function RequirementDetailPage() {
               variant="primary"
               onClick={handleAddCandidate}
               isLoading={isAddingCandidate}
-              disabled={!selectedCandidateId}
+              disabled={selectedCandidates.length === 0}
             >
-              Add Candidate
+              Add {selectedCandidates.length > 0 ? `${selectedCandidates.length} Candidate${selectedCandidates.length > 1 ? 's' : ''}` : 'Candidates'}
             </Button>
           </div>
         </div>
