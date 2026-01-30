@@ -1434,7 +1434,7 @@ export function CandidateProfilePage() {
                 onChange={(e) => setPhoneForm(prev => ({ ...prev, contract_preference: e.target.value }))}
               />
               <Input
-                label="Salary Proposed (£)"
+                label="Minimum Salary Expected (£)"
                 type="number"
                 value={phoneForm.salary_proposed}
                 onChange={(e) => setPhoneForm(prev => ({ ...prev, salary_proposed: e.target.value }))}
@@ -1610,14 +1610,6 @@ export function CandidateProfilePage() {
               </div>
             </div>
           </div>
-
-          <Input
-            label="Salary Proposed (£)"
-            type="number"
-            value={techForm.salary_proposed}
-            onChange={(e) => setTechForm(prev => ({ ...prev, salary_proposed: e.target.value }))}
-            placeholder="e.g., 65000"
-          />
 
           <Textarea
             label="Warnings"

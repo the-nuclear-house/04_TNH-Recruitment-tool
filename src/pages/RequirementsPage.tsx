@@ -261,7 +261,9 @@ export function RequirementsPage() {
 
   const managerOptions = [
     { value: '', label: 'Select Manager (Optional)' },
-    ...users.map(u => ({ value: u.id, label: u.full_name })),
+    ...users
+      .filter(u => u.roles?.some((r: string) => ['recruiter', 'admin', 'director'].includes(r)))
+      .map(u => ({ value: u.id, label: u.full_name })),
   ];
 
   // Format contacts for searchable select

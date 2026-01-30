@@ -53,11 +53,14 @@ import {
   companiesService,
   contactsService,
   customerMeetingsService,
+  customerAssessmentsService,
+  applicationsService,
   requirementsService,
   type DbCompany,
   type DbContact,
   type DbCustomerMeeting,
   type DbRequirement,
+  type DbApplication,
 } from '@/lib/services';
 
 const industryOptions = [
@@ -220,6 +223,7 @@ export function CustomersPage() {
   // Meeting modal
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [lockedMeetingContact, setLockedMeetingContact] = useState<DbContact | null>(null); // When booking from contact card
+  const [meetingCategory, setMeetingCategory] = useState<'client_meeting' | 'candidate_assessment'>('client_meeting');
   const [meetingForm, setMeetingForm] = useState({
     contact_id: '',
     meeting_type: 'call',
@@ -229,7 +233,11 @@ export function CustomersPage() {
     duration_minutes: '30',
     location: '',
     notes: '',
+    // For candidate assessment
+    requirement_id: '',
+    candidate_id: '',
   });
+  const [requirementCandidates, setRequirementCandidates] = useState<Array<{ id: string; candidate: any }>>([]);
 
   // Contact detail modal
   const [isContactDetailOpen, setIsContactDetailOpen] = useState(false);
@@ -552,6 +560,8 @@ export function CustomersPage() {
     
     // If contact provided, lock it (coming from contact card)
     setLockedMeetingContact(contact || null);
+    setMeetingCategory('client_meeting');
+    setRequirementCandidates([]);
     
     setMeetingForm({
       contact_id: contact?.id || '',
@@ -562,8 +572,32 @@ export function CustomersPage() {
       duration_minutes: '30',
       location: '',
       notes: '',
+      requirement_id: '',
+      candidate_id: '',
     });
     setIsMeetingModalOpen(true);
+  };
+
+  // Load candidates when requirement is selected
+  const handleRequirementSelectForMeeting = async (requirementId: string) => {
+    setMeetingForm(prev => ({ ...prev, requirement_id: requirementId, candidate_id: '' }));
+    setRequirementCandidates([]);
+    
+    if (requirementId) {
+      try {
+        const applications = await applicationsService.getByRequirement(requirementId);
+        // Only show candidates that have progressed (not rejected)
+        const validApplications = applications.filter(app => 
+          app.status !== 'rejected' && app.candidate
+        );
+        setRequirementCandidates(validApplications.map(app => ({
+          id: app.id,
+          candidate: app.candidate,
+        })));
+      } catch (error) {
+        console.error('Error loading candidates:', error);
+      }
+    }
   };
 
   const handleSaveMeeting = async () => {
@@ -573,24 +607,54 @@ export function CustomersPage() {
     }
     if (!selectedCompany) return;
 
+    // Validation for candidate assessment
+    if (meetingCategory === 'candidate_assessment') {
+      if (!meetingForm.requirement_id) {
+        toast.error('Validation Error', 'Please select a requirement');
+        return;
+      }
+      if (!meetingForm.candidate_id) {
+        toast.error('Validation Error', 'Please select a candidate');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const scheduledAt = meetingForm.scheduled_at && meetingForm.scheduled_time
-        ? `${meetingForm.scheduled_at}T${meetingForm.scheduled_time}:00`
-        : undefined;
+      if (meetingCategory === 'client_meeting') {
+        // Create customer meeting
+        const scheduledAt = meetingForm.scheduled_at && meetingForm.scheduled_time
+          ? `${meetingForm.scheduled_at}T${meetingForm.scheduled_time}:00`
+          : undefined;
 
-      await customerMeetingsService.create({
-        company_id: selectedCompany.id,
-        contact_id: meetingForm.contact_id || undefined,
-        meeting_type: meetingForm.meeting_type,
-        subject: meetingForm.subject,
-        scheduled_at: scheduledAt,
-        duration_minutes: parseInt(meetingForm.duration_minutes) || undefined,
-        location: meetingForm.location || undefined,
-        notes: meetingForm.notes || undefined,
-      });
-      toast.success('Meeting Scheduled', 'Meeting has been added');
+        await customerMeetingsService.create({
+          company_id: selectedCompany.id,
+          contact_id: meetingForm.contact_id || undefined,
+          meeting_type: meetingForm.meeting_type,
+          subject: meetingForm.subject,
+          scheduled_at: scheduledAt,
+          duration_minutes: parseInt(meetingForm.duration_minutes) || undefined,
+          location: meetingForm.location || undefined,
+          notes: meetingForm.notes || undefined,
+        });
+        toast.success('Meeting Scheduled', 'Client meeting has been booked');
+      } else {
+        // Create candidate assessment
+        const selectedApp = requirementCandidates.find(rc => rc.id === meetingForm.candidate_id);
+        
+        await customerAssessmentsService.create({
+          application_id: meetingForm.candidate_id, // This is actually the application ID
+          contact_id: lockedMeetingContact?.id || meetingForm.contact_id || undefined,
+          scheduled_date: meetingForm.scheduled_at,
+          scheduled_time: meetingForm.scheduled_time || undefined,
+          location: meetingForm.location || undefined,
+          notes: meetingForm.subject ? `${meetingForm.subject}${meetingForm.notes ? '\n\n' + meetingForm.notes : ''}` : meetingForm.notes || undefined,
+        });
+        toast.success('Assessment Scheduled', 'Candidate assessment has been booked');
+      }
+      
       setIsMeetingModalOpen(false);
+      setLockedMeetingContact(null);
       loadCompanyDetails(selectedCompany.id);
 
       // Refresh contact meetings if viewing contact detail
@@ -1802,10 +1866,10 @@ export function CustomersPage() {
       {/* Meeting Modal */}
       <Modal
         isOpen={isMeetingModalOpen}
-        onClose={() => { setIsMeetingModalOpen(false); setLockedMeetingContact(null); }}
+        onClose={() => { setIsMeetingModalOpen(false); setLockedMeetingContact(null); setMeetingCategory('client_meeting'); setRequirementCandidates([]); }}
         title="Book Meeting"
         description={lockedMeetingContact ? `Schedule a meeting with ${lockedMeetingContact.first_name} ${lockedMeetingContact.last_name}` : undefined}
-        size="md"
+        size="lg"
       >
         <div className="space-y-4">
           {/* Contact - locked if coming from contact card */}
@@ -1840,23 +1904,105 @@ export function CustomersPage() {
             />
           ) : null}
 
+          {/* Meeting Category Toggle */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
+              Meeting Category
+            </label>
+            <div className="flex gap-2 p-1 bg-brand-grey-100 rounded-lg">
+              <button
+                type="button"
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  meetingCategory === 'client_meeting' 
+                    ? 'bg-white text-brand-slate-900 shadow-sm' 
+                    : 'text-brand-grey-500 hover:text-brand-slate-700'
+                }`}
+                onClick={() => {
+                  setMeetingCategory('client_meeting');
+                  setMeetingForm(prev => ({ ...prev, requirement_id: '', candidate_id: '' }));
+                  setRequirementCandidates([]);
+                }}
+              >
+                Client Meeting
+              </button>
+              <button
+                type="button"
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  meetingCategory === 'candidate_assessment' 
+                    ? 'bg-white text-brand-slate-900 shadow-sm' 
+                    : 'text-brand-grey-500 hover:text-brand-slate-700'
+                }`}
+                onClick={() => setMeetingCategory('candidate_assessment')}
+              >
+                Candidate Assessment
+              </button>
+            </div>
+          </div>
+
+          {/* Candidate Assessment fields */}
+          {meetingCategory === 'candidate_assessment' && (
+            <>
+              {/* Requirement selector - only requirements for this company */}
+              <Select
+                label="Requirement *"
+                options={[
+                  { value: '', label: 'Select Requirement' },
+                  ...requirements.map(r => ({
+                    value: r.id,
+                    label: `${r.customer}${r.location ? ` - ${r.location}` : ''} (${r.fte_count || 1} FTE)`
+                  }))
+                ]}
+                value={meetingForm.requirement_id}
+                onChange={(e) => handleRequirementSelectForMeeting(e.target.value)}
+              />
+
+              {/* Candidate selector - only candidates linked to selected requirement */}
+              {meetingForm.requirement_id && (
+                requirementCandidates.length > 0 ? (
+                  <SearchableSelect
+                    label="Candidate *"
+                    placeholder="Type to search candidates..."
+                    options={requirementCandidates.map(rc => ({
+                      value: rc.id,
+                      label: `${rc.candidate?.first_name} ${rc.candidate?.last_name}`,
+                      sublabel: rc.candidate?.email || undefined
+                    }))}
+                    value={meetingForm.candidate_id}
+                    onChange={(val) => setMeetingForm(prev => ({ ...prev, candidate_id: val }))}
+                  />
+                ) : (
+                  <div className="p-4 bg-brand-orange/10 border border-brand-orange/20 rounded-lg">
+                    <p className="text-sm text-brand-orange">
+                      No candidates linked to this requirement yet. Add candidates to the requirement first.
+                    </p>
+                  </div>
+                )
+              )}
+            </>
+          )}
+
           <Input
-            label="Subject *"
+            label="Subject / Title *"
             value={meetingForm.subject}
             onChange={(e) => setMeetingForm(prev => ({ ...prev, subject: e.target.value }))}
-            placeholder="e.g., Introduction call, Requirements discussion"
+            placeholder={meetingCategory === 'client_meeting' 
+              ? "e.g., Introduction call, Requirements discussion" 
+              : "e.g., Technical assessment, Final interview"
+            }
           />
 
-          <Select
-            label="Meeting Type"
-            options={meetingTypeOptions}
-            value={meetingForm.meeting_type}
-            onChange={(e) => setMeetingForm(prev => ({ ...prev, meeting_type: e.target.value }))}
-          />
+          {meetingCategory === 'client_meeting' && (
+            <Select
+              label="Meeting Type"
+              options={meetingTypeOptions}
+              value={meetingForm.meeting_type}
+              onChange={(e) => setMeetingForm(prev => ({ ...prev, meeting_type: e.target.value }))}
+            />
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Date"
+              label="Date *"
               type="date"
               value={meetingForm.scheduled_at}
               onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduled_at: e.target.value }))}
@@ -1869,28 +2015,28 @@ export function CustomersPage() {
             />
           </div>
 
-          <Select
-            label="Duration"
-            options={[
-              { value: '15', label: '15 minutes' },
-              { value: '30', label: '30 minutes' },
-              { value: '45', label: '45 minutes' },
-              { value: '60', label: '1 hour' },
-              { value: '90', label: '1.5 hours' },
-              { value: '120', label: '2 hours' },
-            ]}
-            value={meetingForm.duration_minutes}
-            onChange={(e) => setMeetingForm(prev => ({ ...prev, duration_minutes: e.target.value }))}
-          />
-
-          {meetingForm.meeting_type === 'in_person' && (
-            <Input
-              label="Location"
-              value={meetingForm.location}
-              onChange={(e) => setMeetingForm(prev => ({ ...prev, location: e.target.value }))}
-              placeholder="Address or meeting room"
+          {meetingCategory === 'client_meeting' && (
+            <Select
+              label="Duration"
+              options={[
+                { value: '15', label: '15 minutes' },
+                { value: '30', label: '30 minutes' },
+                { value: '45', label: '45 minutes' },
+                { value: '60', label: '1 hour' },
+                { value: '90', label: '1.5 hours' },
+                { value: '120', label: '2 hours' },
+              ]}
+              value={meetingForm.duration_minutes}
+              onChange={(e) => setMeetingForm(prev => ({ ...prev, duration_minutes: e.target.value }))}
             />
           )}
+
+          <Input
+            label="Location"
+            value={meetingForm.location}
+            onChange={(e) => setMeetingForm(prev => ({ ...prev, location: e.target.value }))}
+            placeholder={meetingCategory === 'candidate_assessment' ? "Customer office address" : "Address or meeting room"}
+          />
 
           <Textarea
             label="Notes"
@@ -1901,9 +2047,9 @@ export function CustomersPage() {
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
-            <Button variant="secondary" onClick={() => setIsMeetingModalOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => { setIsMeetingModalOpen(false); setLockedMeetingContact(null); }}>Cancel</Button>
             <Button variant="success" onClick={handleSaveMeeting} isLoading={isSubmitting}>
-              Book Meeting
+              {meetingCategory === 'client_meeting' ? 'Book Meeting' : 'Schedule Assessment'}
             </Button>
           </div>
         </div>
