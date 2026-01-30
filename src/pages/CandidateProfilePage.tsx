@@ -85,11 +85,17 @@ const stageConfig: Record<InterviewStage, {
 
 const statusLabels: Record<string, string> = {
   new: 'New',
+  sourced: 'Sourced',
   screening: 'Screening',
   phone_qualification: 'Phone Qualification',
   technical_interview: 'Technical Interview',
   director_interview: 'Director Interview',
   offer: 'Offer',
+  offer_pending: 'Offer Pending Approval',
+  offer_approved: 'Offer Approved',
+  offer_rejected: 'Offer Rejected',
+  contract_sent: 'Contract Sent',
+  contract_signed: 'Contract Signed',
   hired: 'Hired',
   rejected: 'Rejected',
   withdrawn: 'Withdrawn',
@@ -206,6 +212,37 @@ export function CandidateProfilePage() {
   // Delete confirmation
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Edit candidate modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    location: '',
+    linkedin_url: '',
+    years_experience: '',
+    degree: '',
+    summary: '',
+    right_to_work: '',
+    security_vetting: '',
+    open_to_relocate: '',
+    minimum_salary_expected: '',
+    expected_day_rate: '',
+    notice_period: '',
+    contract_preference: '',
+    source: '',
+  });
+  const [editSkills, setEditSkills] = useState<string[]>([]);
+  const [editSkillInput, setEditSkillInput] = useState('');
+  const [editPreviousCompanies, setEditPreviousCompanies] = useState<string[]>([]);
+  const [editCompanyInput, setEditCompanyInput] = useState('');
+  const [editNationalities, setEditNationalities] = useState<string[]>([]);
+  const [editNationalityInput, setEditNationalityInput] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editValidationErrors, setEditValidationErrors] = useState<string[]>([]);
+  const [isEditShaking, setIsEditShaking] = useState(false);
   
   // Validation errors and shake animation
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -814,7 +851,33 @@ export function CandidateProfilePage() {
               <Button
                 variant="secondary"
                 leftIcon={<Edit className="h-4 w-4" />}
-                onClick={() => navigate(`/candidates/${id}/edit`)}
+                onClick={() => {
+                  // Populate form with current candidate data
+                  setEditForm({
+                    first_name: candidate?.first_name || '',
+                    last_name: candidate?.last_name || '',
+                    email: candidate?.email || '',
+                    phone: candidate?.phone || '',
+                    location: candidate?.location || '',
+                    linkedin_url: candidate?.linkedin_url || '',
+                    years_experience: candidate?.years_experience?.toString() || '',
+                    degree: candidate?.degree || '',
+                    summary: candidate?.summary || '',
+                    right_to_work: candidate?.right_to_work || '',
+                    security_vetting: candidate?.security_vetting || '',
+                    open_to_relocate: candidate?.open_to_relocate || '',
+                    minimum_salary_expected: candidate?.minimum_salary_expected?.toString() || '',
+                    expected_day_rate: candidate?.expected_day_rate?.toString() || '',
+                    notice_period: candidate?.notice_period || '',
+                    contract_preference: candidate?.contract_preference || '',
+                    source: candidate?.source || '',
+                  });
+                  setEditSkills(candidate?.skills || []);
+                  setEditPreviousCompanies(candidate?.previous_companies || []);
+                  setEditNationalities(candidate?.nationalities || []);
+                  setEditValidationErrors([]);
+                  setIsEditModalOpen(true);
+                }}
               >
                 Edit
               </Button>
@@ -2345,94 +2408,112 @@ export function CandidateProfilePage() {
             </p>
           </div>
 
-          {/* Document Uploads with Drag & Drop */}
+          {/* Document Uploads - Copied exactly from working CV upload */}
           <div className="grid grid-cols-2 gap-4">
             {/* ID Document */}
-            <div 
-              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors cursor-pointer ${
-                idDocumentFile 
-                  ? 'border-green-300 bg-green-50' 
-                  : isDraggingId 
-                    ? 'border-brand-cyan bg-brand-cyan/10' 
-                    : 'border-brand-grey-300 hover:border-brand-grey-400'
-              }`}
-              onDragOver={handleIdDragOver}
-              onDragLeave={handleIdDragLeave}
-              onDrop={handleIdDrop}
-            >
-              <Upload className={`h-8 w-8 mx-auto mb-2 ${idDocumentFile ? 'text-green-500' : isDraggingId ? 'text-brand-cyan' : 'text-brand-grey-400'}`} />
-              <p className="text-sm font-medium text-brand-slate-700">ID Document</p>
-              <p className="text-xs text-brand-grey-400 mb-2">Passport or British ID</p>
-              {idDocumentFile ? (
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-xs text-green-600 truncate max-w-[120px]">{idDocumentFile.name}</span>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setIdDocumentFile(null); }}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs text-brand-grey-400 mb-2">Drag & drop or</p>
-                  <label className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={(e) => e.target.files?.[0] && setIdDocumentFile(e.target.files[0])}
-                    />
-                    <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
-                      Browse
-                    </span>
-                  </label>
-                </>
-              )}
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+                ID Document
+              </label>
+              <div 
+                className={`
+                  border-2 border-dashed rounded-lg p-4 text-center transition-all
+                  ${isDraggingId 
+                    ? 'border-brand-cyan bg-brand-cyan/5' 
+                    : idDocumentFile 
+                      ? 'border-green-300 bg-green-50' 
+                      : 'border-brand-grey-200 hover:border-brand-cyan'
+                  }
+                `}
+                onDragOver={handleIdDragOver}
+                onDragLeave={handleIdDragLeave}
+                onDrop={handleIdDrop}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => setIdDocumentFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                  id="id-doc-upload"
+                />
+                <label htmlFor="id-doc-upload" className="cursor-pointer block">
+                  {idDocumentFile ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <FileText className="h-6 w-6 text-green-600" />
+                      <span className="text-sm font-medium text-brand-slate-900 truncate max-w-[100px]">{idDocumentFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIdDocumentFile(null); }}
+                        className="p-1 rounded-full hover:bg-red-100 text-brand-grey-400 hover:text-red-500 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={`${isDraggingId ? 'text-brand-cyan' : 'text-brand-grey-400'}`}>
+                      <Upload className={`h-8 w-8 mx-auto mb-1 ${isDraggingId ? 'text-brand-cyan' : 'text-brand-grey-300'}`} />
+                      <p className="text-sm font-medium">
+                        {isDraggingId ? 'Drop here' : 'Drag & drop'}
+                      </p>
+                      <p className="text-xs mt-1">or click to browse</p>
+                      <p className="text-xs mt-1 text-brand-grey-300">Passport or British ID</p>
+                    </div>
+                  )}
+                </label>
+              </div>
             </div>
-            
+
             {/* Right to Work Document */}
-            <div 
-              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors cursor-pointer ${
-                rtwDocumentFile 
-                  ? 'border-green-300 bg-green-50' 
-                  : isDraggingRtw 
-                    ? 'border-brand-cyan bg-brand-cyan/10' 
-                    : 'border-brand-grey-300 hover:border-brand-grey-400'
-              }`}
-              onDragOver={handleRtwDragOver}
-              onDragLeave={handleRtwDragLeave}
-              onDrop={handleRtwDrop}
-            >
-              <Upload className={`h-8 w-8 mx-auto mb-2 ${rtwDocumentFile ? 'text-green-500' : isDraggingRtw ? 'text-brand-cyan' : 'text-brand-grey-400'}`} />
-              <p className="text-sm font-medium text-brand-slate-700">Right to Work</p>
-              <p className="text-xs text-brand-grey-400 mb-2">If non-British nationality</p>
-              {rtwDocumentFile ? (
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-xs text-green-600 truncate max-w-[120px]">{rtwDocumentFile.name}</span>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setRtwDocumentFile(null); }}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs text-brand-grey-400 mb-2">Drag & drop or</p>
-                  <label className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={(e) => e.target.files?.[0] && setRtwDocumentFile(e.target.files[0])}
-                    />
-                    <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
-                      Browse
-                    </span>
-                  </label>
-                </>
-              )}
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+                Right to Work
+              </label>
+              <div 
+                className={`
+                  border-2 border-dashed rounded-lg p-4 text-center transition-all
+                  ${isDraggingRtw 
+                    ? 'border-brand-cyan bg-brand-cyan/5' 
+                    : rtwDocumentFile 
+                      ? 'border-green-300 bg-green-50' 
+                      : 'border-brand-grey-200 hover:border-brand-cyan'
+                  }
+                `}
+                onDragOver={handleRtwDragOver}
+                onDragLeave={handleRtwDragLeave}
+                onDrop={handleRtwDrop}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => setRtwDocumentFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                  id="rtw-doc-upload"
+                />
+                <label htmlFor="rtw-doc-upload" className="cursor-pointer block">
+                  {rtwDocumentFile ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <FileText className="h-6 w-6 text-green-600" />
+                      <span className="text-sm font-medium text-brand-slate-900 truncate max-w-[100px]">{rtwDocumentFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRtwDocumentFile(null); }}
+                        className="p-1 rounded-full hover:bg-red-100 text-brand-grey-400 hover:text-red-500 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={`${isDraggingRtw ? 'text-brand-cyan' : 'text-brand-grey-400'}`}>
+                      <Upload className={`h-8 w-8 mx-auto mb-1 ${isDraggingRtw ? 'text-brand-cyan' : 'text-brand-grey-300'}`} />
+                      <p className="text-sm font-medium">
+                        {isDraggingRtw ? 'Drop here' : 'Drag & drop'}
+                      </p>
+                      <p className="text-xs mt-1">or click to browse</p>
+                      <p className="text-xs mt-1 text-brand-grey-300">If non-British nationality</p>
+                    </div>
+                  )}
+                </label>
+              </div>
             </div>
           </div>
 
@@ -2511,9 +2592,13 @@ export function CandidateProfilePage() {
                     requested_by: user?.id,
                   });
                   
+                  // Update candidate status to offer_pending
+                  await candidatesService.update(id!, { status: 'offer_pending' });
+                  
                   toast.success('Offer Created', 'The offer has been submitted for approval');
                   setIsCreateOfferModalOpen(false);
                   loadOffers();
+                  loadData(); // Reload to show updated status
                 } catch (error: any) {
                   console.error('Error creating offer:', error);
                   toast.error('Error', error.message || 'Failed to create offer');
@@ -2541,6 +2626,384 @@ export function CandidateProfilePage() {
         variant="danger"
         isLoading={isDeleting}
       />
+
+      {/* Edit Candidate Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Candidate"
+        description={`Update details for ${candidate?.first_name} ${candidate?.last_name}`}
+        size="xl"
+        shake={isEditShaking}
+      >
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+          {/* Basic Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className={editValidationErrors.includes('first_name') ? 'validation-error rounded-lg' : ''}>
+              <Input
+                label="First Name *"
+                value={editForm.first_name}
+                onChange={(e) => setEditForm(prev => ({ ...prev, first_name: e.target.value }))}
+              />
+            </div>
+            <div className={editValidationErrors.includes('last_name') ? 'validation-error rounded-lg' : ''}>
+              <Input
+                label="Last Name *"
+                value={editForm.last_name}
+                onChange={(e) => setEditForm(prev => ({ ...prev, last_name: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Email"
+              type="email"
+              value={editForm.email}
+              onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+            />
+            <Input
+              label="Phone"
+              value={editForm.phone}
+              onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Location"
+              value={editForm.location}
+              onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))}
+            />
+            <Input
+              label="LinkedIn URL"
+              value={editForm.linkedin_url}
+              onChange={(e) => setEditForm(prev => ({ ...prev, linkedin_url: e.target.value }))}
+            />
+          </div>
+
+          <hr className="border-brand-grey-200" />
+
+          {/* Professional Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Years of Experience"
+              type="number"
+              value={editForm.years_experience}
+              onChange={(e) => setEditForm(prev => ({ ...prev, years_experience: e.target.value }))}
+            />
+            <Input
+              label="Degree / Qualification"
+              value={editForm.degree}
+              onChange={(e) => setEditForm(prev => ({ ...prev, degree: e.target.value }))}
+            />
+          </div>
+
+          <Textarea
+            label="Summary"
+            value={editForm.summary}
+            onChange={(e) => setEditForm(prev => ({ ...prev, summary: e.target.value }))}
+            rows={3}
+          />
+
+          {/* Skills */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Skills</label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Add skill and press Enter..."
+                value={editSkillInput}
+                onChange={(e) => setEditSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && editSkillInput.trim()) {
+                    e.preventDefault();
+                    if (!editSkills.includes(editSkillInput.trim())) {
+                      setEditSkills([...editSkills, editSkillInput.trim()]);
+                    }
+                    setEditSkillInput('');
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (editSkillInput.trim() && !editSkills.includes(editSkillInput.trim())) {
+                    setEditSkills([...editSkills, editSkillInput.trim()]);
+                    setEditSkillInput('');
+                  }
+                }}
+              >
+                Add
+              </Button>
+            </div>
+            {editSkills.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {editSkills.map((skill, idx) => (
+                  <Badge key={idx} variant="cyan">
+                    {skill}
+                    <button
+                      onClick={() => setEditSkills(editSkills.filter(s => s !== skill))}
+                      className="ml-1 hover:text-red-500"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Previous Companies */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Previous Companies</label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Add company and press Enter..."
+                value={editCompanyInput}
+                onChange={(e) => setEditCompanyInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && editCompanyInput.trim()) {
+                    e.preventDefault();
+                    if (!editPreviousCompanies.includes(editCompanyInput.trim())) {
+                      setEditPreviousCompanies([...editPreviousCompanies, editCompanyInput.trim()]);
+                    }
+                    setEditCompanyInput('');
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (editCompanyInput.trim() && !editPreviousCompanies.includes(editCompanyInput.trim())) {
+                    setEditPreviousCompanies([...editPreviousCompanies, editCompanyInput.trim()]);
+                    setEditCompanyInput('');
+                  }
+                }}
+              >
+                Add
+              </Button>
+            </div>
+            {editPreviousCompanies.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {editPreviousCompanies.map((company, idx) => (
+                  <Badge key={idx} variant="grey">
+                    {company}
+                    <button
+                      onClick={() => setEditPreviousCompanies(editPreviousCompanies.filter(c => c !== company))}
+                      className="ml-1 hover:text-red-500"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <hr className="border-brand-grey-200" />
+
+          {/* Compliance */}
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Right to Work"
+              options={[
+                { value: '', label: 'Not specified' },
+                { value: 'british_citizen', label: 'British Citizen' },
+                { value: 'settled_status', label: 'Settled Status' },
+                { value: 'pre_settled_status', label: 'Pre-settled Status' },
+                { value: 'skilled_worker_visa', label: 'Skilled Worker Visa' },
+                { value: 'graduate_visa', label: 'Graduate Visa' },
+                { value: 'other_visa', label: 'Other Visa' },
+                { value: 'requires_sponsorship', label: 'Requires Sponsorship' },
+              ]}
+              value={editForm.right_to_work}
+              onChange={(e) => setEditForm(prev => ({ ...prev, right_to_work: e.target.value }))}
+            />
+            <Select
+              label="Security Clearance"
+              options={[
+                { value: '', label: 'None' },
+                { value: 'bpss', label: 'BPSS' },
+                { value: 'ctc', label: 'CTC' },
+                { value: 'sc', label: 'SC' },
+                { value: 'esc', label: 'eSC' },
+                { value: 'dv', label: 'DV' },
+                { value: 'edv', label: 'eDV' },
+              ]}
+              value={editForm.security_vetting}
+              onChange={(e) => setEditForm(prev => ({ ...prev, security_vetting: e.target.value }))}
+            />
+          </div>
+
+          {/* Nationalities */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Nationalities</label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Add nationality..."
+                value={editNationalityInput}
+                onChange={(e) => setEditNationalityInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && editNationalityInput.trim()) {
+                    e.preventDefault();
+                    if (!editNationalities.includes(editNationalityInput.trim())) {
+                      setEditNationalities([...editNationalities, editNationalityInput.trim()]);
+                    }
+                    setEditNationalityInput('');
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (editNationalityInput.trim() && !editNationalities.includes(editNationalityInput.trim())) {
+                    setEditNationalities([...editNationalities, editNationalityInput.trim()]);
+                    setEditNationalityInput('');
+                  }
+                }}
+              >
+                Add
+              </Button>
+            </div>
+            {editNationalities.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {editNationalities.map((nationality, idx) => (
+                  <Badge key={idx} variant="purple">
+                    {nationality}
+                    <button
+                      onClick={() => setEditNationalities(editNationalities.filter(n => n !== nationality))}
+                      className="ml-1 hover:text-red-500"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <hr className="border-brand-grey-200" />
+
+          {/* Salary & Contract */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Minimum Salary Expected (£)"
+              type="number"
+              value={editForm.minimum_salary_expected}
+              onChange={(e) => setEditForm(prev => ({ ...prev, minimum_salary_expected: e.target.value }))}
+            />
+            <Input
+              label="Expected Day Rate (£)"
+              type="number"
+              value={editForm.expected_day_rate}
+              onChange={(e) => setEditForm(prev => ({ ...prev, expected_day_rate: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Notice Period"
+              options={[
+                { value: '', label: 'Not specified' },
+                { value: '1_week', label: '1 Week' },
+                { value: '2_weeks', label: '2 Weeks' },
+                { value: '1_month', label: '1 Month' },
+                { value: '2_months', label: '2 Months' },
+                { value: '3_months', label: '3 Months' },
+                { value: 'immediate', label: 'Immediate' },
+              ]}
+              value={editForm.notice_period}
+              onChange={(e) => setEditForm(prev => ({ ...prev, notice_period: e.target.value }))}
+            />
+            <Select
+              label="Contract Preference"
+              options={[
+                { value: '', label: 'Not specified' },
+                { value: 'permanent', label: 'Permanent' },
+                { value: 'contractor', label: 'Contractor' },
+                { value: 'open_to_both', label: 'Open to Both' },
+              ]}
+              value={editForm.contract_preference}
+              onChange={(e) => setEditForm(prev => ({ ...prev, contract_preference: e.target.value }))}
+            />
+          </div>
+
+          <Select
+            label="Open to Relocate"
+            options={[
+              { value: '', label: 'Not specified' },
+              { value: 'yes', label: 'Yes' },
+              { value: 'no', label: 'No' },
+              { value: 'maybe', label: 'Maybe / Depends' },
+            ]}
+            value={editForm.open_to_relocate}
+            onChange={(e) => setEditForm(prev => ({ ...prev, open_to_relocate: e.target.value }))}
+          />
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              isLoading={isSavingEdit}
+              onClick={async () => {
+                // Validate
+                const errors: string[] = [];
+                if (!editForm.first_name.trim()) errors.push('first_name');
+                if (!editForm.last_name.trim()) errors.push('last_name');
+                
+                if (errors.length > 0) {
+                  setEditValidationErrors(errors);
+                  setIsEditShaking(true);
+                  setTimeout(() => setIsEditShaking(false), 500);
+                  return;
+                }
+                
+                setIsSavingEdit(true);
+                try {
+                  await candidatesService.update(id!, {
+                    first_name: editForm.first_name,
+                    last_name: editForm.last_name,
+                    email: editForm.email || undefined,
+                    phone: editForm.phone || undefined,
+                    location: editForm.location || undefined,
+                    linkedin_url: editForm.linkedin_url || undefined,
+                    years_experience: editForm.years_experience ? parseInt(editForm.years_experience) : undefined,
+                    degree: editForm.degree || undefined,
+                    summary: editForm.summary || undefined,
+                    right_to_work: editForm.right_to_work || undefined,
+                    security_vetting: editForm.security_vetting || undefined,
+                    open_to_relocate: editForm.open_to_relocate || undefined,
+                    minimum_salary_expected: editForm.minimum_salary_expected ? parseFloat(editForm.minimum_salary_expected) : undefined,
+                    expected_day_rate: editForm.expected_day_rate ? parseFloat(editForm.expected_day_rate) : undefined,
+                    notice_period: editForm.notice_period || undefined,
+                    contract_preference: editForm.contract_preference || undefined,
+                    skills: editSkills.length > 0 ? editSkills : undefined,
+                    previous_companies: editPreviousCompanies.length > 0 ? editPreviousCompanies : undefined,
+                    nationalities: editNationalities.length > 0 ? editNationalities : undefined,
+                  });
+                  
+                  toast.success('Candidate Updated', 'Changes have been saved');
+                  setIsEditModalOpen(false);
+                  loadData();
+                } catch (error: any) {
+                  console.error('Error updating candidate:', error);
+                  toast.error('Error', error.message || 'Failed to update candidate');
+                } finally {
+                  setIsSavingEdit(false);
+                }
+              }}
+            >
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

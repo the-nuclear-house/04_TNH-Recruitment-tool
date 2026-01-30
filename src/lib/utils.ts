@@ -241,8 +241,11 @@ export function computeCandidatePipelineStatus(
   candidateStatus?: string
 ): { status: string; label: string; colour: string } {
   // Check if candidate has contract-related status
-  if (candidateStatus === 'contract_signed' || candidateStatus === 'active_consultant') {
-    return { status: 'active_consultant', label: 'Active Consultant', colour: 'bg-green-100 text-green-700' };
+  if (candidateStatus === 'converted_to_consultant') {
+    return { status: 'converted_to_consultant', label: 'Converted to Consultant', colour: 'bg-purple-100 text-purple-700' };
+  }
+  if (candidateStatus === 'contract_signed') {
+    return { status: 'contract_signed', label: 'Contract Signed', colour: 'bg-green-100 text-green-700' };
   }
   if (candidateStatus === 'contract_sent') {
     return { status: 'contract_sent', label: 'Contract Sent', colour: 'bg-blue-100 text-blue-700' };
@@ -252,6 +255,9 @@ export function computeCandidatePipelineStatus(
   }
   if (candidateStatus === 'offer_pending') {
     return { status: 'offer_pending', label: 'Offer Pending', colour: 'bg-amber-100 text-amber-700' };
+  }
+  if (candidateStatus === 'offer_rejected') {
+    return { status: 'offer_rejected', label: 'Offer Rejected', colour: 'bg-red-100 text-red-700' };
   }
   if (candidateStatus === 'rejected') {
     return { status: 'rejected', label: 'Rejected', colour: 'bg-red-100 text-red-700' };

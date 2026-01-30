@@ -101,6 +101,8 @@ export function ContractsPage() {
     setIsProcessing(true);
     try {
       await offersService.approve(selectedOffer.id, user!.id, approvalNotes);
+      // Update candidate status to offer_approved
+      await candidatesService.update(selectedOffer.candidate_id, { status: 'offer_approved' });
       toast.success('Offer Approved', 'The offer has been approved and sent to HR for contract processing');
       setIsApprovalModalOpen(false);
       setSelectedOffer(null);
@@ -119,6 +121,8 @@ export function ContractsPage() {
     setIsProcessing(true);
     try {
       await offersService.reject(selectedOffer.id, approvalNotes);
+      // Update candidate status back to director_interview (or a rejected status)
+      await candidatesService.update(selectedOffer.candidate_id, { status: 'offer_rejected' });
       toast.success('Offer Rejected', 'The offer has been rejected');
       setIsApprovalModalOpen(false);
       setSelectedOffer(null);
@@ -135,6 +139,8 @@ export function ContractsPage() {
   const handleMarkContractSent = async (offer: DbOffer) => {
     try {
       await offersService.markContractSent(offer.id, user!.id);
+      // Update candidate status to contract_sent
+      await candidatesService.update(offer.candidate_id, { status: 'contract_sent' });
       toast.success('Contract Sent', 'Contract has been marked as sent to candidate');
       loadData();
     } catch (error) {
@@ -146,7 +152,9 @@ export function ContractsPage() {
   const handleMarkContractSigned = async (offer: DbOffer) => {
     try {
       await offersService.markContractSigned(offer.id, user!.id);
-      toast.success('Contract Signed', 'Contract has been signed. Candidate is now an active consultant!');
+      // Update candidate status to contract_signed
+      await candidatesService.update(offer.candidate_id, { status: 'contract_signed' });
+      toast.success('Contract Signed', 'Contract has been signed. Ready to convert to consultant!');
       loadData();
     } catch (error) {
       console.error('Error marking contract signed:', error);
@@ -428,8 +436,26 @@ export function ContractsPage() {
                         size="sm"
                         onClick={() => navigate(`/candidates/${offer.candidate_id}`)}
                       >
-                        View Candidate
+                        View Candidate Profile
                       </Button>
+                      
+                      {offer.candidate?.status === 'converted_to_consultant' && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={async () => {
+                            // Find the consultant by candidate_id
+                            const consultant = await consultantsService.getByCandidateId(offer.candidate_id);
+                            if (consultant) {
+                              navigate(`/consultants/${consultant.id}`);
+                            } else {
+                              toast.error('Error', 'Consultant profile not found');
+                            }
+                          }}
+                        >
+                          View Consultant Profile
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
