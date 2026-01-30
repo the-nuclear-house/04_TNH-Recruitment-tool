@@ -1,6 +1,7 @@
 export { Button } from './Button';
 export { Input } from './Input';
 export { Select } from './Select';
+export { SearchableSelect } from './SearchableSelect';
 export { Textarea } from './Textarea';
 export { Badge, getStatusVariant } from './Badge';
 export { Avatar, AvatarGroup } from './Avatar';

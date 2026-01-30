@@ -6,6 +6,7 @@ import {
   Button,
   Input,
   Select,
+  SearchableSelect,
   Textarea,
   Modal,
   Badge,
@@ -1929,17 +1930,16 @@ export function CustomersPage() {
                 </div>
               </div>
             ) : (
-              <Select
+              <SearchableSelect
                 label="Contact *"
-                options={[
-                  { value: '', label: 'Select Contact' },
-                  ...contacts.map(c => ({ 
-                    value: c.id, 
-                    label: `${c.first_name} ${c.last_name}${c.role ? ` - ${c.role}` : ''}` 
-                  }))
-                ]}
+                placeholder="Type to search contacts..."
+                options={contacts.map(c => ({ 
+                  value: c.id, 
+                  label: `${c.first_name} ${c.last_name}`,
+                  sublabel: c.role || c.department || undefined
+                }))}
                 value={requirementForm.contact_id}
-                onChange={(e) => setRequirementForm(prev => ({ ...prev, contact_id: e.target.value }))}
+                onChange={(val) => setRequirementForm(prev => ({ ...prev, contact_id: val }))}
               />
             )}
           </div>

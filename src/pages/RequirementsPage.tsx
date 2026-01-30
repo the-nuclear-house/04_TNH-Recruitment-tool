@@ -11,6 +11,7 @@ import {
   Badge,
   EmptyState,
   Select,
+  SearchableSelect,
   Modal,
   Textarea,
 } from '@/components/ui';
@@ -263,17 +264,15 @@ export function RequirementsPage() {
     ...users.map(u => ({ value: u.id, label: u.full_name })),
   ];
 
-  // Group contacts by company for better UX
-  const contactOptions = [
-    { value: '', label: 'Select Contact *' },
-    ...allContacts.map(c => {
-      const companyName = c.company?.name || companies.find(co => co.id === c.company_id)?.name || '';
-      return { 
-        value: c.id, 
-        label: `${c.first_name} ${c.last_name}${c.role ? ` - ${c.role}` : ''} (${companyName})` 
-      };
-    }),
-  ];
+  // Format contacts for searchable select
+  const contactSearchOptions = allContacts.map(c => {
+    const companyName = c.company?.name || companies.find(co => co.id === c.company_id)?.name || '';
+    return { 
+      value: c.id, 
+      label: `${c.first_name} ${c.last_name}`,
+      sublabel: `${c.role ? c.role + ' - ' : ''}${companyName}`
+    };
+  });
 
   return (
     <div className="min-h-screen">
@@ -446,11 +445,12 @@ export function RequirementsPage() {
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Select
+            <SearchableSelect
               label="Contact *"
-              options={contactOptions}
+              placeholder="Type to search contacts..."
+              options={contactSearchOptions}
               value={formData.contact_id}
-              onChange={(e) => handleContactSelect(e.target.value)}
+              onChange={(val) => handleContactSelect(val)}
             />
             <Select
               label="Industry"
