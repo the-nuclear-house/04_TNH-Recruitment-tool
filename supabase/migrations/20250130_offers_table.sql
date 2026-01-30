@@ -10,11 +10,12 @@ CREATE TABLE IF NOT EXISTS offers (
   
   -- Offer details
   job_title TEXT NOT NULL,
-  salary_amount DECIMAL(12,2) NOT NULL,
+  salary_amount DECIMAL(12,2),
   salary_currency TEXT DEFAULT 'GBP',
   contract_type TEXT NOT NULL DEFAULT 'permanent', -- permanent, contract, fixed_term
   day_rate DECIMAL(10,2), -- For contractors
   start_date DATE NOT NULL,
+  end_date DATE, -- For fixed term contracts
   work_location TEXT,
   
   -- Candidate document details

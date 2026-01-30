@@ -50,6 +50,7 @@ export function ContractsPage() {
   // Approval modal
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<DbOffer | null>(null);
+  const [approvalAction, setApprovalAction] = useState<'approve' | 'reject' | null>(null);
   const [approvalNotes, setApprovalNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -356,6 +357,7 @@ export function ContractsPage() {
                             leftIcon={<ThumbsDown className="h-4 w-4" />}
                             onClick={() => {
                               setSelectedOffer(offer);
+                              setApprovalAction('reject');
                               setApprovalNotes('');
                               setIsApprovalModalOpen(true);
                             }}
@@ -368,6 +370,7 @@ export function ContractsPage() {
                             leftIcon={<ThumbsUp className="h-4 w-4" />}
                             onClick={() => {
                               setSelectedOffer(offer);
+                              setApprovalAction('approve');
                               setApprovalNotes('');
                               setIsApprovalModalOpen(true);
                             }}
@@ -418,8 +421,8 @@ export function ContractsPage() {
       {/* Approval Modal */}
       <Modal
         isOpen={isApprovalModalOpen}
-        onClose={() => setIsApprovalModalOpen(false)}
-        title="Review Offer"
+        onClose={() => { setIsApprovalModalOpen(false); setApprovalAction(null); }}
+        title={approvalAction === 'approve' ? 'Approve Offer' : 'Reject Offer'}
         size="md"
       >
         {selectedOffer && (
@@ -428,38 +431,47 @@ export function ContractsPage() {
               <h4 className="font-medium text-brand-slate-900">{selectedOffer.candidate_full_name}</h4>
               <p className="text-sm text-brand-grey-500">{selectedOffer.job_title}</p>
               <p className="text-sm text-brand-grey-500">
-                £{selectedOffer.salary_amount?.toLocaleString()} | Start: {formatDate(selectedOffer.start_date)}
+                {selectedOffer.contract_type === 'contract' && selectedOffer.day_rate
+                  ? `£${selectedOffer.day_rate}/day`
+                  : `£${selectedOffer.salary_amount?.toLocaleString()}`
+                } | Start: {formatDate(selectedOffer.start_date)}
               </p>
             </div>
             
             <Textarea
-              label="Notes (optional)"
+              label={approvalAction === 'reject' ? 'Reason for rejection' : 'Notes (optional)'}
               value={approvalNotes}
               onChange={(e) => setApprovalNotes(e.target.value)}
-              placeholder="Add any notes about this decision..."
+              placeholder={approvalAction === 'reject' 
+                ? 'Please provide a reason for rejecting this offer...' 
+                : 'Add any notes about this approval...'}
               rows={3}
             />
             
             <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
-              <Button variant="secondary" onClick={() => setIsApprovalModalOpen(false)}>
+              <Button variant="secondary" onClick={() => { setIsApprovalModalOpen(false); setApprovalAction(null); }}>
                 Cancel
               </Button>
-              <Button
-                variant="danger"
-                leftIcon={<ThumbsDown className="h-4 w-4" />}
-                onClick={handleReject}
-                isLoading={isProcessing}
-              >
-                Reject
-              </Button>
-              <Button
-                variant="success"
-                leftIcon={<ThumbsUp className="h-4 w-4" />}
-                onClick={handleApprove}
-                isLoading={isProcessing}
-              >
-                Approve
-              </Button>
+              {approvalAction === 'reject' && (
+                <Button
+                  variant="danger"
+                  leftIcon={<ThumbsDown className="h-4 w-4" />}
+                  onClick={handleReject}
+                  isLoading={isProcessing}
+                >
+                  Confirm Rejection
+                </Button>
+              )}
+              {approvalAction === 'approve' && (
+                <Button
+                  variant="success"
+                  leftIcon={<ThumbsUp className="h-4 w-4" />}
+                  onClick={handleApprove}
+                  isLoading={isProcessing}
+                >
+                  Confirm Approval
+                </Button>
+              )}
             </div>
           </div>
         )}

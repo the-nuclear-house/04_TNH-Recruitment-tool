@@ -285,11 +285,14 @@ export function CandidateProfilePage() {
     contract_type: 'permanent',
     day_rate: '',
     start_date: '',
+    end_date: '',
     work_location: '',
     candidate_full_name: '',
     candidate_address: '',
     notes: '',
   });
+  const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null);
+  const [rtwDocumentFile, setRtwDocumentFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -1048,11 +1051,14 @@ export function CandidateProfilePage() {
                             contract_type: candidate?.contract_preference === 'contractor' ? 'contract' : 'permanent',
                             day_rate: candidate?.expected_day_rate || '',
                             start_date: '',
+                            end_date: '',
                             work_location: linkedRequirements[0]?.requirement?.location || candidate?.location || '',
                             candidate_full_name: `${candidate?.first_name} ${candidate?.last_name}`,
                             candidate_address: '',
                             notes: '',
                           });
+                          setIdDocumentFile(null);
+                          setRtwDocumentFile(null);
                           setIsCreateOfferModalOpen(true);
                         }}
                       >
@@ -1135,17 +1141,25 @@ export function CandidateProfilePage() {
                       
                       {/* Approval info */}
                       {activeOffer.status === 'pending_approval' && (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div 
+                          className="p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors"
+                          onClick={() => navigate('/contracts')}
+                        >
                           <p className="text-sm text-amber-700">
-                            Awaiting approval from {activeOffer.approver?.full_name || 'Director'}
+                            Awaiting approval from {activeOffer.approver?.full_name || 'Director'}.{' '}
+                            <span className="underline font-medium">View in Contracts →</span>
                           </p>
                         </div>
                       )}
                       
                       {activeOffer.status === 'approved' && (
-                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div 
+                          className="p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 transition-colors"
+                          onClick={() => navigate('/contracts')}
+                        >
                           <p className="text-sm text-green-700">
-                            Approved on {formatDate(activeOffer.approved_at || '')}. HR to send contract.
+                            Approved on {formatDate(activeOffer.approved_at || '')}. HR to send contract.{' '}
+                            <span className="underline font-medium">View in Contracts →</span>
                           </p>
                         </div>
                       )}
@@ -2109,34 +2123,41 @@ export function CandidateProfilePage() {
             />
           </div>
 
-          {/* Salary */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Salary/Rate based on contract type */}
+          {offerForm.contract_type === 'contract' ? (
             <Input
-              label={offerForm.contract_type === 'contract' ? 'Annual Equivalent (£) *' : 'Annual Salary (£) *'}
+              label="Day Rate (£) *"
+              type="number"
+              value={offerForm.day_rate}
+              onChange={(e) => setOfferForm(prev => ({ ...prev, day_rate: e.target.value }))}
+              placeholder="e.g., 500"
+            />
+          ) : (
+            <Input
+              label="Annual Salary (£) *"
               type="number"
               value={offerForm.salary_amount}
               onChange={(e) => setOfferForm(prev => ({ ...prev, salary_amount: e.target.value }))}
               placeholder="e.g., 70000"
             />
-            {offerForm.contract_type === 'contract' && (
-              <Input
-                label="Day Rate (£)"
-                type="number"
-                value={offerForm.day_rate}
-                onChange={(e) => setOfferForm(prev => ({ ...prev, day_rate: e.target.value }))}
-                placeholder="e.g., 500"
-              />
-            )}
-          </div>
+          )}
 
-          {/* Start Date & Location */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Start Date, End Date (for fixed term), & Location */}
+          <div className={`grid gap-4 ${offerForm.contract_type === 'fixed_term' ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <Input
               label="Start Date *"
               type="date"
               value={offerForm.start_date}
               onChange={(e) => setOfferForm(prev => ({ ...prev, start_date: e.target.value }))}
             />
+            {offerForm.contract_type === 'fixed_term' && (
+              <Input
+                label="End Date *"
+                type="date"
+                value={offerForm.end_date}
+                onChange={(e) => setOfferForm(prev => ({ ...prev, end_date: e.target.value }))}
+              />
+            )}
             <Input
               label="Work Location"
               value={offerForm.work_location}
@@ -2175,23 +2196,63 @@ export function CandidateProfilePage() {
             </p>
           </div>
 
-          {/* Document Uploads - Placeholder for now */}
+          {/* Document Uploads */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 border-2 border-dashed border-brand-grey-300 rounded-lg text-center">
-              <Upload className="h-8 w-8 mx-auto text-brand-grey-400 mb-2" />
+            <div className={`p-4 border-2 border-dashed rounded-lg text-center ${idDocumentFile ? 'border-green-300 bg-green-50' : 'border-brand-grey-300'}`}>
+              <Upload className={`h-8 w-8 mx-auto mb-2 ${idDocumentFile ? 'text-green-500' : 'text-brand-grey-400'}`} />
               <p className="text-sm text-brand-grey-500">ID Document</p>
-              <p className="text-xs text-brand-grey-400">Passport or British ID</p>
-              <Button variant="secondary" size="sm" className="mt-2" disabled>
-                Upload (Coming Soon)
-              </Button>
+              <p className="text-xs text-brand-grey-400 mb-2">Passport or British ID</p>
+              {idDocumentFile ? (
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xs text-green-600 truncate max-w-[120px]">{idDocumentFile.name}</span>
+                  <button 
+                    onClick={() => setIdDocumentFile(null)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && setIdDocumentFile(e.target.files[0])}
+                  />
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
+                    <Upload className="h-3.5 w-3.5" /> Upload
+                  </span>
+                </label>
+              )}
             </div>
-            <div className="p-4 border-2 border-dashed border-brand-grey-300 rounded-lg text-center">
-              <Upload className="h-8 w-8 mx-auto text-brand-grey-400 mb-2" />
+            <div className={`p-4 border-2 border-dashed rounded-lg text-center ${rtwDocumentFile ? 'border-green-300 bg-green-50' : 'border-brand-grey-300'}`}>
+              <Upload className={`h-8 w-8 mx-auto mb-2 ${rtwDocumentFile ? 'text-green-500' : 'text-brand-grey-400'}`} />
               <p className="text-sm text-brand-grey-500">Right to Work</p>
-              <p className="text-xs text-brand-grey-400">If non-British</p>
-              <Button variant="secondary" size="sm" className="mt-2" disabled>
-                Upload (Coming Soon)
-              </Button>
+              <p className="text-xs text-brand-grey-400 mb-2">If non-British nationality</p>
+              {rtwDocumentFile ? (
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xs text-green-600 truncate max-w-[120px]">{rtwDocumentFile.name}</span>
+                  <button 
+                    onClick={() => setRtwDocumentFile(null)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && setRtwDocumentFile(e.target.files[0])}
+                  />
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
+                    <Upload className="h-3.5 w-3.5" /> Upload
+                  </span>
+                </label>
+              )}
             </div>
           </div>
 
@@ -2211,8 +2272,27 @@ export function CandidateProfilePage() {
               variant="primary"
               leftIcon={<Gift className="h-4 w-4" />}
               onClick={async () => {
-                if (!offerForm.job_title || !offerForm.salary_amount || !offerForm.start_date || !offerForm.candidate_full_name) {
+                // Validate based on contract type
+                const isContract = offerForm.contract_type === 'contract';
+                const isFixedTerm = offerForm.contract_type === 'fixed_term';
+                
+                if (!offerForm.job_title || !offerForm.start_date || !offerForm.candidate_full_name) {
                   toast.error('Validation Error', 'Please fill in all required fields');
+                  return;
+                }
+                
+                if (isContract && !offerForm.day_rate) {
+                  toast.error('Validation Error', 'Please enter a day rate');
+                  return;
+                }
+                
+                if (!isContract && !offerForm.salary_amount) {
+                  toast.error('Validation Error', 'Please enter a salary');
+                  return;
+                }
+                
+                if (isFixedTerm && !offerForm.end_date) {
+                  toast.error('Validation Error', 'Please enter an end date for fixed term contract');
                   return;
                 }
                 
@@ -2240,10 +2320,11 @@ export function CandidateProfilePage() {
                     candidate_id: id!,
                     requirement_id: linkedRequirements[0]?.requirement_id,
                     job_title: offerForm.job_title,
-                    salary_amount: parseFloat(offerForm.salary_amount),
+                    salary_amount: offerForm.salary_amount ? parseFloat(offerForm.salary_amount) : undefined,
                     contract_type: offerForm.contract_type,
                     day_rate: offerForm.day_rate ? parseFloat(offerForm.day_rate) : undefined,
                     start_date: offerForm.start_date,
+                    end_date: offerForm.end_date || undefined,
                     work_location: offerForm.work_location,
                     candidate_full_name: offerForm.candidate_full_name,
                     candidate_address: offerForm.candidate_address,

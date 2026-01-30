@@ -1617,11 +1617,12 @@ export interface DbOffer {
   candidate_id: string;
   requirement_id: string | null;
   job_title: string;
-  salary_amount: number;
+  salary_amount: number | null;
   salary_currency: string;
   contract_type: string;
   day_rate: number | null;
   start_date: string;
+  end_date: string | null;
   work_location: string | null;
   candidate_full_name: string;
   candidate_address: string | null;
@@ -1652,11 +1653,12 @@ export interface CreateOfferInput {
   candidate_id: string;
   requirement_id?: string;
   job_title: string;
-  salary_amount: number;
+  salary_amount?: number;
   salary_currency?: string;
   contract_type: string;
   day_rate?: number;
   start_date: string;
+  end_date?: string;
   work_location?: string;
   candidate_full_name: string;
   candidate_address?: string;
