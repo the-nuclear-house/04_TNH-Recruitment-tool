@@ -163,8 +163,14 @@ export interface DbRequirement {
   status: string;
   manager_id: string | null;
   created_by: string | null;
+  // Customer module fields
+  company_id: string | null;
+  contact_id: string | null;
   created_at: string;
   updated_at: string;
+  // Joined
+  company?: DbCompany;
+  contact?: DbContact;
 }
 
 export interface CreateRequirementInput {
@@ -180,6 +186,9 @@ export interface CreateRequirementInput {
   status?: string;
   manager_id?: string;
   created_by?: string;
+  // Customer module fields
+  company_id?: string;
+  contact_id?: string;
 }
 
 export const requirementsService = {
@@ -266,6 +275,37 @@ export const requirementsService = {
       .from('requirements')
       .select('*')
       .eq('manager_id', managerId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get by company (single company)
+  async getByCompany(companyId: string): Promise<DbRequirement[]> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .select(`
+        *,
+        contact:contact_id(id, first_name, last_name)
+      `)
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get by multiple companies (for parent + subsidiaries)
+  async getByCompanies(companyIds: string[]): Promise<DbRequirement[]> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .select(`
+        *,
+        company:company_id(id, name),
+        contact:contact_id(id, first_name, last_name)
+      `)
+      .in('company_id', companyIds)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -957,10 +997,15 @@ export interface DbContact {
   is_primary_contact: boolean;
   is_active: boolean;
   notes: string | null;
+  // Org chart fields
+  role: string | null;
+  reports_to_id: string | null;
   created_at: string;
   updated_at: string;
   // Joined
   company?: DbCompany;
+  reports_to?: DbContact;
+  direct_reports?: DbContact[];
 }
 
 export interface CreateContactInput {
@@ -975,6 +1020,9 @@ export interface CreateContactInput {
   linkedin_url?: string;
   is_primary_contact?: boolean;
   notes?: string;
+  // Org chart fields
+  role?: string;
+  reports_to_id?: string;
 }
 
 export const contactsService = {
@@ -995,7 +1043,10 @@ export const contactsService = {
   async getByCompany(companyId: string): Promise<DbContact[]> {
     const { data, error } = await supabase
       .from('contacts')
-      .select('*')
+      .select(`
+        *,
+        reports_to:reports_to_id(id, first_name, last_name, role, job_title)
+      `)
       .eq('company_id', companyId)
       .eq('is_active', true)
       .order('is_primary_contact', { ascending: false })
