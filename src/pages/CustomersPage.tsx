@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/layout';
-import { 
-  Card, 
-  Button, 
-  Input, 
+import {
+  Card,
+  Button,
+  Input,
   Select,
   Textarea,
   Modal,
@@ -12,12 +12,13 @@ import {
   Avatar,
   ConfirmDialog,
 } from '@/components/ui';
-import { 
-  Plus, 
-  Building2, 
-  Users, 
+import {
+  Plus,
+  Building2,
+  Users,
   Search,
   ChevronRight,
+  ChevronDown,
   MapPin,
   Phone,
   Mail,
@@ -30,16 +31,22 @@ import {
   ExternalLink,
   Clock,
   FileText,
+  GitBranch,
+  FolderTree,
+  Network,
 } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { 
-  companiesService, 
-  contactsService, 
+import { usePermissions } from '@/hooks/usePermissions';
+import {
+  companiesService,
+  contactsService,
   customerMeetingsService,
-  type DbCompany, 
+  requirementsService,
+  type DbCompany,
   type DbContact,
   type DbCustomerMeeting,
+  type DbRequirement,
 } from '@/lib/services';
 
 const industryOptions = [
@@ -86,21 +93,29 @@ const statusColours: Record<string, string> = {
   former: 'bg-red-100 text-red-800',
 };
 
+type TabType = 'contacts' | 'org-chart' | 'locations' | 'requirements';
+
 export function CustomersPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { isAdmin } = usePermissions();
   const toast = useToast();
-  
+
   // Data
   const [companies, setCompanies] = useState<DbCompany[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<DbCompany | null>(null);
+  const [selectedContact, setSelectedContact] = useState<DbContact | null>(null);
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [meetings, setMeetings] = useState<DbCustomerMeeting[]>([]);
+  const [requirements, setRequirements] = useState<DbRequirement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Search
-  const [searchQuery, setSearchQuery] = useState('');
-  
+
+  // UI State
+  const [activeTab, setActiveTab] = useState<TabType>('contacts');
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [contactSearch, setContactSearch] = useState('');
+
   // Company modal
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isEditingCompany, setIsEditingCompany] = useState(false);
@@ -122,7 +137,7 @@ export function CustomersPage() {
     status: 'prospect',
     notes: '',
   });
-  
+
   // Contact modal
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -138,8 +153,10 @@ export function CustomersPage() {
     linkedin_url: '',
     is_primary_contact: false,
     notes: '',
+    role: '',
+    reports_to_id: '',
   });
-  
+
   // Meeting modal
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [meetingForm, setMeetingForm] = useState({
@@ -152,11 +169,15 @@ export function CustomersPage() {
     location: '',
     notes: '',
   });
-  
+
+  // Contact detail modal
+  const [isContactDetailOpen, setIsContactDetailOpen] = useState(false);
+  const [contactMeetings, setContactMeetings] = useState<DbCustomerMeeting[]>([]);
+
   // Delete confirmation
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'company' | 'contact'; item: any } | null>(null);
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadCompanies = async () => {
@@ -181,8 +202,48 @@ export function CustomersPage() {
       setSelectedCompany(company);
       setContacts(companyContacts);
       setMeetings(companyMeetings);
+      setSelectedContact(null);
+
+      // Load requirements based on whether this is a parent or subcompany
+      await loadRequirements(company);
     } catch (error) {
       console.error('Error loading company details:', error);
+    }
+  };
+
+  const loadRequirements = async (company: DbCompany | null) => {
+    if (!company) return;
+
+    try {
+      // If this is a parent company, get requirements from all subsidiaries too
+      if (!company.parent_company_id) {
+        const subsidiaryIds = companies
+          .filter(c => c.parent_company_id === company.id)
+          .map(c => c.id);
+        const allCompanyIds = [company.id, ...subsidiaryIds];
+        const reqs = await requirementsService.getByCompanies(allCompanyIds);
+        setRequirements(reqs);
+      } else {
+        // Subcompany - only show its own requirements
+        const reqs = await requirementsService.getByCompany(company.id);
+        setRequirements(reqs);
+      }
+    } catch (error) {
+      console.error('Error loading requirements:', error);
+    }
+  };
+
+  const loadContactDetails = async (contact: DbContact) => {
+    setSelectedContact(contact);
+    setIsContactDetailOpen(true);
+
+    // Load meetings for this specific contact
+    try {
+      const allMeetings = await customerMeetingsService.getByCompany(contact.company_id);
+      const contactMeetings = allMeetings.filter(m => m.contact_id === contact.id);
+      setContactMeetings(contactMeetings);
+    } catch (error) {
+      console.error('Error loading contact meetings:', error);
     }
   };
 
@@ -190,21 +251,58 @@ export function CustomersPage() {
     loadCompanies();
   }, []);
 
+  // Re-load requirements when companies change (for subsidiary count)
+  useEffect(() => {
+    if (selectedCompany) {
+      loadRequirements(selectedCompany);
+    }
+  }, [companies]);
+
   // Filter companies by search
-  const filteredCompanies = companies.filter(c => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
+  const filteredCompanies = useMemo(() => {
+    if (!sidebarSearch) return companies;
+    const query = sidebarSearch.toLowerCase();
+    return companies.filter(c =>
       c.name.toLowerCase().includes(query) ||
       c.trading_name?.toLowerCase().includes(query) ||
-      c.city?.toLowerCase().includes(query) ||
-      c.industry?.toLowerCase().includes(query)
+      c.city?.toLowerCase().includes(query)
     );
-  });
+  }, [companies, sidebarSearch]);
 
-  // Separate parent companies and subsidiaries
-  const parentCompanies = filteredCompanies.filter(c => !c.parent_company_id);
-  const getSubsidiaries = (parentId: string) => filteredCompanies.filter(c => c.parent_company_id === parentId);
+  // Separate parent companies and get subsidiaries
+  const parentCompanies = useMemo(() =>
+    filteredCompanies.filter(c => !c.parent_company_id),
+    [filteredCompanies]
+  );
+
+  const getSubsidiaries = (parentId: string) =>
+    filteredCompanies.filter(c => c.parent_company_id === parentId);
+
+  // Filter contacts by search
+  const filteredContacts = useMemo(() => {
+    if (!contactSearch) return contacts;
+    const query = contactSearch.toLowerCase();
+    return contacts.filter(c =>
+      c.first_name.toLowerCase().includes(query) ||
+      c.last_name.toLowerCase().includes(query) ||
+      c.job_title?.toLowerCase().includes(query) ||
+      c.role?.toLowerCase().includes(query) ||
+      c.email?.toLowerCase().includes(query)
+    );
+  }, [contacts, contactSearch]);
+
+  // Toggle company expansion in sidebar
+  const toggleCompanyExpanded = (companyId: string) => {
+    setExpandedCompanies(prev => {
+      const next = new Set(prev);
+      if (next.has(companyId)) {
+        next.delete(companyId);
+      } else {
+        next.add(companyId);
+      }
+      return next;
+    });
+  };
 
   // Company handlers
   const handleOpenAddCompany = (parentId?: string) => {
@@ -270,6 +368,7 @@ export function CustomersPage() {
         const newCompany = await companiesService.create(companyForm);
         toast.success('Company Created', `${companyForm.name} has been added`);
         setSelectedCompany(newCompany);
+        loadCompanyDetails(newCompany.id);
       }
       setIsCompanyModalOpen(false);
       loadCompanies();
@@ -296,6 +395,8 @@ export function CustomersPage() {
       linkedin_url: '',
       is_primary_contact: false,
       notes: '',
+      role: '',
+      reports_to_id: '',
     });
     setIsContactModalOpen(true);
   };
@@ -314,6 +415,8 @@ export function CustomersPage() {
       linkedin_url: contact.linkedin_url || '',
       is_primary_contact: contact.is_primary_contact,
       notes: contact.notes || '',
+      role: contact.role || '',
+      reports_to_id: contact.reports_to_id || '',
     });
     setIsContactModalOpen(true);
   };
@@ -327,14 +430,17 @@ export function CustomersPage() {
 
     setIsSubmitting(true);
     try {
+      const inputData = {
+        ...contactForm,
+        company_id: selectedCompany.id,
+        reports_to_id: contactForm.reports_to_id || undefined,
+      };
+
       if (isEditingContact && editingContactId) {
-        await contactsService.update(editingContactId, contactForm);
+        await contactsService.update(editingContactId, inputData);
         toast.success('Contact Updated', 'Contact details have been saved');
       } else {
-        await contactsService.create({
-          ...contactForm,
-          company_id: selectedCompany.id,
-        });
+        await contactsService.create(inputData);
         toast.success('Contact Added', `${contactForm.first_name} ${contactForm.last_name} has been added`);
       }
       setIsContactModalOpen(false);
@@ -347,10 +453,10 @@ export function CustomersPage() {
     }
   };
 
-  // Meeting handlers
-  const handleOpenAddMeeting = () => {
+  // Meeting handlers - now from contact level
+  const handleOpenAddMeeting = (contact?: DbContact) => {
     setMeetingForm({
-      contact_id: '',
+      contact_id: contact?.id || selectedContact?.id || '',
       meeting_type: 'call',
       subject: '',
       scheduled_at: '',
@@ -388,6 +494,11 @@ export function CustomersPage() {
       toast.success('Meeting Scheduled', 'Meeting has been added');
       setIsMeetingModalOpen(false);
       loadCompanyDetails(selectedCompany.id);
+
+      // Refresh contact meetings if viewing contact detail
+      if (selectedContact) {
+        loadContactDetails(selectedContact);
+      }
     } catch (error: any) {
       console.error('Error saving meeting:', error);
       toast.error('Error', error.message || 'Failed to save meeting');
@@ -398,6 +509,11 @@ export function CustomersPage() {
 
   // Delete handlers
   const handleDeleteClick = (type: 'company' | 'contact', item: any) => {
+    // Only admin can delete companies
+    if (type === 'company' && !isAdmin) {
+      toast.error('Permission Denied', 'Only administrators can delete companies');
+      return;
+    }
     setDeleteTarget({ type, item });
     setIsDeleteDialogOpen(true);
   };
@@ -418,6 +534,8 @@ export function CustomersPage() {
         if (selectedCompany) {
           loadCompanyDetails(selectedCompany.id);
         }
+        setIsContactDetailOpen(false);
+        setSelectedContact(null);
       }
       setIsDeleteDialogOpen(false);
       setDeleteTarget(null);
@@ -429,19 +547,97 @@ export function CustomersPage() {
     }
   };
 
-  const handleCreateRequirement = () => {
+  const handleCreateRequirement = (contact?: DbContact) => {
     if (selectedCompany) {
-      navigate(`/requirements/new?company_id=${selectedCompany.id}&company_name=${encodeURIComponent(selectedCompany.name)}`);
+      let url = `/requirements/new?company_id=${selectedCompany.id}&company_name=${encodeURIComponent(selectedCompany.name)}`;
+      if (contact) {
+        url += `&contact_id=${contact.id}&contact_name=${encodeURIComponent(`${contact.first_name} ${contact.last_name}`)}`;
+      }
+      navigate(url);
     }
   };
 
+  // Build org chart tree
+  const buildOrgChart = () => {
+    // Find contacts with no reports_to (top level)
+    const topLevel = contacts.filter(c => !c.reports_to_id);
+
+    const getDirectReports = (contactId: string): DbContact[] => {
+      return contacts.filter(c => c.reports_to_id === contactId);
+    };
+
+    const renderOrgNode = (contact: DbContact, level: number = 0): JSX.Element => {
+      const directReports = getDirectReports(contact.id);
+
+      return (
+        <div key={contact.id} className="flex flex-col items-center">
+          <div
+            className="bg-white border border-brand-grey-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer min-w-[200px]"
+            onClick={() => loadContactDetails(contact)}
+          >
+            <div className="flex items-center gap-3">
+              <Avatar name={`${contact.first_name} ${contact.last_name}`} size="md" />
+              <div>
+                <p className="font-medium text-brand-slate-900">
+                  {contact.first_name} {contact.last_name}
+                </p>
+                <p className="text-sm text-brand-cyan">{contact.role || contact.job_title || 'No role'}</p>
+              </div>
+            </div>
+          </div>
+
+          {directReports.length > 0 && (
+            <>
+              <div className="w-px h-6 bg-brand-grey-300" />
+              <div className="flex gap-8">
+                {directReports.length > 1 && (
+                  <div className="absolute h-px bg-brand-grey-300" style={{ width: `${(directReports.length - 1) * 240}px` }} />
+                )}
+                {directReports.map(report => (
+                  <div key={report.id} className="flex flex-col items-center">
+                    <div className="w-px h-6 bg-brand-grey-300" />
+                    {renderOrgNode(report, level + 1)}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    };
+
+    if (topLevel.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <Network className="h-12 w-12 mx-auto text-brand-grey-300 mb-4" />
+          <p className="text-brand-grey-500">No org chart data yet</p>
+          <p className="text-sm text-brand-grey-400 mt-1">Add contacts with roles and direct reports to build the org chart</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex justify-center gap-12 overflow-x-auto py-8">
+        {topLevel.map(contact => renderOrgNode(contact))}
+      </div>
+    );
+  };
+
+  // Tabs configuration
+  const tabs = [
+    { id: 'contacts' as TabType, label: 'Contacts', icon: Users, count: contacts.length },
+    { id: 'org-chart' as TabType, label: 'Org Chart', icon: Network },
+    { id: 'locations' as TabType, label: 'Locations & Subcompanies', icon: FolderTree, count: selectedCompany?.subsidiaries?.length || getSubsidiaries(selectedCompany?.id || '').length },
+    { id: 'requirements' as TabType, label: 'Requirements', icon: Briefcase, count: requirements.length },
+  ];
+
   return (
     <div className="min-h-screen">
-      <Header 
+      <Header
         title="Customers"
         subtitle="Manage companies and contacts"
         actions={
-          <Button 
+          <Button
             variant="success"
             leftIcon={<Plus className="h-4 w-4" />}
             onClick={() => handleOpenAddCompany()}
@@ -450,9 +646,9 @@ export function CustomersPage() {
           </Button>
         }
       />
-      
+
       <div className="flex h-[calc(100vh-80px)]">
-        {/* Left Sidebar - Company List */}
+        {/* Left Sidebar - Company List (Collapsible) */}
         <div className="w-80 border-r border-brand-grey-200 bg-white flex flex-col">
           {/* Search */}
           <div className="p-4 border-b border-brand-grey-200">
@@ -461,13 +657,13 @@ export function CustomersPage() {
               <input
                 type="text"
                 placeholder="Search companies..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={sidebarSearch}
+                onChange={(e) => setSidebarSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 rounded-lg border border-brand-grey-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 focus:border-brand-cyan"
               />
             </div>
           </div>
-          
+
           {/* Company Tree */}
           <div className="flex-1 overflow-y-auto p-2">
             {isLoading ? (
@@ -479,56 +675,80 @@ export function CustomersPage() {
               </div>
             ) : (
               <div className="space-y-1">
-                {parentCompanies.map(company => (
-                  <div key={company.id}>
-                    {/* Parent Company */}
-                    <button
-                      onClick={() => loadCompanyDetails(company.id)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors flex items-center gap-3 ${
-                        selectedCompany?.id === company.id 
-                          ? 'bg-brand-cyan/10 text-brand-cyan' 
-                          : 'hover:bg-brand-grey-100'
-                      }`}
-                    >
-                      <Building2 className="h-5 w-5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{company.name}</p>
-                        {company.city && (
-                          <p className="text-xs text-brand-grey-400 truncate">{company.city}</p>
+                {parentCompanies.map(company => {
+                  const subsidiaries = getSubsidiaries(company.id);
+                  const hasSubsidiaries = subsidiaries.length > 0;
+                  const isExpanded = expandedCompanies.has(company.id);
+
+                  return (
+                    <div key={company.id}>
+                      {/* Parent Company */}
+                      <div className="flex items-center">
+                        {hasSubsidiaries && (
+                          <button
+                            onClick={() => toggleCompanyExpanded(company.id)}
+                            className="p-1 hover:bg-brand-grey-100 rounded"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-brand-grey-400" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-brand-grey-400" />
+                            )}
+                          </button>
                         )}
+                        <button
+                          onClick={() => loadCompanyDetails(company.id)}
+                          className={`flex-1 text-left p-3 rounded-lg transition-colors flex items-center gap-3 ${
+                            selectedCompany?.id === company.id
+                              ? 'bg-brand-cyan/10 text-brand-cyan'
+                              : 'hover:bg-brand-grey-100'
+                          } ${!hasSubsidiaries ? 'ml-6' : ''}`}
+                        >
+                          <Building2 className="h-5 w-5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{company.name}</p>
+                            {company.city && (
+                              <p className="text-xs text-brand-grey-400 truncate">{company.city}</p>
+                            )}
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${statusColours[company.status]}`}>
+                            {company.status}
+                          </span>
+                        </button>
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusColours[company.status]}`}>
-                        {company.status}
-                      </span>
-                    </button>
-                    
-                    {/* Subsidiaries */}
-                    {getSubsidiaries(company.id).map(sub => (
-                      <button
-                        key={sub.id}
-                        onClick={() => loadCompanyDetails(sub.id)}
-                        className={`w-full text-left p-3 pl-10 rounded-lg transition-colors flex items-center gap-3 ${
-                          selectedCompany?.id === sub.id 
-                            ? 'bg-brand-cyan/10 text-brand-cyan' 
-                            : 'hover:bg-brand-grey-100'
-                        }`}
-                      >
-                        <ChevronRight className="h-4 w-4 flex-shrink-0 text-brand-grey-300" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{sub.name}</p>
-                          {sub.city && (
-                            <p className="text-xs text-brand-grey-400 truncate">{sub.city}</p>
-                          )}
+
+                      {/* Subsidiaries (Collapsible) */}
+                      {hasSubsidiaries && isExpanded && (
+                        <div className="ml-6 border-l-2 border-brand-grey-200 pl-2">
+                          {subsidiaries.map(sub => (
+                            <button
+                              key={sub.id}
+                              onClick={() => loadCompanyDetails(sub.id)}
+                              className={`w-full text-left p-3 rounded-lg transition-colors flex items-center gap-3 ${
+                                selectedCompany?.id === sub.id
+                                  ? 'bg-brand-cyan/10 text-brand-cyan'
+                                  : 'hover:bg-brand-grey-100'
+                              }`}
+                            >
+                              <MapPin className="h-4 w-4 flex-shrink-0 text-brand-grey-400" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{sub.name}</p>
+                                {sub.city && (
+                                  <p className="text-xs text-brand-grey-400 truncate">{sub.city}</p>
+                                )}
+                              </div>
+                            </button>
+                          ))}
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
-        
+
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto bg-brand-grey-50">
           {selectedCompany ? (
@@ -559,20 +779,27 @@ export function CustomersPage() {
                         {selectedCompany.companies_house_number && (
                           <span className="text-sm text-white/50">#{selectedCompany.companies_house_number}</span>
                         )}
+                        {selectedCompany.parent_company_id && (
+                          <Badge variant="cyan">
+                            Subcompany
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2">
                     <Button variant="secondary" size="sm" onClick={handleEditCompany}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={() => handleDeleteClick('company', selectedCompany)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {isAdmin && (
+                      <Button variant="secondary" size="sm" onClick={() => handleDeleteClick('company', selectedCompany)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
-                
+
                 {/* Quick Info Row */}
                 <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
                   {selectedCompany.main_phone && (
@@ -603,185 +830,268 @@ export function CustomersPage() {
                   )}
                 </div>
               </div>
-              
-              {/* Action Buttons */}
+
+              {/* Action Buttons - Company level */}
               <div className="flex gap-3">
-                <Button variant="success" leftIcon={<Briefcase className="h-4 w-4" />} onClick={handleCreateRequirement}>
-                  Create Requirement
-                </Button>
-                <Button variant="primary" leftIcon={<Calendar className="h-4 w-4" />} onClick={handleOpenAddMeeting}>
-                  Book Meeting
-                </Button>
                 <Button variant="secondary" leftIcon={<User className="h-4 w-4" />} onClick={handleOpenAddContact}>
                   Add Contact
                 </Button>
-                <Button variant="secondary" leftIcon={<Building2 className="h-4 w-4" />} onClick={() => handleOpenAddCompany(selectedCompany.id)}>
-                  Add Business Unit
-                </Button>
+                {!selectedCompany.parent_company_id && (
+                  <Button variant="secondary" leftIcon={<Building2 className="h-4 w-4" />} onClick={() => handleOpenAddCompany(selectedCompany.id)}>
+                    Add Location / Subcompany
+                  </Button>
+                )}
               </div>
-              
-              {/* Two Column Layout */}
-              <div className="grid grid-cols-2 gap-6">
-                {/* Contacts Column */}
-                <div>
-                  <h3 className="text-lg font-semibold text-brand-slate-900 mb-4 flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Contacts ({contacts.length})
-                  </h3>
-                  
-                  {contacts.length === 0 ? (
-                    <Card className="p-6 text-center">
-                      <User className="h-10 w-10 mx-auto text-brand-grey-300 mb-2" />
-                      <p className="text-sm text-brand-grey-400">No contacts yet</p>
-                      <Button variant="primary" size="sm" className="mt-3" onClick={handleOpenAddContact}>
-                        Add First Contact
-                      </Button>
-                    </Card>
-                  ) : (
-                    <div className="space-y-3">
-                      {contacts.map(contact => (
-                        <Card key={contact.id} className="p-4 hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-3">
-                              <Avatar name={`${contact.first_name} ${contact.last_name}`} size="md" />
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium text-brand-slate-900">
-                                    {contact.first_name} {contact.last_name}
-                                  </p>
-                                  {contact.is_primary_contact && (
-                                    <Badge variant="cyan">Primary</Badge>
+
+              {/* Tabs */}
+              <div className="border-b border-brand-grey-200">
+                <div className="flex gap-1">
+                  {tabs.map(tab => {
+                    // Hide Locations tab for subcompanies
+                    if (tab.id === 'locations' && selectedCompany.parent_company_id) return null;
+
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+                          activeTab === tab.id
+                            ? 'border-brand-cyan text-brand-cyan'
+                            : 'border-transparent text-brand-grey-500 hover:text-brand-slate-900'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="font-medium">{tab.label}</span>
+                        {tab.count !== undefined && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            activeTab === tab.id
+                              ? 'bg-brand-cyan/10 text-brand-cyan'
+                              : 'bg-brand-grey-100 text-brand-grey-500'
+                          }`}>
+                            {tab.count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Tab Content */}
+              <div className="min-h-[400px]">
+                {/* Contacts Tab */}
+                {activeTab === 'contacts' && (
+                  <div>
+                    {/* Search */}
+                    <div className="mb-4">
+                      <div className="relative max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-grey-400" />
+                        <input
+                          type="text"
+                          placeholder="Search contacts..."
+                          value={contactSearch}
+                          onChange={(e) => setContactSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-brand-grey-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 focus:border-brand-cyan"
+                        />
+                      </div>
+                    </div>
+
+                    {filteredContacts.length === 0 ? (
+                      <Card className="p-8 text-center">
+                        <User className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
+                        <p className="text-brand-grey-500">No contacts yet</p>
+                        <Button variant="primary" size="sm" className="mt-4" onClick={handleOpenAddContact}>
+                          Add First Contact
+                        </Button>
+                      </Card>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {filteredContacts.map(contact => (
+                          <Card
+                            key={contact.id}
+                            className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => loadContactDetails(contact)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-3">
+                                <Avatar name={`${contact.first_name} ${contact.last_name}`} size="lg" />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-brand-slate-900">
+                                      {contact.first_name} {contact.last_name}
+                                    </p>
+                                    {contact.is_primary_contact && (
+                                      <Badge variant="cyan">Primary</Badge>
+                                    )}
+                                  </div>
+                                  {(contact.role || contact.job_title) && (
+                                    <p className="text-sm text-brand-cyan">{contact.role || contact.job_title}</p>
+                                  )}
+                                  {contact.department && (
+                                    <p className="text-sm text-brand-grey-500">{contact.department}</p>
+                                  )}
+                                  <div className="flex items-center gap-4 mt-2 text-sm text-brand-grey-400">
+                                    {contact.email && (
+                                      <span className="flex items-center gap-1">
+                                        <Mail className="h-3.5 w-3.5" />
+                                        {contact.email}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {contact.reports_to && (
+                                    <p className="text-xs text-brand-grey-400 mt-1">
+                                      Reports to: {contact.reports_to.first_name} {contact.reports_to.last_name}
+                                    </p>
                                   )}
                                 </div>
-                                {contact.job_title && (
-                                  <p className="text-sm text-brand-grey-500">{contact.job_title}</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); handleEditContact(contact); }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Org Chart Tab */}
+                {activeTab === 'org-chart' && (
+                  <div className="bg-brand-grey-100 rounded-xl p-6 min-h-[400px]">
+                    {buildOrgChart()}
+                  </div>
+                )}
+
+                {/* Locations & Subcompanies Tab */}
+                {activeTab === 'locations' && !selectedCompany.parent_company_id && (
+                  <div>
+                    {(() => {
+                      const subsidiaries = getSubsidiaries(selectedCompany.id);
+
+                      if (subsidiaries.length === 0) {
+                        return (
+                          <Card className="p-8 text-center">
+                            <FolderTree className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
+                            <p className="text-brand-grey-500">No locations or subcompanies</p>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="mt-4"
+                              onClick={() => handleOpenAddCompany(selectedCompany.id)}
+                            >
+                              Add First Location
+                            </Button>
+                          </Card>
+                        );
+                      }
+
+                      return (
+                        <div className="grid grid-cols-3 gap-4">
+                          {subsidiaries.map(sub => (
+                            <Card
+                              key={sub.id}
+                              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                              onClick={() => loadCompanyDetails(sub.id)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-brand-grey-100 rounded-lg">
+                                  <MapPin className="h-5 w-5 text-brand-grey-500" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium text-brand-slate-900">{sub.name}</p>
+                                  {sub.city && (
+                                    <p className="text-sm text-brand-grey-400">{sub.city}, {sub.postcode}</p>
+                                  )}
+                                </div>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${statusColours[sub.status]}`}>
+                                  {sub.status}
+                                </span>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Requirements Tab */}
+                {activeTab === 'requirements' && (
+                  <div>
+                    {requirements.length === 0 ? (
+                      <Card className="p-8 text-center">
+                        <Briefcase className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
+                        <p className="text-brand-grey-500">No requirements yet</p>
+                        <p className="text-sm text-brand-grey-400 mt-1">
+                          Create requirements from a contact's profile
+                        </p>
+                      </Card>
+                    ) : (
+                      <div className="space-y-3">
+                        {requirements.map(req => (
+                          <Card
+                            key={req.id}
+                            className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => navigate(`/requirements/${req.id}`)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-brand-slate-900">{req.customer}</p>
+                                  <Badge variant={
+                                    req.status === 'open' ? 'green' :
+                                    req.status === 'filled' ? 'cyan' :
+                                    req.status === 'cancelled' ? 'red' : 'grey'
+                                  }>
+                                    {req.status}
+                                  </Badge>
+                                </div>
+                                {req.description && (
+                                  <p className="text-sm text-brand-grey-500 mt-1 line-clamp-2">{req.description}</p>
                                 )}
                                 <div className="flex items-center gap-4 mt-2 text-sm text-brand-grey-400">
-                                  {contact.email && (
-                                    <a href={`mailto:${contact.email}`} className="flex items-center gap-1 hover:text-brand-cyan">
-                                      <Mail className="h-3.5 w-3.5" />
-                                      {contact.email}
-                                    </a>
-                                  )}
-                                  {contact.phone && (
+                                  {req.location && (
                                     <span className="flex items-center gap-1">
-                                      <Phone className="h-3.5 w-3.5" />
-                                      {contact.phone}
+                                      <MapPin className="h-3.5 w-3.5" />
+                                      {req.location}
+                                    </span>
+                                  )}
+                                  {req.fte_count && (
+                                    <span className="flex items-center gap-1">
+                                      <Users className="h-3.5 w-3.5" />
+                                      {req.fte_count} position{req.fte_count > 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                  {req.company && (
+                                    <span className="flex items-center gap-1">
+                                      <Building2 className="h-3.5 w-3.5" />
+                                      {req.company.name}
                                     </span>
                                   )}
                                 </div>
                               </div>
+                              <div className="text-right">
+                                {req.max_day_rate && (
+                                  <p className="text-sm font-medium text-brand-slate-900">
+                                    £{req.max_day_rate}/day
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleEditContact(contact)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleDeleteClick('contact', contact)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Meetings Column */}
-                <div>
-                  <h3 className="text-lg font-semibold text-brand-slate-900 mb-4 flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Meetings ({meetings.length})
-                  </h3>
-                  
-                  {meetings.length === 0 ? (
-                    <Card className="p-6 text-center">
-                      <Calendar className="h-10 w-10 mx-auto text-brand-grey-300 mb-2" />
-                      <p className="text-sm text-brand-grey-400">No meetings yet</p>
-                      <Button variant="primary" size="sm" className="mt-3" onClick={handleOpenAddMeeting}>
-                        Book First Meeting
-                      </Button>
-                    </Card>
-                  ) : (
-                    <div className="space-y-3">
-                      {meetings.map(meeting => (
-                        <Card key={meeting.id} className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg ${
-                              meeting.meeting_type === 'call' ? 'bg-blue-100 text-blue-600' :
-                              meeting.meeting_type === 'video' ? 'bg-purple-100 text-purple-600' :
-                              meeting.meeting_type === 'in_person' ? 'bg-green-100 text-green-600' :
-                              'bg-grey-100 text-grey-600'
-                            }`}>
-                              {meeting.meeting_type === 'call' && <Phone className="h-4 w-4" />}
-                              {meeting.meeting_type === 'video' && <Globe className="h-4 w-4" />}
-                              {meeting.meeting_type === 'in_person' && <MapPin className="h-4 w-4" />}
-                              {meeting.meeting_type === 'email' && <Mail className="h-4 w-4" />}
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-medium text-brand-slate-900">{meeting.subject}</p>
-                              {meeting.contact && (
-                                <p className="text-sm text-brand-grey-500">
-                                  with {meeting.contact.first_name} {meeting.contact.last_name}
-                                </p>
-                              )}
-                              {meeting.scheduled_at && (
-                                <p className="text-sm text-brand-grey-400 flex items-center gap-1 mt-1">
-                                  <Clock className="h-3.5 w-3.5" />
-                                  {new Date(meeting.scheduled_at).toLocaleDateString('en-GB', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Subsidiaries Section */}
-              {selectedCompany.subsidiaries && selectedCompany.subsidiaries.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-brand-slate-900 mb-4 flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    Business Units / Subsidiaries
-                  </h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    {selectedCompany.subsidiaries.map(sub => (
-                      <Card 
-                        key={sub.id} 
-                        className="p-4 cursor-pointer hover:shadow-md transition-shadow"
-                        onClick={() => loadCompanyDetails(sub.id)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-brand-grey-100 rounded-lg">
-                            <Building2 className="h-5 w-5 text-brand-grey-500" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-brand-slate-900">{sub.name}</p>
-                            {sub.city && (
-                              <p className="text-sm text-brand-grey-400">{sub.city}</p>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
+                          </Card>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
-              
+                )}
+              </div>
+
               {/* Notes Section */}
               {selectedCompany.notes && (
                 <Card className="p-4">
@@ -807,12 +1117,160 @@ export function CustomersPage() {
           )}
         </div>
       </div>
-      
+
+      {/* Contact Detail Modal */}
+      <Modal
+        isOpen={isContactDetailOpen}
+        onClose={() => setIsContactDetailOpen(false)}
+        title={selectedContact ? `${selectedContact.first_name} ${selectedContact.last_name}` : 'Contact'}
+        size="xl"
+      >
+        {selectedContact && (
+          <div className="space-y-6">
+            {/* Contact Header */}
+            <div className="flex items-start gap-4">
+              <Avatar name={`${selectedContact.first_name} ${selectedContact.last_name}`} size="xl" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-semibold text-brand-slate-900">
+                    {selectedContact.first_name} {selectedContact.last_name}
+                  </h3>
+                  {selectedContact.is_primary_contact && (
+                    <Badge variant="cyan">Primary Contact</Badge>
+                  )}
+                </div>
+                {(selectedContact.role || selectedContact.job_title) && (
+                  <p className="text-brand-cyan">{selectedContact.role || selectedContact.job_title}</p>
+                )}
+                {selectedContact.department && (
+                  <p className="text-brand-grey-500">{selectedContact.department}</p>
+                )}
+                {selectedContact.reports_to && (
+                  <p className="text-sm text-brand-grey-400 mt-1">
+                    Reports to: {selectedContact.reports_to.first_name} {selectedContact.reports_to.last_name}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={() => { setIsContactDetailOpen(false); handleEditContact(selectedContact); }}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleDeleteClick('contact', selectedContact)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Contact Info */}
+            <div className="grid grid-cols-2 gap-4">
+              {selectedContact.email && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4 text-brand-grey-400" />
+                  <a href={`mailto:${selectedContact.email}`} className="text-brand-cyan hover:underline">
+                    {selectedContact.email}
+                  </a>
+                </div>
+              )}
+              {selectedContact.phone && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4 text-brand-grey-400" />
+                  <span>{selectedContact.phone}</span>
+                </div>
+              )}
+              {selectedContact.mobile && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4 text-brand-grey-400" />
+                  <span>{selectedContact.mobile} (mobile)</span>
+                </div>
+              )}
+              {selectedContact.linkedin_url && (
+                <div className="flex items-center gap-2 text-sm">
+                  <ExternalLink className="h-4 w-4 text-brand-grey-400" />
+                  <a href={selectedContact.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-brand-cyan hover:underline">
+                    LinkedIn
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 border-t border-brand-grey-200 pt-4">
+              <Button variant="primary" leftIcon={<Calendar className="h-4 w-4" />} onClick={() => handleOpenAddMeeting(selectedContact)}>
+                Book Meeting
+              </Button>
+              <Button variant="success" leftIcon={<Briefcase className="h-4 w-4" />} onClick={() => handleCreateRequirement(selectedContact)}>
+                Create Requirement
+              </Button>
+            </div>
+
+            {/* Meetings History */}
+            <div>
+              <h4 className="text-sm font-semibold text-brand-slate-900 mb-3 flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Meetings ({contactMeetings.length})
+              </h4>
+
+              {contactMeetings.length === 0 ? (
+                <p className="text-sm text-brand-grey-400">No meetings scheduled with this contact</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {contactMeetings.map(meeting => (
+                    <div key={meeting.id} className="flex items-center gap-3 p-3 bg-brand-grey-50 rounded-lg">
+                      <div className={`p-2 rounded-lg ${
+                        meeting.meeting_type === 'call' ? 'bg-blue-100 text-blue-600' :
+                        meeting.meeting_type === 'video' ? 'bg-purple-100 text-purple-600' :
+                        meeting.meeting_type === 'in_person' ? 'bg-green-100 text-green-600' :
+                        'bg-grey-100 text-grey-600'
+                      }`}>
+                        {meeting.meeting_type === 'call' && <Phone className="h-4 w-4" />}
+                        {meeting.meeting_type === 'video' && <Globe className="h-4 w-4" />}
+                        {meeting.meeting_type === 'in_person' && <MapPin className="h-4 w-4" />}
+                        {meeting.meeting_type === 'email' && <Mail className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-brand-slate-900">{meeting.subject}</p>
+                        {meeting.scheduled_at && (
+                          <p className="text-xs text-brand-grey-400">
+                            {new Date(meeting.scheduled_at).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            {selectedContact.notes && (
+              <div>
+                <h4 className="text-sm font-semibold text-brand-slate-900 mb-2 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Notes
+                </h4>
+                <p className="text-sm text-brand-grey-600 whitespace-pre-wrap">{selectedContact.notes}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
       {/* Company Modal */}
       <Modal
         isOpen={isCompanyModalOpen}
         onClose={() => setIsCompanyModalOpen(false)}
-        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Business Unit' : 'Add Company')}
+        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Location / Subcompany' : 'Add Company')}
         size="xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -830,7 +1288,7 @@ export function CustomersPage() {
               placeholder="If different from company name"
             />
           </div>
-          
+
           <div className="grid grid-cols-3 gap-4">
             <Input
               label="Companies House #"
@@ -851,7 +1309,7 @@ export function CustomersPage() {
               onChange={(e) => setCompanyForm(prev => ({ ...prev, company_size: e.target.value }))}
             />
           </div>
-          
+
           {!companyForm.parent_company_id && parentCompanies.length > 0 && (
             <Select
               label="Parent Company (if subsidiary)"
@@ -863,7 +1321,7 @@ export function CustomersPage() {
               onChange={(e) => setCompanyForm(prev => ({ ...prev, parent_company_id: e.target.value }))}
             />
           )}
-          
+
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Address</h4>
             <div className="grid grid-cols-2 gap-4">
@@ -894,7 +1352,7 @@ export function CustomersPage() {
               />
             </div>
           </div>
-          
+
           <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Contact Information</h4>
             <div className="grid grid-cols-3 gap-4">
@@ -917,21 +1375,21 @@ export function CustomersPage() {
               />
             </div>
           </div>
-          
+
           <Select
             label="Status"
             options={statusOptions}
             value={companyForm.status}
             onChange={(e) => setCompanyForm(prev => ({ ...prev, status: e.target.value }))}
           />
-          
+
           <Textarea
             label="Notes"
             value={companyForm.notes}
             onChange={(e) => setCompanyForm(prev => ({ ...prev, notes: e.target.value }))}
             rows={3}
           />
-          
+
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => setIsCompanyModalOpen(false)}>Cancel</Button>
             <Button variant="success" onClick={handleSaveCompany} isLoading={isSubmitting}>
@@ -940,7 +1398,7 @@ export function CustomersPage() {
           </div>
         </div>
       </Modal>
-      
+
       {/* Contact Modal */}
       <Modal
         isOpen={isContactModalOpen}
@@ -961,27 +1419,50 @@ export function CustomersPage() {
               onChange={(e) => setContactForm(prev => ({ ...prev, last_name: e.target.value }))}
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Role (for org chart)"
+              value={contactForm.role}
+              onChange={(e) => setContactForm(prev => ({ ...prev, role: e.target.value }))}
+              placeholder="e.g., CEO, Director, Manager"
+            />
             <Input
               label="Job Title"
               value={contactForm.job_title}
               onChange={(e) => setContactForm(prev => ({ ...prev, job_title: e.target.value }))}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Input
               label="Department"
               value={contactForm.department}
               onChange={(e) => setContactForm(prev => ({ ...prev, department: e.target.value }))}
             />
+            <Select
+              label="Reports To (Direct Manager)"
+              options={[
+                { value: '', label: 'No direct report (top level)' },
+                ...contacts
+                  .filter(c => c.id !== editingContactId) // Can't report to self
+                  .map(c => ({
+                    value: c.id,
+                    label: `${c.first_name} ${c.last_name}${c.role ? ` (${c.role})` : c.job_title ? ` (${c.job_title})` : ''}`
+                  }))
+              ]}
+              value={contactForm.reports_to_id}
+              onChange={(e) => setContactForm(prev => ({ ...prev, reports_to_id: e.target.value }))}
+            />
           </div>
-          
+
           <Input
             label="Email"
             type="email"
             value={contactForm.email}
             onChange={(e) => setContactForm(prev => ({ ...prev, email: e.target.value }))}
           />
-          
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Phone"
@@ -994,14 +1475,14 @@ export function CustomersPage() {
               onChange={(e) => setContactForm(prev => ({ ...prev, mobile: e.target.value }))}
             />
           </div>
-          
+
           <Input
             label="LinkedIn URL"
             value={contactForm.linkedin_url}
             onChange={(e) => setContactForm(prev => ({ ...prev, linkedin_url: e.target.value }))}
             placeholder="https://linkedin.com/in/..."
           />
-          
+
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -1011,14 +1492,14 @@ export function CustomersPage() {
             />
             <span className="text-sm text-brand-slate-700">Primary contact for this company</span>
           </label>
-          
+
           <Textarea
             label="Notes"
             value={contactForm.notes}
             onChange={(e) => setContactForm(prev => ({ ...prev, notes: e.target.value }))}
             rows={2}
           />
-          
+
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => setIsContactModalOpen(false)}>Cancel</Button>
             <Button variant="success" onClick={handleSaveContact} isLoading={isSubmitting}>
@@ -1027,7 +1508,7 @@ export function CustomersPage() {
           </div>
         </div>
       </Modal>
-      
+
       {/* Meeting Modal */}
       <Modal
         isOpen={isMeetingModalOpen}
@@ -1042,26 +1523,26 @@ export function CustomersPage() {
             onChange={(e) => setMeetingForm(prev => ({ ...prev, subject: e.target.value }))}
             placeholder="e.g., Introduction call, Requirements discussion"
           />
-          
+
           <Select
             label="Meeting Type"
             options={meetingTypeOptions}
             value={meetingForm.meeting_type}
             onChange={(e) => setMeetingForm(prev => ({ ...prev, meeting_type: e.target.value }))}
           />
-          
+
           {contacts.length > 0 && (
             <Select
               label="With Contact"
               options={[
-                { value: '', label: 'Select contact (optional)' },
+                { value: '', label: 'Select contact' },
                 ...contacts.map(c => ({ value: c.id, label: `${c.first_name} ${c.last_name}` }))
               ]}
               value={meetingForm.contact_id}
               onChange={(e) => setMeetingForm(prev => ({ ...prev, contact_id: e.target.value }))}
             />
           )}
-          
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Date"
@@ -1076,7 +1557,7 @@ export function CustomersPage() {
               onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
             />
           </div>
-          
+
           <Select
             label="Duration"
             options={[
@@ -1090,7 +1571,7 @@ export function CustomersPage() {
             value={meetingForm.duration_minutes}
             onChange={(e) => setMeetingForm(prev => ({ ...prev, duration_minutes: e.target.value }))}
           />
-          
+
           {meetingForm.meeting_type === 'in_person' && (
             <Input
               label="Location"
@@ -1099,7 +1580,7 @@ export function CustomersPage() {
               placeholder="Address or meeting room"
             />
           )}
-          
+
           <Textarea
             label="Notes"
             value={meetingForm.notes}
@@ -1107,7 +1588,7 @@ export function CustomersPage() {
             rows={2}
             placeholder="Agenda, preparation notes..."
           />
-          
+
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => setIsMeetingModalOpen(false)}>Cancel</Button>
             <Button variant="success" onClick={handleSaveMeeting} isLoading={isSubmitting}>
@@ -1116,7 +1597,7 @@ export function CustomersPage() {
           </div>
         </div>
       </Modal>
-      
+
       {/* Delete Confirmation */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
