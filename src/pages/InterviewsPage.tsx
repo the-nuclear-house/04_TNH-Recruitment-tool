@@ -10,6 +10,9 @@ import {
   XCircle,
   AlertCircle,
   Users,
+  Trash2,
+  Star,
+  MapPin,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -21,10 +24,12 @@ import {
   Button,
   Textarea,
   StarRating,
+  ConfirmDialog,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useToast } from '@/lib/stores/ui-store';
+import { usePermissions } from '@/hooks/usePermissions';
 import { interviewsService, candidatesService, usersService } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
@@ -46,6 +51,7 @@ export function InterviewsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const toast = useToast();
+  const permissions = usePermissions();
   
   const [interviews, setInterviews] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<Record<string, any>>({});
@@ -56,6 +62,14 @@ export function InterviewsPage() {
   const [stageFilter, setStageFilter] = useState<string>('');
   const [outcomeFilter, setOutcomeFilter] = useState<string>('');
   const [showMyCandidatesOnly, setShowMyCandidatesOnly] = useState(false);
+  
+  // Detail modal
+  const [viewingInterview, setViewingInterview] = useState<any>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  
+  // Delete confirmation
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [interviewToDelete, setInterviewToDelete] = useState<any>(null);
   
   // Complete interview modal
   const [selectedInterview, setSelectedInterview] = useState<any>(null);
@@ -101,6 +115,36 @@ export function InterviewsPage() {
       toast.error('Error', 'Failed to load interviews');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleViewInterview = (interview: any) => {
+    setViewingInterview(interview);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleDeleteClick = (interview: any) => {
+    setInterviewToDelete(interview);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteInterview = async () => {
+    if (!interviewToDelete) return;
+    
+    setIsSubmitting(true);
+    try {
+      await interviewsService.delete(interviewToDelete.id);
+      toast.success('Interview Deleted', 'The interview has been removed');
+      setIsDeleteDialogOpen(false);
+      setIsDetailModalOpen(false);
+      setInterviewToDelete(null);
+      setViewingInterview(null);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting interview:', error);
+      toast.error('Error', 'Failed to delete interview');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -411,7 +455,7 @@ export function InterviewsPage() {
                   className={`hover:shadow-md transition-all cursor-pointer ${
                     isToday(interview.scheduled_at) ? 'border-l-4 border-l-brand-cyan' : ''
                   }`}
-                  onClick={() => candidate && navigate(`/candidates/${candidate.id}`)}
+                  onClick={() => handleViewInterview(interview)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -589,6 +633,187 @@ export function InterviewsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Interview Detail Modal */}
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={() => { setIsDetailModalOpen(false); setViewingInterview(null); }}
+        title="Interview Details"
+        size="lg"
+      >
+        {viewingInterview && (() => {
+          const candidate = candidates[viewingInterview.candidate_id];
+          const interviewer = users[viewingInterview.interviewer_id];
+          const stage = viewingInterview.stage as InterviewStage;
+          const stageInfo = stageConfig[stage] || stageConfig.phone_qualification;
+          const outcomeInfo = outcomeConfig[viewingInterview.outcome] || outcomeConfig.pending;
+          
+          return (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <Avatar name={`${candidate?.first_name} ${candidate?.last_name}`} size="lg" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-brand-slate-900">
+                      {candidate?.first_name} {candidate?.last_name}
+                    </h3>
+                    <p className="text-sm text-brand-grey-500">{candidate?.email}</p>
+                    {candidate?.reference_id && (
+                      <span className="text-xs font-mono text-brand-grey-400">{candidate.reference_id}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${stageInfo.colour}`}>
+                    {stageInfo.label}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${outcomeInfo.colour}`}>
+                    {outcomeInfo.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* Details */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
+                <div>
+                  <p className="text-xs text-brand-grey-400">Interviewer</p>
+                  <p className="font-medium text-brand-slate-900">{interviewer?.name || 'Unassigned'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-brand-grey-400">Scheduled</p>
+                  <p className="font-medium text-brand-slate-900">
+                    {viewingInterview.scheduled_at 
+                      ? `${formatDate(viewingInterview.scheduled_at)} ${formatTime(viewingInterview.scheduled_at)}`
+                      : 'Not scheduled'
+                    }
+                  </p>
+                </div>
+                {viewingInterview.location && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-brand-grey-400">Location</p>
+                    <p className="font-medium text-brand-slate-900">{viewingInterview.location}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Scores (if completed) */}
+              {viewingInterview.outcome !== 'pending' && (
+                <div className="space-y-3">
+                  <h4 className="font-medium text-brand-slate-900">Scores</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {viewingInterview.communication_score && (
+                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
+                        <span className="text-sm text-brand-grey-500">Communication</span>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                          <span className="font-medium">{viewingInterview.communication_score}/5</span>
+                        </div>
+                      </div>
+                    )}
+                    {viewingInterview.professionalism_score && (
+                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
+                        <span className="text-sm text-brand-grey-500">Professionalism</span>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                          <span className="font-medium">{viewingInterview.professionalism_score}/5</span>
+                        </div>
+                      </div>
+                    )}
+                    {viewingInterview.enthusiasm_score && (
+                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
+                        <span className="text-sm text-brand-grey-500">Enthusiasm</span>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                          <span className="font-medium">{viewingInterview.enthusiasm_score}/5</span>
+                        </div>
+                      </div>
+                    )}
+                    {viewingInterview.cultural_fit_score && (
+                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
+                        <span className="text-sm text-brand-grey-500">Cultural Fit</span>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                          <span className="font-medium">{viewingInterview.cultural_fit_score}/5</span>
+                        </div>
+                      </div>
+                    )}
+                    {viewingInterview.technical_depth_score && (
+                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
+                        <span className="text-sm text-brand-grey-500">Technical Depth</span>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                          <span className="font-medium">{viewingInterview.technical_depth_score}/5</span>
+                        </div>
+                      </div>
+                    )}
+                    {viewingInterview.problem_solving_score && (
+                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
+                        <span className="text-sm text-brand-grey-500">Problem Solving</span>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                          <span className="font-medium">{viewingInterview.problem_solving_score}/5</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Comments */}
+              {viewingInterview.general_comments && (
+                <div>
+                  <h4 className="font-medium text-brand-slate-900 mb-2">Comments</h4>
+                  <p className="text-sm text-brand-grey-600 whitespace-pre-wrap">{viewingInterview.general_comments}</p>
+                </div>
+              )}
+
+              {/* Recommendation */}
+              {viewingInterview.recommendation && (
+                <div>
+                  <h4 className="font-medium text-brand-slate-900 mb-2">Recommendation</h4>
+                  <p className="text-sm text-brand-grey-600 whitespace-pre-wrap">{viewingInterview.recommendation}</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-between pt-4 border-t border-brand-grey-200">
+                <div>
+                  {permissions.isAdmin && (
+                    <Button 
+                      variant="danger" 
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      onClick={() => handleDeleteClick(viewingInterview)}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="secondary" onClick={() => setIsDetailModalOpen(false)}>
+                    Close
+                  </Button>
+                  <Button variant="primary" onClick={() => candidate && navigate(`/candidates/${candidate.id}`)}>
+                    View Candidate
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => { setIsDeleteDialogOpen(false); setInterviewToDelete(null); }}
+        onConfirm={handleDeleteInterview}
+        title="Delete Interview"
+        message="Are you sure you want to delete this interview? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
     </div>
   );
 }

@@ -13,6 +13,8 @@ import {
   Video,
   Mail,
   Users,
+  Trash2,
+  FileText,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -26,10 +28,12 @@ import {
   Select,
   SearchableSelect,
   Textarea,
+  ConfirmDialog,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useToast } from '@/lib/stores/ui-store';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   customerMeetingsService,
   customerAssessmentsService, 
@@ -65,6 +69,7 @@ export function ClientMeetingsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const toast = useToast();
+  const permissions = usePermissions();
   
   // Data
   const [customerMeetings, setCustomerMeetings] = useState<DbCustomerMeeting[]>([]);
@@ -76,6 +81,15 @@ export function ClientMeetingsPage() {
   
   // Filters
   const [meetingTypeFilter, setMeetingTypeFilter] = useState<'all' | 'client' | 'assessment'>('all');
+  
+  // Detail modal
+  const [viewingItem, setViewingItem] = useState<any>(null);
+  const [viewingItemType, setViewingItemType] = useState<'meeting' | 'assessment' | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  
+  // Delete confirmation
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ item: any; type: 'meeting' | 'assessment' } | null>(null);
   
   // Create modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -137,6 +151,49 @@ export function ClientMeetingsPage() {
       toast.error('Error', 'Failed to load meetings');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleViewMeeting = (meeting: DbCustomerMeeting) => {
+    setViewingItem(meeting);
+    setViewingItemType('meeting');
+    setIsDetailModalOpen(true);
+  };
+
+  const handleViewAssessment = (assessment: DbCustomerAssessment) => {
+    setViewingItem(assessment);
+    setViewingItemType('assessment');
+    setIsDetailModalOpen(true);
+  };
+
+  const handleDeleteClick = (item: any, type: 'meeting' | 'assessment') => {
+    setItemToDelete({ item, type });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteItem = async () => {
+    if (!itemToDelete) return;
+    
+    setIsSubmitting(true);
+    try {
+      if (itemToDelete.type === 'meeting') {
+        await customerMeetingsService.delete(itemToDelete.item.id);
+        toast.success('Meeting Deleted', 'The meeting has been removed');
+      } else {
+        await customerAssessmentsService.delete(itemToDelete.item.id);
+        toast.success('Assessment Deleted', 'The assessment has been removed');
+      }
+      setIsDeleteDialogOpen(false);
+      setIsDetailModalOpen(false);
+      setItemToDelete(null);
+      setViewingItem(null);
+      setViewingItemType(null);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting:', error);
+      toast.error('Error', 'Failed to delete');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -415,7 +472,11 @@ export function ClientMeetingsPage() {
                 const MeetingIcon = meetingTypeIcons[meeting.meeting_type] || Phone;
                 
                 return (
-                  <Card key={`meeting-${meeting.id}`} className="hover:shadow-md transition-shadow border-l-4 border-l-brand-cyan">
+                  <Card 
+                    key={`meeting-${meeting.id}`} 
+                    className="hover:shadow-md transition-shadow border-l-4 border-l-brand-cyan cursor-pointer"
+                    onClick={() => handleViewMeeting(meeting)}
+                  >
                     <div className="flex items-start gap-4">
                       <div className="p-2 bg-brand-cyan/10 rounded-lg">
                         <MeetingIcon className="h-5 w-5 text-brand-cyan" />
@@ -468,7 +529,11 @@ export function ClientMeetingsPage() {
                 const company = contact?.company || companies.find(co => co.id === contact?.company_id);
                 
                 return (
-                  <Card key={`assessment-${meeting.id}`} className="hover:shadow-md transition-shadow border-l-4 border-l-brand-orange">
+                  <Card 
+                    key={`assessment-${meeting.id}`} 
+                    className="hover:shadow-md transition-shadow border-l-4 border-l-brand-orange cursor-pointer"
+                    onClick={() => handleViewAssessment(meeting)}
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-4">
                         <Avatar 
@@ -812,6 +877,205 @@ export function ClientMeetingsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Detail Modal */}
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={() => { setIsDetailModalOpen(false); setViewingItem(null); setViewingItemType(null); }}
+        title={viewingItemType === 'meeting' ? 'Meeting Details' : 'Assessment Details'}
+        size="lg"
+      >
+        {viewingItem && viewingItemType === 'meeting' && (() => {
+          const contact = contacts.find(c => c.id === viewingItem.contact_id);
+          const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+          const MeetingIcon = meetingTypeIcons[viewingItem.meeting_type] || Phone;
+          const meetingTypeLabels: Record<string, string> = {
+            call: 'Phone Call',
+            video: 'Video Call',
+            in_person: 'In Person',
+            email: 'Email',
+          };
+          
+          return (
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-brand-cyan/10 rounded-lg">
+                  <MeetingIcon className="h-6 w-6 text-brand-cyan" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-brand-slate-900">{viewingItem.subject}</h3>
+                  <p className="text-sm text-brand-grey-500">{meetingTypeLabels[viewingItem.meeting_type] || viewingItem.meeting_type}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
+                {contact && (
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Contact</p>
+                    <p className="font-medium text-brand-slate-900">{contact.first_name} {contact.last_name}</p>
+                    {contact.role && <p className="text-sm text-brand-grey-500">{contact.role}</p>}
+                  </div>
+                )}
+                {company && (
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Company</p>
+                    <p className="font-medium text-brand-slate-900">{company.name}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-brand-grey-400">Date & Time</p>
+                  <p className="font-medium text-brand-slate-900">
+                    {viewingItem.scheduled_at ? formatDate(viewingItem.scheduled_at) : 'Not scheduled'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-brand-grey-400">Duration</p>
+                  <p className="font-medium text-brand-slate-900">
+                    {viewingItem.duration_minutes ? `${viewingItem.duration_minutes} minutes` : 'Not specified'}
+                  </p>
+                </div>
+                {viewingItem.location && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-brand-grey-400">Location</p>
+                    <p className="font-medium text-brand-slate-900">{viewingItem.location}</p>
+                  </div>
+                )}
+              </div>
+
+              {viewingItem.notes && (
+                <div>
+                  <h4 className="font-medium text-brand-slate-900 mb-2">Notes</h4>
+                  <p className="text-sm text-brand-grey-600 whitespace-pre-wrap">{viewingItem.notes}</p>
+                </div>
+              )}
+
+              <div className="flex justify-between pt-4 border-t border-brand-grey-200">
+                <div>
+                  {permissions.isAdmin && (
+                    <Button 
+                      variant="danger" 
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      onClick={() => handleDeleteClick(viewingItem, 'meeting')}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+                <Button variant="secondary" onClick={() => setIsDetailModalOpen(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {viewingItem && viewingItemType === 'assessment' && (() => {
+          const candidate = viewingItem.application?.candidate || candidates.find(c => c.id === viewingItem.candidate_id);
+          const contact = contacts.find(c => c.id === viewingItem.contact_id);
+          const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+          const outcome = viewingItem.outcome || 'pending';
+          const config = outcomeConfig[outcome as keyof typeof outcomeConfig];
+          
+          return (
+            <div className="space-y-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <Avatar name={candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Unknown'} size="lg" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-brand-slate-900">
+                      {candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Unknown Candidate'}
+                    </h3>
+                    {candidate?.email && <p className="text-sm text-brand-grey-500">{candidate.email}</p>}
+                    {candidate?.reference_id && (
+                      <span className="text-xs font-mono text-brand-grey-400">{candidate.reference_id}</span>
+                    )}
+                  </div>
+                </div>
+                <Badge variant={config.colour as any}>{config.label}</Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
+                {contact && (
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Customer Contact</p>
+                    <p className="font-medium text-brand-slate-900">{contact.first_name} {contact.last_name}</p>
+                    {contact.role && <p className="text-sm text-brand-grey-500">{contact.role}</p>}
+                  </div>
+                )}
+                {company && (
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Company</p>
+                    <p className="font-medium text-brand-slate-900">{company.name}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-brand-grey-400">Scheduled Date</p>
+                  <p className="font-medium text-brand-slate-900">
+                    {viewingItem.scheduled_date ? formatDate(viewingItem.scheduled_date) : 'Not scheduled'}
+                    {viewingItem.scheduled_time && ` at ${viewingItem.scheduled_time}`}
+                  </p>
+                </div>
+                {viewingItem.location && (
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Location</p>
+                    <p className="font-medium text-brand-slate-900">{viewingItem.location}</p>
+                  </div>
+                )}
+              </div>
+
+              {viewingItem.notes && (
+                <div>
+                  <h4 className="font-medium text-brand-slate-900 mb-2">Notes</h4>
+                  <p className="text-sm text-brand-grey-600 whitespace-pre-wrap">{viewingItem.notes}</p>
+                </div>
+              )}
+
+              {viewingItem.outcome_notes && (
+                <div>
+                  <h4 className="font-medium text-brand-slate-900 mb-2">Outcome Notes</h4>
+                  <p className="text-sm text-brand-grey-600 whitespace-pre-wrap">{viewingItem.outcome_notes}</p>
+                </div>
+              )}
+
+              <div className="flex justify-between pt-4 border-t border-brand-grey-200">
+                <div>
+                  {permissions.isAdmin && (
+                    <Button 
+                      variant="danger" 
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      onClick={() => handleDeleteClick(viewingItem, 'assessment')}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="secondary" onClick={() => setIsDetailModalOpen(false)}>
+                    Close
+                  </Button>
+                  {candidate && (
+                    <Button variant="primary" onClick={() => navigate(`/candidates/${candidate.id}`)}>
+                      View Candidate
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => { setIsDeleteDialogOpen(false); setItemToDelete(null); }}
+        onConfirm={handleDeleteItem}
+        title={itemToDelete?.type === 'meeting' ? 'Delete Meeting' : 'Delete Assessment'}
+        message="Are you sure you want to delete this? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
     </div>
   );
 }
