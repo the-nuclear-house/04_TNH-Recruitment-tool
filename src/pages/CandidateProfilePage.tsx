@@ -209,6 +209,14 @@ export function CandidateProfilePage() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isShaking, setIsShaking] = useState(false);
   
+  // Offer form validation
+  const [offerValidationErrors, setOfferValidationErrors] = useState<string[]>([]);
+  const [isOfferShaking, setIsOfferShaking] = useState(false);
+  
+  // Document drag state
+  const [isDraggingId, setIsDraggingId] = useState(false);
+  const [isDraggingRtw, setIsDraggingRtw] = useState(false);
+  
   // Schedule interview modal
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [selectedStage, setSelectedStage] = useState<InterviewStage | null>(null);
@@ -2097,20 +2105,23 @@ export function CandidateProfilePage() {
       {/* Create Offer Modal */}
       <Modal
         isOpen={isCreateOfferModalOpen}
-        onClose={() => setIsCreateOfferModalOpen(false)}
+        onClose={() => { setIsCreateOfferModalOpen(false); setOfferValidationErrors([]); }}
         title="Create Offer"
         description={`Create an offer for ${candidate?.first_name} ${candidate?.last_name}`}
         size="xl"
+        shake={isOfferShaking}
       >
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
           {/* Job Details */}
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Job Title *"
-              value={offerForm.job_title}
-              onChange={(e) => setOfferForm(prev => ({ ...prev, job_title: e.target.value }))}
-              placeholder="e.g., Senior Software Engineer"
-            />
+            <div className={offerValidationErrors.includes('job_title') ? 'validation-error rounded-lg' : ''}>
+              <Input
+                label="Job Title *"
+                value={offerForm.job_title}
+                onChange={(e) => setOfferForm(prev => ({ ...prev, job_title: e.target.value }))}
+                placeholder="e.g., Senior Software Engineer"
+              />
+            </div>
             <Select
               label="Contract Type *"
               options={[
@@ -2125,38 +2136,46 @@ export function CandidateProfilePage() {
 
           {/* Salary/Rate based on contract type */}
           {offerForm.contract_type === 'contract' ? (
-            <Input
-              label="Day Rate (£) *"
-              type="number"
-              value={offerForm.day_rate}
-              onChange={(e) => setOfferForm(prev => ({ ...prev, day_rate: e.target.value }))}
-              placeholder="e.g., 500"
-            />
+            <div className={offerValidationErrors.includes('day_rate') ? 'validation-error rounded-lg' : ''}>
+              <Input
+                label="Day Rate (£) *"
+                type="number"
+                value={offerForm.day_rate}
+                onChange={(e) => setOfferForm(prev => ({ ...prev, day_rate: e.target.value }))}
+                placeholder="e.g., 500"
+              />
+            </div>
           ) : (
-            <Input
-              label="Annual Salary (£) *"
-              type="number"
-              value={offerForm.salary_amount}
-              onChange={(e) => setOfferForm(prev => ({ ...prev, salary_amount: e.target.value }))}
-              placeholder="e.g., 70000"
-            />
+            <div className={offerValidationErrors.includes('salary_amount') ? 'validation-error rounded-lg' : ''}>
+              <Input
+                label="Annual Salary (£) *"
+                type="number"
+                value={offerForm.salary_amount}
+                onChange={(e) => setOfferForm(prev => ({ ...prev, salary_amount: e.target.value }))}
+                placeholder="e.g., 70000"
+              />
+            </div>
           )}
 
           {/* Start Date, End Date (for fixed term), & Location */}
           <div className={`grid gap-4 ${offerForm.contract_type === 'fixed_term' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-            <Input
-              label="Start Date *"
-              type="date"
-              value={offerForm.start_date}
-              onChange={(e) => setOfferForm(prev => ({ ...prev, start_date: e.target.value }))}
-            />
-            {offerForm.contract_type === 'fixed_term' && (
+            <div className={offerValidationErrors.includes('start_date') ? 'validation-error rounded-lg' : ''}>
               <Input
-                label="End Date *"
+                label="Start Date *"
                 type="date"
-                value={offerForm.end_date}
-                onChange={(e) => setOfferForm(prev => ({ ...prev, end_date: e.target.value }))}
+                value={offerForm.start_date}
+                onChange={(e) => setOfferForm(prev => ({ ...prev, start_date: e.target.value }))}
               />
+            </div>
+            {offerForm.contract_type === 'fixed_term' && (
+              <div className={offerValidationErrors.includes('end_date') ? 'validation-error rounded-lg' : ''}>
+                <Input
+                  label="End Date *"
+                  type="date"
+                  value={offerForm.end_date}
+                  onChange={(e) => setOfferForm(prev => ({ ...prev, end_date: e.target.value }))}
+                />
+              </div>
             )}
             <Input
               label="Work Location"
@@ -2171,12 +2190,14 @@ export function CandidateProfilePage() {
           {/* Candidate Document Details */}
           <h3 className="font-medium text-brand-slate-900">Candidate Details (for contract)</h3>
           
-          <Input
-            label="Full Legal Name *"
-            value={offerForm.candidate_full_name}
-            onChange={(e) => setOfferForm(prev => ({ ...prev, candidate_full_name: e.target.value }))}
-            placeholder="Full name as it should appear on the contract"
-          />
+          <div className={offerValidationErrors.includes('candidate_full_name') ? 'validation-error rounded-lg' : ''}>
+            <Input
+              label="Full Legal Name *"
+              value={offerForm.candidate_full_name}
+              onChange={(e) => setOfferForm(prev => ({ ...prev, candidate_full_name: e.target.value }))}
+              placeholder="Full name as it should appear on the contract"
+            />
+          </div>
           
           <Textarea
             label="Address"
@@ -2196,11 +2217,30 @@ export function CandidateProfilePage() {
             </p>
           </div>
 
-          {/* Document Uploads */}
+          {/* Document Uploads with Drag & Drop */}
           <div className="grid grid-cols-2 gap-4">
-            <div className={`p-4 border-2 border-dashed rounded-lg text-center ${idDocumentFile ? 'border-green-300 bg-green-50' : 'border-brand-grey-300'}`}>
-              <Upload className={`h-8 w-8 mx-auto mb-2 ${idDocumentFile ? 'text-green-500' : 'text-brand-grey-400'}`} />
-              <p className="text-sm text-brand-grey-500">ID Document</p>
+            {/* ID Document */}
+            <div 
+              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors ${
+                idDocumentFile 
+                  ? 'border-green-300 bg-green-50' 
+                  : isDraggingId 
+                    ? 'border-brand-cyan bg-brand-cyan/10' 
+                    : 'border-brand-grey-300 hover:border-brand-grey-400'
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingId(true); }}
+              onDragLeave={() => setIsDraggingId(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDraggingId(false);
+                const file = e.dataTransfer.files[0];
+                if (file && (file.type === 'application/pdf' || file.type.startsWith('image/'))) {
+                  setIdDocumentFile(file);
+                }
+              }}
+            >
+              <Upload className={`h-8 w-8 mx-auto mb-2 ${idDocumentFile ? 'text-green-500' : isDraggingId ? 'text-brand-cyan' : 'text-brand-grey-400'}`} />
+              <p className="text-sm font-medium text-brand-slate-700">ID Document</p>
               <p className="text-xs text-brand-grey-400 mb-2">Passport or British ID</p>
               {idDocumentFile ? (
                 <div className="flex items-center justify-center gap-2">
@@ -2213,22 +2253,45 @@ export function CandidateProfilePage() {
                   </button>
                 </div>
               ) : (
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="hidden"
-                    onChange={(e) => e.target.files?.[0] && setIdDocumentFile(e.target.files[0])}
-                  />
-                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
-                    <Upload className="h-3.5 w-3.5" /> Upload
-                  </span>
-                </label>
+                <>
+                  <p className="text-xs text-brand-grey-400 mb-2">Drag & drop or</p>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => e.target.files?.[0] && setIdDocumentFile(e.target.files[0])}
+                    />
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
+                      Browse
+                    </span>
+                  </label>
+                </>
               )}
             </div>
-            <div className={`p-4 border-2 border-dashed rounded-lg text-center ${rtwDocumentFile ? 'border-green-300 bg-green-50' : 'border-brand-grey-300'}`}>
-              <Upload className={`h-8 w-8 mx-auto mb-2 ${rtwDocumentFile ? 'text-green-500' : 'text-brand-grey-400'}`} />
-              <p className="text-sm text-brand-grey-500">Right to Work</p>
+            
+            {/* Right to Work Document */}
+            <div 
+              className={`p-4 border-2 border-dashed rounded-lg text-center transition-colors ${
+                rtwDocumentFile 
+                  ? 'border-green-300 bg-green-50' 
+                  : isDraggingRtw 
+                    ? 'border-brand-cyan bg-brand-cyan/10' 
+                    : 'border-brand-grey-300 hover:border-brand-grey-400'
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingRtw(true); }}
+              onDragLeave={() => setIsDraggingRtw(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDraggingRtw(false);
+                const file = e.dataTransfer.files[0];
+                if (file && (file.type === 'application/pdf' || file.type.startsWith('image/'))) {
+                  setRtwDocumentFile(file);
+                }
+              }}
+            >
+              <Upload className={`h-8 w-8 mx-auto mb-2 ${rtwDocumentFile ? 'text-green-500' : isDraggingRtw ? 'text-brand-cyan' : 'text-brand-grey-400'}`} />
+              <p className="text-sm font-medium text-brand-slate-700">Right to Work</p>
               <p className="text-xs text-brand-grey-400 mb-2">If non-British nationality</p>
               {rtwDocumentFile ? (
                 <div className="flex items-center justify-center gap-2">
@@ -2241,17 +2304,20 @@ export function CandidateProfilePage() {
                   </button>
                 </div>
               ) : (
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="hidden"
-                    onChange={(e) => e.target.files?.[0] && setRtwDocumentFile(e.target.files[0])}
-                  />
-                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
-                    <Upload className="h-3.5 w-3.5" /> Upload
-                  </span>
-                </label>
+                <>
+                  <p className="text-xs text-brand-grey-400 mb-2">Drag & drop or</p>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => e.target.files?.[0] && setRtwDocumentFile(e.target.files[0])}
+                    />
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-grey-100 hover:bg-brand-grey-200 rounded text-sm text-brand-slate-700 transition-colors">
+                      Browse
+                    </span>
+                  </label>
+                </>
               )}
             </div>
           </div>
@@ -2275,27 +2341,23 @@ export function CandidateProfilePage() {
                 // Validate based on contract type
                 const isContract = offerForm.contract_type === 'contract';
                 const isFixedTerm = offerForm.contract_type === 'fixed_term';
+                const errors: string[] = [];
                 
-                if (!offerForm.job_title || !offerForm.start_date || !offerForm.candidate_full_name) {
-                  toast.error('Validation Error', 'Please fill in all required fields');
+                if (!offerForm.job_title) errors.push('job_title');
+                if (!offerForm.start_date) errors.push('start_date');
+                if (!offerForm.candidate_full_name) errors.push('candidate_full_name');
+                if (isContract && !offerForm.day_rate) errors.push('day_rate');
+                if (!isContract && !offerForm.salary_amount) errors.push('salary_amount');
+                if (isFixedTerm && !offerForm.end_date) errors.push('end_date');
+                
+                if (errors.length > 0) {
+                  setOfferValidationErrors(errors);
+                  setIsOfferShaking(true);
+                  setTimeout(() => setIsOfferShaking(false), 500);
                   return;
                 }
                 
-                if (isContract && !offerForm.day_rate) {
-                  toast.error('Validation Error', 'Please enter a day rate');
-                  return;
-                }
-                
-                if (!isContract && !offerForm.salary_amount) {
-                  toast.error('Validation Error', 'Please enter a salary');
-                  return;
-                }
-                
-                if (isFixedTerm && !offerForm.end_date) {
-                  toast.error('Validation Error', 'Please enter an end date for fixed term contract');
-                  return;
-                }
-                
+                setOfferValidationErrors([]);
                 setIsCreatingOffer(true);
                 try {
                   // Find the approver (the director above the current user's manager)

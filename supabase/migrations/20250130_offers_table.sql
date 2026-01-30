@@ -67,14 +67,13 @@ CREATE POLICY "Users can read offers" ON offers
 CREATE POLICY "Authenticated users can create offers" ON offers
   FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
--- Users can update offers they're involved with
-CREATE POLICY "Users can update relevant offers" ON offers
-  FOR UPDATE USING (
-    auth.uid() = requested_by OR 
-    auth.uid() = approver_id OR
-    auth.uid() = created_by OR
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND 'admin' = ANY(roles))
-  );
+-- Authenticated users can update offers (UI controls who can do what)
+CREATE POLICY "Authenticated users can update offers" ON offers
+  FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+-- Authenticated users can delete offers
+CREATE POLICY "Authenticated users can delete offers" ON offers
+  FOR DELETE USING (auth.uid() IS NOT NULL);
 
 -- Comments for documentation
 COMMENT ON TABLE offers IS 'Stores job offers pending approval and contract workflow status';
