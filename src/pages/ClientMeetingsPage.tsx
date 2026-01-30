@@ -94,9 +94,9 @@ export function ClientMeetingsPage() {
     notes: '',
   });
   
-  // Assessment form - robust flow: Company -> Requirement -> Candidate
+  // Assessment form - robust flow: Contact -> Requirement -> Candidate
   const [assessmentForm, setAssessmentForm] = useState({
-    company_id: '',
+    contact_id: '',
     requirement_id: '',
     application_id: '', // The application links candidate to requirement
     subject: '',
@@ -105,7 +105,7 @@ export function ClientMeetingsPage() {
     location: '',
     notes: '',
   });
-  const [companyRequirements, setCompanyRequirements] = useState<DbRequirement[]>([]);
+  const [contactRequirements, setContactRequirements] = useState<DbRequirement[]>([]);
   const [requirementCandidates, setRequirementCandidates] = useState<Array<{ id: string; candidate: any }>>([]);
   
   // Outcome modal (for assessments)
@@ -140,17 +140,18 @@ export function ClientMeetingsPage() {
     }
   };
 
-  // Handle company selection for assessment - load requirements for that company
-  const handleCompanySelectForAssessment = async (companyId: string) => {
-    setAssessmentForm(prev => ({ ...prev, company_id: companyId, requirement_id: '', application_id: '' }));
-    setCompanyRequirements([]);
+  // Handle contact selection for assessment - load requirements for that contact
+  const handleContactSelectForAssessment = async (contactId: string) => {
+    setAssessmentForm(prev => ({ ...prev, contact_id: contactId, requirement_id: '', application_id: '' }));
+    setContactRequirements([]);
     setRequirementCandidates([]);
     
-    if (companyId) {
+    if (contactId) {
       try {
         const allRequirements = await requirementsService.getAll();
-        const companyReqs = allRequirements.filter(r => r.company_id === companyId);
-        setCompanyRequirements(companyReqs);
+        // Requirements are linked to contacts
+        const contactReqs = allRequirements.filter(r => r.contact_id === contactId);
+        setContactRequirements(contactReqs);
       } catch (error) {
         console.error('Error loading requirements:', error);
       }
@@ -218,8 +219,8 @@ export function ClientMeetingsPage() {
       }
     } else {
       // Candidate assessment - robust flow
-      if (!assessmentForm.company_id) {
-        toast.error('Validation Error', 'Please select a customer');
+      if (!assessmentForm.contact_id) {
+        toast.error('Validation Error', 'Please select a contact');
         return;
       }
       if (!assessmentForm.requirement_id) {
@@ -243,6 +244,7 @@ export function ClientMeetingsPage() {
       try {
         await customerAssessmentsService.create({
           application_id: assessmentForm.application_id,
+          contact_id: assessmentForm.contact_id,
           scheduled_date: assessmentForm.scheduled_date,
           scheduled_time: assessmentForm.scheduled_time || undefined,
           location: assessmentForm.location || undefined,
@@ -302,7 +304,7 @@ export function ClientMeetingsPage() {
       notes: '',
     });
     setAssessmentForm({
-      company_id: '',
+      contact_id: '',
       requirement_id: '',
       application_id: '',
       subject: '',
@@ -311,7 +313,7 @@ export function ClientMeetingsPage() {
       location: '',
       notes: '',
     });
-    setCompanyRequirements([]);
+    setContactRequirements([]);
     setRequirementCandidates([]);
   };
 
@@ -324,12 +326,6 @@ export function ClientMeetingsPage() {
       sublabel: `${c.role ? c.role + ' - ' : ''}${company?.name || ''}`,
     };
   });
-
-  const companyOptions = companies.map(c => ({
-    value: c.id,
-    label: c.name,
-    sublabel: c.industry || undefined,
-  }));
 
   // Combine and sort all meetings
   const allMeetings = [
@@ -666,25 +662,25 @@ export function ClientMeetingsPage() {
             </>
           ) : (
             <>
-              {/* Step 1: Select Customer (Company) */}
+              {/* Step 1: Select Contact */}
               <SearchableSelect
-                label="Customer (Company) *"
-                placeholder="Type to search companies..."
-                options={companyOptions}
-                value={assessmentForm.company_id}
-                onChange={(val) => handleCompanySelectForAssessment(val)}
+                label="Contact *"
+                placeholder="Type to search contacts..."
+                options={contactOptions}
+                value={assessmentForm.contact_id}
+                onChange={(val) => handleContactSelectForAssessment(val)}
               />
               
-              {/* Step 2: Select Requirement (only shown after company selected) */}
-              {assessmentForm.company_id && (
-                companyRequirements.length > 0 ? (
+              {/* Step 2: Select Requirement (only shown after contact selected) */}
+              {assessmentForm.contact_id && (
+                contactRequirements.length > 0 ? (
                   <Select
                     label="Requirement *"
                     options={[
                       { value: '', label: 'Select Requirement' },
-                      ...companyRequirements.map(r => ({
+                      ...contactRequirements.map(r => ({
                         value: r.id,
-                        label: `${r.location || 'No location'} - ${r.fte_count || 1} FTE${r.status ? ` (${r.status})` : ''}`
+                        label: `${r.customer}${r.location ? ' - ' + r.location : ''}${r.status ? ` (${r.status})` : ''}`
                       }))
                     ]}
                     value={assessmentForm.requirement_id}
@@ -693,7 +689,7 @@ export function ClientMeetingsPage() {
                 ) : (
                   <div className="p-4 bg-brand-orange/10 border border-brand-orange/20 rounded-lg">
                     <p className="text-sm text-brand-orange">
-                      No requirements found for this customer. Create a requirement first.
+                      No requirements found for this contact. Create a requirement first.
                     </p>
                   </div>
                 )

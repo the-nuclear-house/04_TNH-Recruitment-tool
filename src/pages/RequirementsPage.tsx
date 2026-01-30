@@ -83,9 +83,7 @@ export function RequirementsPage() {
 
   const [formData, setFormData] = useState({
     contact_id: '',
-    industry: '',
     location: '',
-    fte_count: '1',
     max_day_rate: '',
     description: '',
     status: 'opportunity',
@@ -119,14 +117,13 @@ export function RequirementsPage() {
     }
   };
 
-  // When contact is selected, auto-fill industry and location from their company
+  // When contact is selected, auto-fill location from their company
   const handleContactSelect = (contactId: string) => {
     const contact = allContacts.find(c => c.id === contactId);
     const company = contact?.company || companies.find(c => c.id === contact?.company_id);
     setFormData(prev => ({
       ...prev,
       contact_id: contactId,
-      industry: company?.industry || prev.industry,
       location: company?.city || prev.location,
     }));
   };
@@ -167,9 +164,8 @@ export function RequirementsPage() {
         customer: selectedCompany?.name || '',
         company_id: selectedCompany?.id,
         contact_id: formData.contact_id,
-        industry: formData.industry || undefined,
+        industry: selectedCompany?.industry || undefined,
         location: formData.location || undefined,
-        fte_count: parseInt(formData.fte_count) || 1,
         max_day_rate: formData.max_day_rate ? parseInt(formData.max_day_rate) : undefined,
         description: formData.description || undefined,
         status: formData.status,
@@ -184,9 +180,7 @@ export function RequirementsPage() {
       setIsModalOpen(false);
       setFormData({
         contact_id: '',
-        industry: '',
         location: '',
-        fte_count: '1',
         max_day_rate: '',
         description: '',
         status: 'opportunity',
@@ -212,23 +206,7 @@ export function RequirementsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const totalFTE = requirements
-    .filter(r => r.status === 'active' || r.status === 'opportunity')
-    .reduce((sum, r) => sum + r.fte_count, 0);
-
-  const industryOptions = [
-    { value: '', label: 'Select Industry' },
-    { value: 'defence', label: 'Defence' },
-    { value: 'finance', label: 'Finance' },
-    { value: 'healthcare', label: 'Healthcare' },
-    { value: 'government', label: 'Government' },
-    { value: 'aerospace', label: 'Aerospace' },
-    { value: 'nuclear', label: 'Nuclear' },
-    { value: 'telecoms', label: 'Telecoms' },
-    { value: 'energy', label: 'Energy' },
-    { value: 'transport', label: 'Transport' },
-    { value: 'technology', label: 'Technology' },
-  ];
+  const activeRequirements = requirements.filter(r => r.status === 'active' || r.status === 'opportunity').length;
 
   const statusOptions = [
     { value: 'opportunity', label: 'Opportunity' },
@@ -280,7 +258,7 @@ export function RequirementsPage() {
     <div className="min-h-screen">
       <Header
         title="Requirements"
-        subtitle={`${requirements.length} requirements · ${totalFTE} FTEs across active opportunities`}
+        subtitle={`${requirements.length} requirements · ${activeRequirements} active`}
         actions={
           permissions.canCreateRequirements ? (
             <Button
@@ -389,10 +367,6 @@ export function RequirementsPage() {
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-4 w-4" />
-                            {requirement.fte_count} FTE{requirement.fte_count !== 1 ? 's' : ''}
-                          </span>
                           {requirement.location && (
                             <span className="flex items-center gap-1">
                               <Building2 className="h-4 w-4" />
@@ -464,13 +438,6 @@ export function RequirementsPage() {
 
           <div className="grid grid-cols-3 gap-4">
             <Input
-              label="FTE Count *"
-              type="number"
-              min="1"
-              value={formData.fte_count}
-              onChange={(e) => handleFormChange('fte_count', e.target.value)}
-            />
-            <Input
               label="Max Day Rate (£)"
               type="number"
               value={formData.max_day_rate}
@@ -483,15 +450,15 @@ export function RequirementsPage() {
               value={formData.status}
               onChange={(e) => handleFormChange('status', e.target.value)}
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Engineering Discipline"
               options={engineeringOptions}
               value={formData.engineering_discipline}
               onChange={(e) => handleFormChange('engineering_discipline', e.target.value)}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Clearance Required"
               options={clearanceOptions}

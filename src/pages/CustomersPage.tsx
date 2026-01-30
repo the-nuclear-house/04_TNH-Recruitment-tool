@@ -248,9 +248,7 @@ export function CustomersPage() {
   const [lockedContact, setLockedContact] = useState<DbContact | null>(null); // When creating from contact profile
   const [requirementForm, setRequirementForm] = useState({
     contact_id: '',
-    industry: '',
     location: '',
-    fte_count: '1',
     max_day_rate: '',
     description: '',
     status: 'opportunity',
@@ -725,9 +723,7 @@ export function CustomersPage() {
       
       setRequirementForm({
         contact_id: contact?.id || '',
-        industry: selectedCompany.industry || '',
         location: selectedCompany.city || '',
-        fte_count: '1',
         max_day_rate: '',
         description: '',
         status: 'opportunity',
@@ -755,9 +751,8 @@ export function CustomersPage() {
         customer: selectedCompany.name,
         company_id: selectedCompany.id,
         contact_id: requirementForm.contact_id,
-        industry: requirementForm.industry || undefined,
+        industry: selectedCompany.industry || undefined,
         location: requirementForm.location || undefined,
-        fte_count: parseInt(requirementForm.fte_count) || 1,
         max_day_rate: requirementForm.max_day_rate ? parseInt(requirementForm.max_day_rate) : undefined,
         description: requirementForm.description || undefined,
         status: requirementForm.status,
@@ -1371,12 +1366,6 @@ export function CustomersPage() {
                                       {req.location}
                                     </span>
                                   )}
-                                  {req.fte_count && (
-                                    <span className="flex items-center gap-1">
-                                      <Users className="h-3.5 w-3.5" />
-                                      {req.fte_count} position{req.fte_count > 1 ? 's' : ''}
-                                    </span>
-                                  )}
                                   {req.company && (
                                     <span className="flex items-center gap-1">
                                       <Building2 className="h-3.5 w-3.5" />
@@ -1942,19 +1931,31 @@ export function CustomersPage() {
           {/* Candidate Assessment fields */}
           {meetingCategory === 'candidate_assessment' && (
             <>
-              {/* Requirement selector - only requirements for this company */}
-              <Select
-                label="Requirement *"
-                options={[
-                  { value: '', label: 'Select Requirement' },
-                  ...requirements.map(r => ({
-                    value: r.id,
-                    label: `${r.customer}${r.location ? ` - ${r.location}` : ''} (${r.fte_count || 1} FTE)`
-                  }))
-                ]}
-                value={meetingForm.requirement_id}
-                onChange={(e) => handleRequirementSelectForMeeting(e.target.value)}
-              />
+              {/* Requirement selector - only requirements for this contact */}
+              {(() => {
+                const contactId = lockedMeetingContact?.id || meetingForm.contact_id;
+                const contactReqs = requirements.filter(r => r.contact_id === contactId);
+                return contactReqs.length > 0 ? (
+                  <Select
+                    label="Requirement *"
+                    options={[
+                      { value: '', label: 'Select Requirement' },
+                      ...contactReqs.map(r => ({
+                        value: r.id,
+                        label: `${r.customer}${r.location ? ` - ${r.location}` : ''}${r.status ? ` (${r.status})` : ''}`
+                      }))
+                    ]}
+                    value={meetingForm.requirement_id}
+                    onChange={(e) => handleRequirementSelectForMeeting(e.target.value)}
+                  />
+                ) : (
+                  <div className="p-4 bg-brand-orange/10 border border-brand-orange/20 rounded-lg">
+                    <p className="text-sm text-brand-orange">
+                      No requirements found for this contact. Create a requirement first.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Candidate selector - only candidates linked to selected requirement */}
               {meetingForm.requirement_id && (
@@ -2121,13 +2122,6 @@ export function CustomersPage() {
               value={requirementForm.location}
               onChange={(e) => setRequirementForm(prev => ({ ...prev, location: e.target.value }))}
               placeholder="e.g., London, Remote"
-            />
-            <Input
-              label="FTE Count *"
-              type="number"
-              min="1"
-              value={requirementForm.fte_count}
-              onChange={(e) => setRequirementForm(prev => ({ ...prev, fte_count: e.target.value }))}
             />
             <Input
               label="Max Day Rate (£)"
