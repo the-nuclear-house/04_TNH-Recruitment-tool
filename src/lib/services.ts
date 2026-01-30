@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 // Types matching our database schema
 export interface DbCandidate {
   id: string;
+  reference_id: string | null;  // Human-readable ID like CAND-001
   first_name: string;
   last_name: string;
   email: string;
@@ -24,6 +25,7 @@ export interface DbCandidate {
   assigned_recruiter_id: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;  // Soft delete timestamp
 }
 
 export interface CreateCandidateInput {
@@ -60,6 +62,7 @@ export const candidatesService = {
     const { data, error } = await supabase
       .from('candidates')
       .select('*')
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -110,11 +113,11 @@ export const candidatesService = {
     return data;
   },
 
-  // Delete candidate
+  // Delete candidate (soft delete)
   async delete(id: string): Promise<void> {
     const { error } = await supabase
       .from('candidates')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) throw error;
@@ -125,6 +128,7 @@ export const candidatesService = {
     const { data, error } = await supabase
       .from('candidates')
       .select('*')
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
       .order('created_at', { ascending: false });
 
@@ -151,6 +155,8 @@ export const candidatesService = {
 
 export interface DbRequirement {
   id: string;
+  reference_id: string | null;  // Human-readable ID like REQ-001
+  title: string | null;         // Descriptive name for the requirement
   customer: string;
   industry: string | null;
   location: string | null;
@@ -168,12 +174,14 @@ export interface DbRequirement {
   contact_id: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;  // Soft delete timestamp
   // Joined
   company?: DbCompany;
   contact?: DbContact;
 }
 
 export interface CreateRequirementInput {
+  title?: string;
   customer: string;
   industry?: string;
   location?: string;
@@ -197,6 +205,7 @@ export const requirementsService = {
     const { data, error } = await supabase
       .from('requirements')
       .select('*')
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -247,11 +256,11 @@ export const requirementsService = {
     return data;
   },
 
-  // Delete requirement
+  // Delete requirement (soft delete)
   async delete(id: string): Promise<void> {
     const { error } = await supabase
       .from('requirements')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) throw error;
@@ -263,6 +272,7 @@ export const requirementsService = {
       .from('requirements')
       .select('*')
       .eq('status', status)
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -848,6 +858,7 @@ export const customerAssessmentsService = {
 
 export interface DbCompany {
   id: string;
+  reference_id: string | null;  // Human-readable ID like CUST-001
   name: string;
   trading_name: string | null;
   companies_house_number: string | null;
@@ -870,6 +881,7 @@ export interface DbCompany {
   assigned_manager_id: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;  // Soft delete timestamp
   // Joined data
   parent_company?: DbCompany;
   subsidiaries?: DbCompany[];
@@ -908,6 +920,7 @@ export const companiesService = {
         parent_company:parent_company_id(*),
         assigned_manager:assigned_manager_id(*)
       `)
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .order('name');
 
     if (error) throw error;
@@ -936,6 +949,7 @@ export const companiesService = {
       .from('companies')
       .select('*')
       .is('parent_company_id', null)
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .order('name');
 
     if (error) throw error;
@@ -982,9 +996,10 @@ export const companiesService = {
   },
 
   async delete(id: string): Promise<void> {
+    // Soft delete - set deleted_at timestamp instead of removing
     const { error } = await supabase
       .from('companies')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) throw error;
@@ -995,6 +1010,7 @@ export const companiesService = {
 
 export interface DbContact {
   id: string;
+  reference_id: string | null;  // Human-readable ID like CON-001
   company_id: string;
   first_name: string;
   last_name: string;
@@ -1012,6 +1028,7 @@ export interface DbContact {
   reports_to_id: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;  // Soft delete timestamp
   // Joined
   company?: DbCompany;
   reports_to?: DbContact;
@@ -1044,6 +1061,7 @@ export const contactsService = {
         company:company_id(id, name, parent_company_id)
       `)
       .eq('is_active', true)
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .order('last_name');
 
     if (error) throw error;
@@ -1059,6 +1077,7 @@ export const contactsService = {
       `)
       .eq('company_id', companyId)
       .eq('is_active', true)
+      .is('deleted_at', null)  // Exclude soft-deleted records
       .order('is_primary_contact', { ascending: false })
       .order('last_name');
 
@@ -1117,9 +1136,10 @@ export const contactsService = {
   },
 
   async delete(id: string): Promise<void> {
+    // Soft delete - set deleted_at timestamp
     const { error } = await supabase
       .from('contacts')
-      .update({ is_active: false })
+      .update({ is_active: false, deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) throw error;

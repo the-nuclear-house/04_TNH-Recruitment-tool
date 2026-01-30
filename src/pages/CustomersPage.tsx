@@ -247,6 +247,7 @@ export function CustomersPage() {
   const [isRequirementModalOpen, setIsRequirementModalOpen] = useState(false);
   const [lockedContact, setLockedContact] = useState<DbContact | null>(null); // When creating from contact profile
   const [requirementForm, setRequirementForm] = useState({
+    title: '',
     contact_id: '',
     location: '',
     max_day_rate: '',
@@ -722,6 +723,7 @@ export function CustomersPage() {
       setLockedContact(contact || null);
       
       setRequirementForm({
+        title: '',
         contact_id: contact?.id || '',
         location: selectedCompany.city || '',
         max_day_rate: '',
@@ -737,6 +739,10 @@ export function CustomersPage() {
   };
 
   const handleSaveRequirement = async () => {
+    if (!requirementForm.title) {
+      toast.error('Validation Error', 'Please enter a title');
+      return;
+    }
     if (!requirementForm.contact_id) {
       toast.error('Validation Error', 'Please select a contact');
       return;
@@ -748,6 +754,7 @@ export function CustomersPage() {
     setIsSubmitting(true);
     try {
       await requirementsService.create({
+        title: requirementForm.title,
         customer: selectedCompany.name,
         company_id: selectedCompany.id,
         contact_id: requirementForm.contact_id,
@@ -762,7 +769,7 @@ export function CustomersPage() {
         created_by: user?.id,
       });
       
-      toast.success('Requirement Created', `Requirement for ${selectedReqContact?.first_name} ${selectedReqContact?.last_name} has been created`);
+      toast.success('Requirement Created', `"${requirementForm.title}" has been created`);
       setIsRequirementModalOpen(false);
       // Reload company details to show new requirement
       await loadCompanyDetails(selectedCompany.id);
@@ -1931,7 +1938,7 @@ export function CustomersPage() {
           {/* Candidate Assessment fields */}
           {meetingCategory === 'candidate_assessment' && (
             <>
-              {/* Requirement selector - only requirements for this contact */}
+              {/* Requirement selector (dropdown) - only requirements for this contact */}
               {(() => {
                 const contactId = lockedMeetingContact?.id || meetingForm.contact_id;
                 const contactReqs = requirements.filter(r => r.contact_id === contactId);
@@ -1942,7 +1949,7 @@ export function CustomersPage() {
                       { value: '', label: 'Select Requirement' },
                       ...contactReqs.map(r => ({
                         value: r.id,
-                        label: `${r.customer}${r.location ? ` - ${r.location}` : ''}${r.status ? ` (${r.status})` : ''}`
+                        label: `${r.title || r.customer}${r.location ? ` - ${r.location}` : ''}${r.reference_id ? ` [${r.reference_id}]` : ''}`
                       }))
                     ]}
                     value={meetingForm.requirement_id}
@@ -1957,19 +1964,20 @@ export function CustomersPage() {
                 );
               })()}
 
-              {/* Candidate selector - only candidates linked to selected requirement */}
+              {/* Candidate selector (dropdown) - only candidates linked to selected requirement */}
               {meetingForm.requirement_id && (
                 requirementCandidates.length > 0 ? (
-                  <SearchableSelect
+                  <Select
                     label="Candidate *"
-                    placeholder="Type to search candidates..."
-                    options={requirementCandidates.map(rc => ({
-                      value: rc.id,
-                      label: `${rc.candidate?.first_name} ${rc.candidate?.last_name}`,
-                      sublabel: rc.candidate?.email || undefined
-                    }))}
+                    options={[
+                      { value: '', label: 'Select Candidate' },
+                      ...requirementCandidates.map(rc => ({
+                        value: rc.id,
+                        label: `${rc.candidate?.first_name} ${rc.candidate?.last_name}${rc.candidate?.reference_id ? ` [${rc.candidate.reference_id}]` : ''}`
+                      }))
+                    ]}
                     value={meetingForm.candidate_id}
-                    onChange={(val) => setMeetingForm(prev => ({ ...prev, candidate_id: val }))}
+                    onChange={(e) => setMeetingForm(prev => ({ ...prev, candidate_id: e.target.value }))}
                   />
                 ) : (
                   <div className="p-4 bg-brand-orange/10 border border-brand-orange/20 rounded-lg">
@@ -2067,6 +2075,13 @@ export function CustomersPage() {
         size="xl"
       >
         <div className="space-y-4">
+          <Input
+            label="Title *"
+            value={requirementForm.title}
+            onChange={(e) => setRequirementForm(prev => ({ ...prev, title: e.target.value }))}
+            placeholder="e.g., Senior Java Developer, DevOps Engineer"
+          />
+
           {/* Company info (read-only) and Contact selector */}
           <div className="grid grid-cols-2 gap-4">
             {/* Company is shown as context */}

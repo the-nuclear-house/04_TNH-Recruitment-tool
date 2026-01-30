@@ -671,7 +671,7 @@ export function ClientMeetingsPage() {
                 onChange={(val) => handleContactSelectForAssessment(val)}
               />
               
-              {/* Step 2: Select Requirement (only shown after contact selected) */}
+              {/* Step 2: Select Requirement (dropdown - only shown after contact selected) */}
               {assessmentForm.contact_id && (
                 contactRequirements.length > 0 ? (
                   <Select
@@ -680,7 +680,7 @@ export function ClientMeetingsPage() {
                       { value: '', label: 'Select Requirement' },
                       ...contactRequirements.map(r => ({
                         value: r.id,
-                        label: `${r.customer}${r.location ? ' - ' + r.location : ''}${r.status ? ` (${r.status})` : ''}`
+                        label: `${r.title || r.customer}${r.location ? ' - ' + r.location : ''}${r.reference_id ? ` [${r.reference_id}]` : ''}`
                       }))
                     ]}
                     value={assessmentForm.requirement_id}
@@ -695,19 +695,20 @@ export function ClientMeetingsPage() {
                 )
               )}
 
-              {/* Step 3: Select Candidate (only shown after requirement selected) */}
+              {/* Step 3: Select Candidate (dropdown - only shown after requirement selected) */}
               {assessmentForm.requirement_id && (
                 requirementCandidates.length > 0 ? (
-                  <SearchableSelect
+                  <Select
                     label="Candidate *"
-                    placeholder="Type to search candidates..."
-                    options={requirementCandidates.map(rc => ({
-                      value: rc.id,
-                      label: `${rc.candidate?.first_name} ${rc.candidate?.last_name}`,
-                      sublabel: rc.candidate?.email || undefined
-                    }))}
+                    options={[
+                      { value: '', label: 'Select Candidate' },
+                      ...requirementCandidates.map(rc => ({
+                        value: rc.id,
+                        label: `${rc.candidate?.first_name} ${rc.candidate?.last_name}${rc.candidate?.reference_id ? ` [${rc.candidate.reference_id}]` : ''}`
+                      }))
+                    ]}
                     value={assessmentForm.application_id}
-                    onChange={(val) => setAssessmentForm(prev => ({ ...prev, application_id: val }))}
+                    onChange={(e) => setAssessmentForm(prev => ({ ...prev, application_id: e.target.value }))}
                   />
                 ) : (
                   <div className="p-4 bg-brand-orange/10 border border-brand-orange/20 rounded-lg">

@@ -82,6 +82,7 @@ export function RequirementsPage() {
   const [skillInput, setSkillInput] = useState('');
 
   const [formData, setFormData] = useState({
+    title: '',
     contact_id: '',
     location: '',
     max_day_rate: '',
@@ -154,6 +155,10 @@ export function RequirementsPage() {
       toast.error('Validation Error', 'Please select a contact');
       return;
     }
+    if (!formData.title) {
+      toast.error('Validation Error', 'Please enter a title for the requirement');
+      return;
+    }
     
     const selectedContact = allContacts.find(c => c.id === formData.contact_id);
     const selectedCompany = selectedContact?.company || companies.find(c => c.id === selectedContact?.company_id);
@@ -161,6 +166,7 @@ export function RequirementsPage() {
     setIsSubmitting(true);
     try {
       await requirementsService.create({
+        title: formData.title,
         customer: selectedCompany?.name || '',
         company_id: selectedCompany?.id,
         contact_id: formData.contact_id,
@@ -176,9 +182,10 @@ export function RequirementsPage() {
         created_by: user?.id,
       });
       
-      toast.success('Requirement Created', `Requirement for ${selectedContact?.first_name} ${selectedContact?.last_name} has been created`);
+      toast.success('Requirement Created', `"${formData.title}" has been created`);
       setIsModalOpen(false);
       setFormData({
+        title: '',
         contact_id: '',
         location: '',
         max_day_rate: '',
@@ -349,13 +356,29 @@ export function RequirementsPage() {
                   <div className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-center gap-3 mb-1">
+                          {requirement.reference_id && (
+                            <span className="text-xs font-mono text-brand-grey-400 bg-brand-grey-100 px-1.5 py-0.5 rounded">
+                              {requirement.reference_id}
+                            </span>
+                          )}
                           <h3 className="text-lg font-semibold text-brand-slate-900">
-                            {requirement.customer}
+                            {requirement.title || requirement.customer}
                           </h3>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColour} ${config.colour}`}>
                             {config.label}
                           </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-sm text-brand-grey-500">
+                            {requirement.customer}
+                          </span>
+                          {requirement.contact && (
+                            <span className="text-sm text-brand-cyan">
+                              → {requirement.contact.first_name} {requirement.contact.last_name}
+                            </span>
+                          )}
                           {requirement.clearance_required && requirement.clearance_required !== 'none' && (
                             <Badge variant="orange">
                               {clearanceLabels[requirement.clearance_required] || requirement.clearance_required}
@@ -420,6 +443,13 @@ export function RequirementsPage() {
         size="xl"
       >
         <div className="space-y-4">
+          <Input
+            label="Title *"
+            value={formData.title}
+            onChange={(e) => handleFormChange('title', e.target.value)}
+            placeholder="e.g., Senior Java Developer, DevOps Engineer"
+          />
+
           <div className="grid grid-cols-2 gap-4">
             <SearchableSelect
               label="Contact *"
