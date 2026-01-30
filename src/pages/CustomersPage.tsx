@@ -1644,6 +1644,7 @@ export function CustomersPage() {
         cancelText="Cancel"
         variant="danger"
         isLoading={isSubmitting}
+        requirePassword={deleteTarget?.type === 'company'}
       />
     </div>
   );

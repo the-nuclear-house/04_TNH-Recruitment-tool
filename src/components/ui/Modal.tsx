@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
+import { supabase } from '@/lib/supabase';
 
 interface ModalProps {
   isOpen: boolean;
@@ -128,6 +129,7 @@ interface ConfirmDialogProps {
   cancelText?: string;
   variant?: 'danger' | 'primary';
   isLoading?: boolean;
+  requirePassword?: boolean;
 }
 
 export function ConfirmDialog({
@@ -140,9 +142,52 @@ export function ConfirmDialog({
   cancelText = 'Cancel',
   variant = 'primary',
   isLoading = false,
+  requirePassword = false,
 }: ConfirmDialogProps) {
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const handleConfirm = async () => {
+    if (requirePassword) {
+      if (!password) {
+        setPasswordError('Please enter your password');
+        return;
+      }
+      // Verify password with Supabase
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) {
+          setPasswordError('Unable to verify user');
+          return;
+        }
+        
+        const { error } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: password,
+        });
+        
+        if (error) {
+          setPasswordError('Incorrect password');
+          return;
+        }
+      } catch (err) {
+        setPasswordError('Failed to verify password');
+        return;
+      }
+    }
+    setPassword('');
+    setPasswordError('');
+    onConfirm();
+  };
+
+  const handleClose = () => {
+    setPassword('');
+    setPasswordError('');
+    onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={false}>
+    <Modal isOpen={isOpen} onClose={handleClose} size="sm" showCloseButton={false}>
       <div className="text-center">
         <h3 className="text-lg font-semibold text-brand-slate-900 mb-2">
           {title}
@@ -150,13 +195,37 @@ export function ConfirmDialog({
         <p className="text-brand-grey-400 mb-6">
           {message}
         </p>
+        
+        {requirePassword && (
+          <div className="mb-6 text-left">
+            <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+              Enter your password to confirm
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setPasswordError('');
+              }}
+              className={`w-full px-3 py-2 rounded-lg border ${
+                passwordError ? 'border-red-500' : 'border-brand-grey-200'
+              } focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 focus:border-brand-cyan`}
+              placeholder="Your password"
+            />
+            {passwordError && (
+              <p className="mt-1 text-sm text-red-500">{passwordError}</p>
+            )}
+          </div>
+        )}
+        
         <div className="flex gap-3 justify-center">
-          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+          <Button variant="secondary" onClick={handleClose} disabled={isLoading}>
             {cancelText}
           </Button>
           <Button 
             variant={variant === 'danger' ? 'danger' : 'primary'} 
-            onClick={onConfirm}
+            onClick={handleConfirm}
             isLoading={isLoading}
           >
             {confirmText}
