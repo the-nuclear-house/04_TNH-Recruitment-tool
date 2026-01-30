@@ -235,6 +235,7 @@ export function CustomersPage() {
 
   // Requirement modal
   const [isRequirementModalOpen, setIsRequirementModalOpen] = useState(false);
+  const [lockedContact, setLockedContact] = useState<DbContact | null>(null); // When creating from contact profile
   const [requirementForm, setRequirementForm] = useState({
     contact_id: '',
     industry: '',
@@ -650,7 +651,9 @@ export function CustomersPage() {
     setIsContactDetailOpen(false);
     
     if (selectedCompany) {
-      // Pre-fill form - if contact provided, pre-select it
+      // If contact provided, lock it (coming from contact profile)
+      setLockedContact(contact || null);
+      
       setRequirementForm({
         contact_id: contact?.id || '',
         industry: selectedCompany.industry || '',
@@ -1883,9 +1886,11 @@ export function CustomersPage() {
       {/* Requirement Modal */}
       <Modal
         isOpen={isRequirementModalOpen}
-        onClose={() => setIsRequirementModalOpen(false)}
+        onClose={() => { setIsRequirementModalOpen(false); setLockedContact(null); }}
         title="New Requirement"
-        description={`Create a new requirement for ${selectedCompany?.name || 'customer'}`}
+        description={lockedContact 
+          ? `Create a new requirement for ${lockedContact.first_name} ${lockedContact.last_name}` 
+          : `Create a new requirement for ${selectedCompany?.name || 'customer'}`}
         size="xl"
       >
         <div className="space-y-4">
@@ -1905,19 +1910,38 @@ export function CustomersPage() {
                 <span className="font-medium text-brand-slate-900">{selectedCompany?.name}</span>
               </div>
             </div>
-            {/* Contact selector */}
-            <Select
-              label="Contact *"
-              options={[
-                { value: '', label: 'Select Contact' },
-                ...contacts.map(c => ({ 
-                  value: c.id, 
-                  label: `${c.first_name} ${c.last_name}${c.role ? ` - ${c.role}` : ''}` 
-                }))
-              ]}
-              value={requirementForm.contact_id}
-              onChange={(e) => setRequirementForm(prev => ({ ...prev, contact_id: e.target.value }))}
-            />
+            {/* Contact - locked if coming from contact profile, otherwise dropdown */}
+            {lockedContact ? (
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
+                  Contact
+                </label>
+                <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
+                  <Avatar name={`${lockedContact.first_name} ${lockedContact.last_name}`} size="sm" />
+                  <div>
+                    <span className="font-medium text-brand-slate-900">
+                      {lockedContact.first_name} {lockedContact.last_name}
+                    </span>
+                    {lockedContact.role && (
+                      <span className="text-sm text-brand-grey-500 ml-2">{lockedContact.role}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <Select
+                label="Contact *"
+                options={[
+                  { value: '', label: 'Select Contact' },
+                  ...contacts.map(c => ({ 
+                    value: c.id, 
+                    label: `${c.first_name} ${c.last_name}${c.role ? ` - ${c.role}` : ''}` 
+                  }))
+                ]}
+                value={requirementForm.contact_id}
+                onChange={(e) => setRequirementForm(prev => ({ ...prev, contact_id: e.target.value }))}
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
