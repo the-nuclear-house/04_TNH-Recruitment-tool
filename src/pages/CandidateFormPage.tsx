@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, X } from 'lucide-react';
+import { ArrowLeft, Upload, X, Plus } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -13,7 +13,7 @@ import {
   Badge,
 } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
-import type { RightToWork, SecurityVetting } from '@/types';
+import { candidatesService } from '@/lib/services';
 
 const rightToWorkOptions = [
   { value: 'british_citizen', label: 'British Citizen' },
@@ -53,8 +53,13 @@ export function CandidateFormPage() {
   const isEditing = !!id;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(isEditing);
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState('');
+  const [previousCompanies, setPreviousCompanies] = useState<string[]>([]);
+  const [companyInput, setCompanyInput] = useState('');
+  const [nationalities, setNationalities] = useState<string[]>([]);
+  const [nationalityInput, setNationalityInput] = useState('');
   
   const [formData, setFormData] = useState({
     first_name: '',
@@ -63,22 +68,61 @@ export function CandidateFormPage() {
     phone: '',
     location: '',
     linkedin_url: '',
-    current_role: '',
-    current_company: '',
     years_experience: '',
     degree: '',
     summary: '',
-    right_to_work: 'unknown' as RightToWork,
-    security_vetting: 'none' as SecurityVetting,
-    open_to_relocate: false,
-    relocation_preferences: '',
-    current_salary: '',
-    salary_expectation_min: '',
-    salary_expectation_max: '',
-    sector_flexibility: '',
-    scope_flexibility: '',
+    right_to_work: 'unknown',
+    security_vetting: 'none',
+    open_to_relocate: '',
+    minimum_salary_expected: '',
+    expected_day_rate: '',
+    notice_period: '',
+    contract_preference: '',
     source: '',
   });
+
+  // Load candidate data when editing
+  useEffect(() => {
+    if (isEditing && id) {
+      loadCandidate();
+    }
+  }, [id, isEditing]);
+
+  const loadCandidate = async () => {
+    try {
+      setIsLoading(true);
+      const candidate = await candidatesService.getById(id!);
+      if (candidate) {
+        setFormData({
+          first_name: candidate.first_name || '',
+          last_name: candidate.last_name || '',
+          email: candidate.email || '',
+          phone: candidate.phone || '',
+          location: candidate.location || '',
+          linkedin_url: candidate.linkedin_url || '',
+          years_experience: candidate.years_experience?.toString() || '',
+          degree: candidate.degree || '',
+          summary: candidate.summary || '',
+          right_to_work: candidate.right_to_work || 'unknown',
+          security_vetting: candidate.security_vetting || 'none',
+          open_to_relocate: candidate.open_to_relocate || '',
+          minimum_salary_expected: candidate.minimum_salary_expected?.toString() || '',
+          expected_day_rate: candidate.expected_day_rate?.toString() || '',
+          notice_period: candidate.notice_period || '',
+          contract_preference: candidate.contract_preference || '',
+          source: candidate.source || '',
+        });
+        setSkills(candidate.skills || []);
+        setPreviousCompanies(candidate.previous_companies || []);
+        setNationalities(candidate.nationalities || []);
+      }
+    } catch (error) {
+      console.error('Error loading candidate:', error);
+      toast.error('Error', 'Failed to load candidate data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -96,26 +140,91 @@ export function CandidateFormPage() {
     setSkills(skills.filter(s => s !== skill));
   };
 
+  const handleAddCompany = () => {
+    if (companyInput.trim() && !previousCompanies.includes(companyInput.trim())) {
+      setPreviousCompanies([...previousCompanies, companyInput.trim()]);
+      setCompanyInput('');
+    }
+  };
+
+  const handleRemoveCompany = (company: string) => {
+    setPreviousCompanies(previousCompanies.filter(c => c !== company));
+  };
+
+  const handleAddNationality = () => {
+    if (nationalityInput.trim() && !nationalities.includes(nationalityInput.trim())) {
+      setNationalities([...nationalities, nationalityInput.trim()]);
+      setNationalityInput('');
+    }
+  };
+
+  const handleRemoveNationality = (nationality: string) => {
+    setNationalities(nationalities.filter(n => n !== nationality));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // TODO: API call to save candidate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const candidateData = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email || undefined,
+        phone: formData.phone || undefined,
+        location: formData.location || undefined,
+        linkedin_url: formData.linkedin_url || undefined,
+        years_experience: formData.years_experience ? parseInt(formData.years_experience) : undefined,
+        degree: formData.degree || undefined,
+        summary: formData.summary || undefined,
+        right_to_work: formData.right_to_work || undefined,
+        security_vetting: formData.security_vetting || undefined,
+        open_to_relocate: formData.open_to_relocate || undefined,
+        minimum_salary_expected: formData.minimum_salary_expected ? parseFloat(formData.minimum_salary_expected) : undefined,
+        expected_day_rate: formData.expected_day_rate ? parseFloat(formData.expected_day_rate) : undefined,
+        notice_period: formData.notice_period || undefined,
+        contract_preference: formData.contract_preference || undefined,
+        skills: skills.length > 0 ? skills : undefined,
+        previous_companies: previousCompanies.length > 0 ? previousCompanies : undefined,
+        nationalities: nationalities.length > 0 ? nationalities : undefined,
+        source: formData.source || undefined,
+      };
+
+      if (isEditing) {
+        await candidatesService.update(id!, candidateData);
+      } else {
+        await candidatesService.create({
+          ...candidateData,
+          email: formData.email, // email is required for create
+        });
+      }
       
       toast.success(
         isEditing ? 'Candidate updated' : 'Candidate added',
         isEditing ? 'The candidate has been updated successfully.' : 'The candidate has been added to your database.'
       );
       
-      navigate('/candidates');
+      navigate(isEditing ? `/candidates/${id}` : '/candidates');
     } catch (error) {
+      console.error('Error saving candidate:', error);
       toast.error('Error', 'Failed to save candidate. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Loading..." />
+        <div className="p-6">
+          <Card>
+            <div className="text-center py-8 text-brand-grey-400">Loading candidate...</div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -190,17 +299,6 @@ export function CandidateFormPage() {
           </CardHeader>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Current Role"
-              value={formData.current_role}
-              onChange={(e) => handleChange('current_role', e.target.value)}
-              placeholder="e.g., Senior Software Engineer"
-            />
-            <Input
-              label="Current Company"
-              value={formData.current_company}
-              onChange={(e) => handleChange('current_company', e.target.value)}
-            />
             <Input
               label="Years of Experience"
               type="number"
@@ -294,30 +392,17 @@ export function CandidateFormPage() {
               onChange={(e) => handleChange('security_vetting', e.target.value)}
             />
             
-            <div className="md:col-span-2">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.open_to_relocate}
-                  onChange={(e) => handleChange('open_to_relocate', e.target.checked)}
-                  className="w-4 h-4 rounded border-brand-grey-200 text-brand-cyan focus:ring-brand-cyan"
-                />
-                <span className="text-sm font-medium text-brand-slate-700">
-                  Open to relocation
-                </span>
-              </label>
-            </div>
-            
-            {formData.open_to_relocate && (
-              <div className="md:col-span-2">
-                <Input
-                  label="Relocation Preferences"
-                  value={formData.relocation_preferences}
-                  onChange={(e) => handleChange('relocation_preferences', e.target.value)}
-                  placeholder="e.g., London, Manchester, Remote"
-                />
-              </div>
-            )}
+            <Select
+              label="Open to Relocate"
+              options={[
+                { value: '', label: 'Not specified' },
+                { value: 'yes', label: 'Yes' },
+                { value: 'no', label: 'No' },
+                { value: 'maybe', label: 'Maybe / Depends' },
+              ]}
+              value={formData.open_to_relocate}
+              onChange={(e) => handleChange('open_to_relocate', e.target.value)}
+            />
           </div>
         </Card>
 
@@ -327,49 +412,45 @@ export function CandidateFormPage() {
             <CardTitle>Salary Information</CardTitle>
           </CardHeader>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="Current Salary (£)"
+              label="Minimum Salary Expected (£)"
               type="number"
-              value={formData.current_salary}
-              onChange={(e) => handleChange('current_salary', e.target.value)}
+              value={formData.minimum_salary_expected}
+              onChange={(e) => handleChange('minimum_salary_expected', e.target.value)}
               placeholder="e.g., 75000"
             />
             <Input
-              label="Salary Expectation Min (£)"
+              label="Expected Day Rate (£)"
               type="number"
-              value={formData.salary_expectation_min}
-              onChange={(e) => handleChange('salary_expectation_min', e.target.value)}
-              placeholder="e.g., 85000"
+              value={formData.expected_day_rate}
+              onChange={(e) => handleChange('expected_day_rate', e.target.value)}
+              placeholder="e.g., 500"
             />
-            <Input
-              label="Salary Expectation Max (£)"
-              type="number"
-              value={formData.salary_expectation_max}
-              onChange={(e) => handleChange('salary_expectation_max', e.target.value)}
-              placeholder="e.g., 95000"
+            <Select
+              label="Notice Period"
+              options={[
+                { value: '', label: 'Not specified' },
+                { value: '1_week', label: '1 Week' },
+                { value: '2_weeks', label: '2 Weeks' },
+                { value: '1_month', label: '1 Month' },
+                { value: '2_months', label: '2 Months' },
+                { value: '3_months', label: '3 Months' },
+                { value: 'immediate', label: 'Immediate' },
+              ]}
+              value={formData.notice_period}
+              onChange={(e) => handleChange('notice_period', e.target.value)}
             />
-          </div>
-        </Card>
-
-        {/* Flexibility */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Flexibility</CardTitle>
-          </CardHeader>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Sector Flexibility"
-              value={formData.sector_flexibility}
-              onChange={(e) => handleChange('sector_flexibility', e.target.value)}
-              placeholder="e.g., Defence, Finance, Healthcare"
-            />
-            <Input
-              label="Scope Flexibility"
-              value={formData.scope_flexibility}
-              onChange={(e) => handleChange('scope_flexibility', e.target.value)}
-              placeholder="e.g., Backend, Full-stack, Architecture"
+            <Select
+              label="Contract Preference"
+              options={[
+                { value: '', label: 'Not specified' },
+                { value: 'permanent', label: 'Permanent' },
+                { value: 'contractor', label: 'Contractor' },
+                { value: 'open_to_both', label: 'Open to Both' },
+              ]}
+              value={formData.contract_preference}
+              onChange={(e) => handleChange('contract_preference', e.target.value)}
             />
           </div>
         </Card>

@@ -746,6 +746,15 @@ export function CandidateProfilePage() {
         title="Candidate Profile"
         actions={
           <div className="flex items-center gap-2">
+            {(permissions.canEditCandidates || candidate?.assigned_recruiter === user?.id) && (
+              <Button
+                variant="secondary"
+                leftIcon={<Edit className="h-4 w-4" />}
+                onClick={() => navigate(`/candidates/${id}/edit`)}
+              >
+                Edit
+              </Button>
+            )}
             {permissions.isAdmin && (
               <Button
                 variant="danger"
