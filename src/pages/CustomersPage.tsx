@@ -531,13 +531,19 @@ export function CustomersPage() {
       if (deleteTarget.type === 'company') {
         await companiesService.delete(deleteTarget.item.id);
         toast.success('Company Deleted', 'Company has been removed');
+        // Clear all related state
         setSelectedCompany(null);
-        loadCompanies();
+        setContacts([]);
+        setMeetings([]);
+        setRequirements([]);
+        setSelectedContact(null);
+        // Reload the companies list
+        await loadCompanies();
       } else {
         await contactsService.delete(deleteTarget.item.id);
         toast.success('Contact Removed', 'Contact has been removed');
         if (selectedCompany) {
-          loadCompanyDetails(selectedCompany.id);
+          await loadCompanyDetails(selectedCompany.id);
         }
         setIsContactDetailOpen(false);
         setSelectedContact(null);
