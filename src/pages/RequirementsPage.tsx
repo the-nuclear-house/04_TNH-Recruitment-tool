@@ -18,7 +18,7 @@ import { formatDate } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { requirementsService, usersService, type DbRequirement, type DbUser } from '@/lib/services';
+import { requirementsService, usersService, companiesService, contactsService, type DbRequirement, type DbUser, type DbCompany, type DbContact } from '@/lib/services';
 
 type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';
 
@@ -69,6 +69,8 @@ export function RequirementsPage() {
   
   const [requirements, setRequirements] = useState<DbRequirement[]>([]);
   const [users, setUsers] = useState<DbUser[]>([]);
+  const [companies, setCompanies] = useState<DbCompany[]>([]);
+  const [allContacts, setAllContacts] = useState<DbContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -79,7 +81,7 @@ export function RequirementsPage() {
   const [skillInput, setSkillInput] = useState('');
 
   const [formData, setFormData] = useState({
-    customer: '',
+    contact_id: '',
     industry: '',
     location: '',
     fte_count: '1',
@@ -98,18 +100,34 @@ export function RequirementsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [reqs, usrs] = await Promise.all([
+      const [reqs, usrs, comps, conts] = await Promise.all([
         requirementsService.getAll(),
         usersService.getAll(),
+        companiesService.getAll(),
+        contactsService.getAll(),
       ]);
       setRequirements(reqs);
       setUsers(usrs);
+      setCompanies(comps);
+      setAllContacts(conts);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error', 'Failed to load requirements');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // When contact is selected, auto-fill industry and location from their company
+  const handleContactSelect = (contactId: string) => {
+    const contact = allContacts.find(c => c.id === contactId);
+    const company = contact?.company || companies.find(c => c.id === contact?.company_id);
+    setFormData(prev => ({
+      ...prev,
+      contact_id: contactId,
+      industry: company?.industry || prev.industry,
+      location: company?.city || prev.location,
+    }));
   };
 
   const handleFormChange = (field: string, value: string) => {
@@ -134,15 +152,20 @@ export function RequirementsPage() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.customer) {
-      toast.error('Validation Error', 'Please enter a customer name');
+    if (!formData.contact_id) {
+      toast.error('Validation Error', 'Please select a contact');
       return;
     }
+    
+    const selectedContact = allContacts.find(c => c.id === formData.contact_id);
+    const selectedCompany = selectedContact?.company || companies.find(c => c.id === selectedContact?.company_id);
     
     setIsSubmitting(true);
     try {
       await requirementsService.create({
-        customer: formData.customer,
+        customer: selectedCompany?.name || '',
+        company_id: selectedCompany?.id,
+        contact_id: formData.contact_id,
         industry: formData.industry || undefined,
         location: formData.location || undefined,
         fte_count: parseInt(formData.fte_count) || 1,
@@ -156,10 +179,10 @@ export function RequirementsPage() {
         created_by: user?.id,
       });
       
-      toast.success('Requirement Created', `${formData.customer} requirement has been created`);
+      toast.success('Requirement Created', `Requirement for ${selectedContact?.first_name} ${selectedContact?.last_name} has been created`);
       setIsModalOpen(false);
       setFormData({
-        customer: '',
+        contact_id: '',
         industry: '',
         location: '',
         fte_count: '1',
@@ -238,6 +261,18 @@ export function RequirementsPage() {
   const managerOptions = [
     { value: '', label: 'Select Manager (Optional)' },
     ...users.map(u => ({ value: u.id, label: u.full_name })),
+  ];
+
+  // Group contacts by company for better UX
+  const contactOptions = [
+    { value: '', label: 'Select Contact *' },
+    ...allContacts.map(c => {
+      const companyName = c.company?.name || companies.find(co => co.id === c.company_id)?.name || '';
+      return { 
+        value: c.id, 
+        label: `${c.first_name} ${c.last_name}${c.role ? ` - ${c.role}` : ''} (${companyName})` 
+      };
+    }),
   ];
 
   return (
@@ -411,11 +446,11 @@ export function RequirementsPage() {
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Customer Name *"
-              value={formData.customer}
-              onChange={(e) => handleFormChange('customer', e.target.value)}
-              placeholder="e.g., BAE Systems"
+            <Select
+              label="Contact *"
+              options={contactOptions}
+              value={formData.contact_id}
+              onChange={(e) => handleContactSelect(e.target.value)}
             />
             <Select
               label="Industry"

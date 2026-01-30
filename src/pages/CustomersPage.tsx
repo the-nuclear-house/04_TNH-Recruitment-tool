@@ -236,7 +236,7 @@ export function CustomersPage() {
   // Requirement modal
   const [isRequirementModalOpen, setIsRequirementModalOpen] = useState(false);
   const [requirementForm, setRequirementForm] = useState({
-    customer: '',
+    contact_id: '',
     industry: '',
     location: '',
     fte_count: '1',
@@ -650,9 +650,9 @@ export function CustomersPage() {
     setIsContactDetailOpen(false);
     
     if (selectedCompany) {
-      // Pre-fill form with company info
+      // Pre-fill form - if contact provided, pre-select it
       setRequirementForm({
-        customer: selectedCompany.name,
+        contact_id: contact?.id || '',
         industry: selectedCompany.industry || '',
         location: selectedCompany.city || '',
         fte_count: '1',
@@ -669,17 +669,20 @@ export function CustomersPage() {
   };
 
   const handleSaveRequirement = async () => {
-    if (!requirementForm.customer) {
-      toast.error('Validation Error', 'Customer name is required');
+    if (!requirementForm.contact_id) {
+      toast.error('Validation Error', 'Please select a contact');
       return;
     }
     if (!selectedCompany) return;
 
+    const selectedReqContact = contacts.find(c => c.id === requirementForm.contact_id);
+
     setIsSubmitting(true);
     try {
       await requirementsService.create({
-        customer: requirementForm.customer,
+        customer: selectedCompany.name,
         company_id: selectedCompany.id,
+        contact_id: requirementForm.contact_id,
         industry: requirementForm.industry || undefined,
         location: requirementForm.location || undefined,
         fte_count: parseInt(requirementForm.fte_count) || 1,
@@ -692,7 +695,7 @@ export function CustomersPage() {
         created_by: user?.id,
       });
       
-      toast.success('Requirement Created', `${requirementForm.customer} requirement has been created`);
+      toast.success('Requirement Created', `Requirement for ${selectedReqContact?.first_name} ${selectedReqContact?.last_name} has been created`);
       setIsRequirementModalOpen(false);
       // Reload company details to show new requirement
       await loadCompanyDetails(selectedCompany.id);
@@ -1886,18 +1889,49 @@ export function CustomersPage() {
         size="xl"
       >
         <div className="space-y-4">
+          {/* Company info (read-only) and Contact selector */}
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Customer Name *"
-              value={requirementForm.customer}
-              onChange={(e) => setRequirementForm(prev => ({ ...prev, customer: e.target.value }))}
-              placeholder="e.g., BAE Systems"
+            {/* Company is shown as context */}
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
+                Company
+              </label>
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
+                {selectedCompany?.logo_url ? (
+                  <img src={selectedCompany.logo_url} alt="" className="w-6 h-6 rounded object-contain" />
+                ) : (
+                  <Building2 className="h-5 w-5 text-brand-grey-400" />
+                )}
+                <span className="font-medium text-brand-slate-900">{selectedCompany?.name}</span>
+              </div>
+            </div>
+            {/* Contact selector */}
+            <Select
+              label="Contact *"
+              options={[
+                { value: '', label: 'Select Contact' },
+                ...contacts.map(c => ({ 
+                  value: c.id, 
+                  label: `${c.first_name} ${c.last_name}${c.role ? ` - ${c.role}` : ''}` 
+                }))
+              ]}
+              value={requirementForm.contact_id}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, contact_id: e.target.value }))}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Industry"
               options={reqIndustryOptions}
               value={requirementForm.industry}
               onChange={(e) => setRequirementForm(prev => ({ ...prev, industry: e.target.value }))}
+            />
+            <Input
+              label="Location"
+              value={requirementForm.location}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, location: e.target.value }))}
+              placeholder="e.g., London, Remote"
             />
           </div>
 
@@ -1916,15 +1950,15 @@ export function CustomersPage() {
               onChange={(e) => setRequirementForm(prev => ({ ...prev, max_day_rate: e.target.value }))}
               placeholder="550"
             />
-            <Input
-              label="Location"
-              value={requirementForm.location}
-              onChange={(e) => setRequirementForm(prev => ({ ...prev, location: e.target.value }))}
-              placeholder="e.g., London, Remote"
+            <Select
+              label="Status"
+              options={reqStatusOptions}
+              value={requirementForm.status}
+              onChange={(e) => setRequirementForm(prev => ({ ...prev, status: e.target.value }))}
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Engineering Discipline"
               options={engineeringOptions}
@@ -1936,12 +1970,6 @@ export function CustomersPage() {
               options={clearanceOptions}
               value={requirementForm.clearance_required}
               onChange={(e) => setRequirementForm(prev => ({ ...prev, clearance_required: e.target.value }))}
-            />
-            <Select
-              label="Status"
-              options={reqStatusOptions}
-              value={requirementForm.status}
-              onChange={(e) => setRequirementForm(prev => ({ ...prev, status: e.target.value }))}
             />
           </div>
 
