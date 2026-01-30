@@ -27,6 +27,9 @@ import {
   Download,
   Settings,
   Flag,
+  Gift,
+  Upload,
+  ArrowRight,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -49,7 +52,7 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { candidatesService, interviewsService, usersService, commentsService, applicationsService, type DbComment, type DbApplication } from '@/lib/services';
+import { candidatesService, interviewsService, usersService, commentsService, applicationsService, offersService, type DbComment, type DbApplication, type DbOffer } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
 
@@ -272,10 +275,27 @@ export function CandidateProfilePage() {
     general_comments: '',
   });
 
+  // Offers
+  const [offers, setOffers] = useState<DbOffer[]>([]);
+  const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
+  const [isCreatingOffer, setIsCreatingOffer] = useState(false);
+  const [offerForm, setOfferForm] = useState({
+    job_title: '',
+    salary_amount: '',
+    contract_type: 'permanent',
+    day_rate: '',
+    start_date: '',
+    work_location: '',
+    candidate_full_name: '',
+    candidate_address: '',
+    notes: '',
+  });
+
   useEffect(() => {
     if (id) {
       loadData();
       loadComments();
+      loadOffers();
     }
   }, [id]);
 
@@ -307,6 +327,15 @@ export function CandidateProfilePage() {
       setComments(data);
     } catch (error) {
       console.error('Error loading comments:', error);
+    }
+  };
+
+  const loadOffers = async () => {
+    try {
+      const data = await offersService.getByCandidate(id!);
+      setOffers(data);
+    } catch (error) {
+      console.error('Error loading offers:', error);
     }
   };
 
@@ -984,6 +1013,156 @@ export function CandidateProfilePage() {
                 })}
               </div>
             </Card>
+
+            {/* Offer & Contract Section */}
+            {(() => {
+              // Check if all 3 interviews passed
+              const phonePass = interviews.some(i => i.stage === 'phone_qualification' && i.outcome === 'pass');
+              const techPass = interviews.some(i => i.stage === 'technical_interview' && i.outcome === 'pass');
+              const directorPass = interviews.some(i => i.stage === 'director_interview' && i.outcome === 'pass');
+              const allInterviewsPassed = phonePass && techPass && directorPass;
+              
+              // Get salary from director interview
+              const directorInterview = interviews.find(i => i.stage === 'director_interview');
+              const proposedSalary = directorInterview?.salary_proposed;
+              
+              // Get active offer if any
+              const activeOffer = offers.find(o => !['rejected', 'withdrawn'].includes(o.status));
+              
+              if (!allInterviewsPassed && offers.length === 0) return null;
+              
+              return (
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Offer & Contract</CardTitle>
+                    {allInterviewsPassed && !activeOffer && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        leftIcon={<Gift className="h-4 w-4" />}
+                        onClick={() => {
+                          // Pre-fill the form
+                          setOfferForm({
+                            job_title: linkedRequirements[0]?.requirement?.title || '',
+                            salary_amount: proposedSalary || '',
+                            contract_type: candidate?.contract_preference === 'contractor' ? 'contract' : 'permanent',
+                            day_rate: candidate?.expected_day_rate || '',
+                            start_date: '',
+                            work_location: linkedRequirements[0]?.requirement?.location || candidate?.location || '',
+                            candidate_full_name: `${candidate?.first_name} ${candidate?.last_name}`,
+                            candidate_address: '',
+                            notes: '',
+                          });
+                          setIsCreateOfferModalOpen(true);
+                        }}
+                      >
+                        Create Offer
+                      </Button>
+                    )}
+                  </CardHeader>
+                  
+                  {activeOffer ? (
+                    <div className="space-y-4">
+                      {/* Visual Pipeline */}
+                      <div className="flex items-center justify-between p-4 bg-brand-grey-50 rounded-lg">
+                        {['pending_approval', 'approved', 'contract_sent', 'contract_signed'].map((status, idx) => {
+                          const statusLabels: Record<string, string> = {
+                            pending_approval: 'Pending Approval',
+                            approved: 'Approved',
+                            contract_sent: 'Contract Sent',
+                            contract_signed: 'Contract Signed',
+                          };
+                          const statusOrder = ['pending_approval', 'approved', 'contract_sent', 'contract_signed'];
+                          const currentIdx = statusOrder.indexOf(activeOffer.status);
+                          const isComplete = idx < currentIdx || activeOffer.status === status;
+                          const isCurrent = activeOffer.status === status;
+                          
+                          return (
+                            <div key={status} className="flex items-center">
+                              <div className={`flex flex-col items-center ${idx > 0 ? 'ml-2' : ''}`}>
+                                <div className={`
+                                  w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium
+                                  ${isComplete ? 'bg-green-100 text-green-700' : 
+                                    isCurrent ? 'bg-amber-100 text-amber-700' : 
+                                    'bg-brand-grey-200 text-brand-grey-400'}
+                                `}>
+                                  {isComplete && idx < currentIdx ? (
+                                    <CheckCircle className="h-5 w-5" />
+                                  ) : (
+                                    idx + 1
+                                  )}
+                                </div>
+                                <span className={`text-xs mt-1 text-center max-w-[80px] ${
+                                  isComplete || isCurrent ? 'text-brand-slate-700 font-medium' : 'text-brand-grey-400'
+                                }`}>
+                                  {statusLabels[status]}
+                                </span>
+                              </div>
+                              {idx < 3 && (
+                                <ArrowRight className={`h-4 w-4 mx-2 ${
+                                  idx < currentIdx ? 'text-green-500' : 'text-brand-grey-300'
+                                }`} />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Offer Details */}
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-brand-grey-400">Job Title:</span>
+                          <p className="font-medium text-brand-slate-900">{activeOffer.job_title}</p>
+                        </div>
+                        <div>
+                          <span className="text-brand-grey-400">Salary:</span>
+                          <p className="font-medium text-brand-slate-900">
+                            £{activeOffer.salary_amount?.toLocaleString()}
+                            {activeOffer.contract_type === 'contract' && activeOffer.day_rate && (
+                              <span className="text-brand-grey-400"> (£{activeOffer.day_rate}/day)</span>
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-brand-grey-400">Start Date:</span>
+                          <p className="font-medium text-brand-slate-900">{formatDate(activeOffer.start_date)}</p>
+                        </div>
+                        <div>
+                          <span className="text-brand-grey-400">Contract Type:</span>
+                          <p className="font-medium text-brand-slate-900 capitalize">{activeOffer.contract_type}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Approval info */}
+                      {activeOffer.status === 'pending_approval' && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <p className="text-sm text-amber-700">
+                            Awaiting approval from {activeOffer.approver?.full_name || 'Director'}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {activeOffer.status === 'approved' && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-sm text-green-700">
+                            Approved on {formatDate(activeOffer.approved_at || '')}. HR to send contract.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : allInterviewsPassed ? (
+                    <div className="text-center py-6 text-brand-grey-400">
+                      <Gift className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>All interviews passed! Ready to create an offer.</p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-brand-grey-400">
+                      <p>Complete all interviews to create an offer.</p>
+                    </div>
+                  )}
+                </Card>
+              );
+            })()}
 
             {/* Summary */}
             {candidate.summary && (
@@ -1897,6 +2076,198 @@ export function CandidateProfilePage() {
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}>Cancel</Button>
             <Button variant="success" onClick={handleSubmitDirectorFeedback} isLoading={isSubmitting}>Save Feedback</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Create Offer Modal */}
+      <Modal
+        isOpen={isCreateOfferModalOpen}
+        onClose={() => setIsCreateOfferModalOpen(false)}
+        title="Create Offer"
+        description={`Create an offer for ${candidate?.first_name} ${candidate?.last_name}`}
+        size="xl"
+      >
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+          {/* Job Details */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Job Title *"
+              value={offerForm.job_title}
+              onChange={(e) => setOfferForm(prev => ({ ...prev, job_title: e.target.value }))}
+              placeholder="e.g., Senior Software Engineer"
+            />
+            <Select
+              label="Contract Type *"
+              options={[
+                { value: 'permanent', label: 'Permanent' },
+                { value: 'contract', label: 'Contract' },
+                { value: 'fixed_term', label: 'Fixed Term' },
+              ]}
+              value={offerForm.contract_type}
+              onChange={(e) => setOfferForm(prev => ({ ...prev, contract_type: e.target.value }))}
+            />
+          </div>
+
+          {/* Salary */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={offerForm.contract_type === 'contract' ? 'Annual Equivalent (£) *' : 'Annual Salary (£) *'}
+              type="number"
+              value={offerForm.salary_amount}
+              onChange={(e) => setOfferForm(prev => ({ ...prev, salary_amount: e.target.value }))}
+              placeholder="e.g., 70000"
+            />
+            {offerForm.contract_type === 'contract' && (
+              <Input
+                label="Day Rate (£)"
+                type="number"
+                value={offerForm.day_rate}
+                onChange={(e) => setOfferForm(prev => ({ ...prev, day_rate: e.target.value }))}
+                placeholder="e.g., 500"
+              />
+            )}
+          </div>
+
+          {/* Start Date & Location */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Start Date *"
+              type="date"
+              value={offerForm.start_date}
+              onChange={(e) => setOfferForm(prev => ({ ...prev, start_date: e.target.value }))}
+            />
+            <Input
+              label="Work Location"
+              value={offerForm.work_location}
+              onChange={(e) => setOfferForm(prev => ({ ...prev, work_location: e.target.value }))}
+              placeholder="e.g., London, Remote, Hybrid"
+            />
+          </div>
+
+          <hr className="border-brand-grey-200" />
+
+          {/* Candidate Document Details */}
+          <h3 className="font-medium text-brand-slate-900">Candidate Details (for contract)</h3>
+          
+          <Input
+            label="Full Legal Name *"
+            value={offerForm.candidate_full_name}
+            onChange={(e) => setOfferForm(prev => ({ ...prev, candidate_full_name: e.target.value }))}
+            placeholder="Full name as it should appear on the contract"
+          />
+          
+          <Textarea
+            label="Address"
+            value={offerForm.candidate_address}
+            onChange={(e) => setOfferForm(prev => ({ ...prev, candidate_address: e.target.value }))}
+            placeholder="Full address for the contract"
+            rows={2}
+          />
+
+          {/* Nationality Info */}
+          <div className="p-4 bg-brand-grey-50 rounded-lg">
+            <p className="text-sm text-brand-grey-500 mb-2">
+              <strong>Nationality:</strong> {candidate?.nationalities?.join(', ') || 'Not specified'}
+            </p>
+            <p className="text-sm text-brand-grey-500">
+              <strong>Right to Work:</strong> {candidate?.right_to_work?.replace(/_/g, ' ') || 'Not specified'}
+            </p>
+          </div>
+
+          {/* Document Uploads - Placeholder for now */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 border-2 border-dashed border-brand-grey-300 rounded-lg text-center">
+              <Upload className="h-8 w-8 mx-auto text-brand-grey-400 mb-2" />
+              <p className="text-sm text-brand-grey-500">ID Document</p>
+              <p className="text-xs text-brand-grey-400">Passport or British ID</p>
+              <Button variant="secondary" size="sm" className="mt-2" disabled>
+                Upload (Coming Soon)
+              </Button>
+            </div>
+            <div className="p-4 border-2 border-dashed border-brand-grey-300 rounded-lg text-center">
+              <Upload className="h-8 w-8 mx-auto text-brand-grey-400 mb-2" />
+              <p className="text-sm text-brand-grey-500">Right to Work</p>
+              <p className="text-xs text-brand-grey-400">If non-British</p>
+              <Button variant="secondary" size="sm" className="mt-2" disabled>
+                Upload (Coming Soon)
+              </Button>
+            </div>
+          </div>
+
+          <Textarea
+            label="Notes"
+            value={offerForm.notes}
+            onChange={(e) => setOfferForm(prev => ({ ...prev, notes: e.target.value }))}
+            placeholder="Any additional notes about this offer..."
+            rows={2}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsCreateOfferModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              leftIcon={<Gift className="h-4 w-4" />}
+              onClick={async () => {
+                if (!offerForm.job_title || !offerForm.salary_amount || !offerForm.start_date || !offerForm.candidate_full_name) {
+                  toast.error('Validation Error', 'Please fill in all required fields');
+                  return;
+                }
+                
+                setIsCreatingOffer(true);
+                try {
+                  // Find the approver (the director above the current user's manager)
+                  const currentUserData = users.find(u => u.id === user?.id);
+                  const managerId = currentUserData?.reports_to;
+                  const manager = managerId ? users.find(u => u.id === managerId) : null;
+                  const directorId = manager?.reports_to || managerId;
+                  
+                  // If no director found, use any user with director role
+                  let approverId = directorId;
+                  if (!approverId) {
+                    const director = users.find(u => u.roles?.includes('director'));
+                    approverId = director?.id;
+                  }
+                  
+                  if (!approverId) {
+                    toast.error('Error', 'No director found for approval. Please contact admin.');
+                    return;
+                  }
+                  
+                  await offersService.create({
+                    candidate_id: id!,
+                    requirement_id: linkedRequirements[0]?.requirement_id,
+                    job_title: offerForm.job_title,
+                    salary_amount: parseFloat(offerForm.salary_amount),
+                    contract_type: offerForm.contract_type,
+                    day_rate: offerForm.day_rate ? parseFloat(offerForm.day_rate) : undefined,
+                    start_date: offerForm.start_date,
+                    work_location: offerForm.work_location,
+                    candidate_full_name: offerForm.candidate_full_name,
+                    candidate_address: offerForm.candidate_address,
+                    candidate_nationality: candidate?.nationalities?.join(', '),
+                    approver_id: approverId,
+                    notes: offerForm.notes,
+                    created_by: user?.id,
+                    requested_by: user?.id,
+                  });
+                  
+                  toast.success('Offer Created', 'The offer has been submitted for approval');
+                  setIsCreateOfferModalOpen(false);
+                  loadOffers();
+                } catch (error: any) {
+                  console.error('Error creating offer:', error);
+                  toast.error('Error', error.message || 'Failed to create offer');
+                } finally {
+                  setIsCreatingOffer(false);
+                }
+              }}
+              isLoading={isCreatingOffer}
+            >
+              Submit for Approval
+            </Button>
           </div>
         </div>
       </Modal>

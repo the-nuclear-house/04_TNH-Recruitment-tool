@@ -1607,3 +1607,252 @@ export const customerContactsService = {
     if (error) throw error;
   },
 };
+
+// ============================================
+// OFFERS SERVICE
+// ============================================
+
+export interface DbOffer {
+  id: string;
+  candidate_id: string;
+  requirement_id: string | null;
+  job_title: string;
+  salary_amount: number;
+  salary_currency: string;
+  contract_type: string;
+  day_rate: number | null;
+  start_date: string;
+  work_location: string | null;
+  candidate_full_name: string;
+  candidate_address: string | null;
+  candidate_nationality: string | null;
+  id_document_url: string | null;
+  right_to_work_document_url: string | null;
+  status: 'pending_approval' | 'approved' | 'rejected' | 'contract_sent' | 'contract_signed' | 'withdrawn';
+  requested_by: string | null;
+  approver_id: string | null;
+  approved_at: string | null;
+  approval_notes: string | null;
+  contract_sent_at: string | null;
+  contract_sent_by: string | null;
+  contract_signed_at: string | null;
+  contract_signed_confirmed_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  // Joined fields
+  candidate?: DbCandidate;
+  requirement?: DbRequirement;
+  requester?: DbUser;
+  approver?: DbUser;
+}
+
+export interface CreateOfferInput {
+  candidate_id: string;
+  requirement_id?: string;
+  job_title: string;
+  salary_amount: number;
+  salary_currency?: string;
+  contract_type: string;
+  day_rate?: number;
+  start_date: string;
+  work_location?: string;
+  candidate_full_name: string;
+  candidate_address?: string;
+  candidate_nationality?: string;
+  id_document_url?: string;
+  right_to_work_document_url?: string;
+  approver_id: string;
+  notes?: string;
+  created_by?: string;
+  requested_by?: string;
+}
+
+export const offersService = {
+  async getAll(): Promise<DbOffer[]> {
+    const { data, error } = await supabase
+      .from('offers')
+      .select(`
+        *,
+        candidate:candidates(*),
+        requirement:requirements(*),
+        requester:users!offers_requested_by_fkey(*),
+        approver:users!offers_approver_id_fkey(*)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbOffer | null> {
+    const { data, error } = await supabase
+      .from('offers')
+      .select(`
+        *,
+        candidate:candidates(*),
+        requirement:requirements(*),
+        requester:users!offers_requested_by_fkey(*),
+        approver:users!offers_approver_id_fkey(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByCandidate(candidateId: string): Promise<DbOffer[]> {
+    const { data, error } = await supabase
+      .from('offers')
+      .select(`
+        *,
+        candidate:candidates(*),
+        requirement:requirements(*)
+      `)
+      .eq('candidate_id', candidateId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getPendingApprovals(approverId: string): Promise<DbOffer[]> {
+    const { data, error } = await supabase
+      .from('offers')
+      .select(`
+        *,
+        candidate:candidates(*),
+        requirement:requirements(*),
+        requester:users!offers_requested_by_fkey(*)
+      `)
+      .eq('approver_id', approverId)
+      .eq('status', 'pending_approval')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateOfferInput): Promise<DbOffer> {
+    const { data, error } = await supabase
+      .from('offers')
+      .insert({
+        ...input,
+        status: 'pending_approval',
+      })
+      .select(`
+        *,
+        candidate:candidates(*),
+        requirement:requirements(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async approve(id: string, approverId: string, notes?: string): Promise<DbOffer> {
+    const { data, error } = await supabase
+      .from('offers')
+      .update({
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+        approval_notes: notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async reject(id: string, notes?: string): Promise<DbOffer> {
+    const { data, error } = await supabase
+      .from('offers')
+      .update({
+        status: 'rejected',
+        approval_notes: notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async markContractSent(id: string, sentBy: string): Promise<DbOffer> {
+    const { data, error } = await supabase
+      .from('offers')
+      .update({
+        status: 'contract_sent',
+        contract_sent_at: new Date().toISOString(),
+        contract_sent_by: sentBy,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async markContractSigned(id: string, confirmedBy: string): Promise<DbOffer> {
+    const { data, error } = await supabase
+      .from('offers')
+      .update({
+        status: 'contract_signed',
+        contract_signed_at: new Date().toISOString(),
+        contract_signed_confirmed_by: confirmedBy,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    
+    // Also update candidate status to active_consultant
+    if (data?.candidate_id) {
+      await supabase
+        .from('candidates')
+        .update({ 
+          status: 'active_consultant',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.candidate_id);
+    }
+    
+    return data;
+  },
+
+  async update(id: string, input: Partial<CreateOfferInput>): Promise<DbOffer> {
+    const { data, error } = await supabase
+      .from('offers')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('offers')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};

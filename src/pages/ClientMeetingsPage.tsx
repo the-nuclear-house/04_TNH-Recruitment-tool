@@ -224,8 +224,8 @@ export function ClientMeetingsPage() {
     if (contactId) {
       try {
         const allRequirements = await requirementsService.getAll();
-        // Requirements are linked to contacts
-        const contactReqs = allRequirements.filter(r => r.contact_id === contactId);
+        // Requirements are linked to contacts - exclude won requirements
+        const contactReqs = allRequirements.filter(r => r.contact_id === contactId && r.status !== 'won');
         setContactRequirements(contactReqs);
       } catch (error) {
         console.error('Error loading requirements:', error);
@@ -352,13 +352,14 @@ export function ClientMeetingsPage() {
     }
   };
 
-  const handleSetOutcome = async (outcome: 'go' | 'nogo') => {
-    if (!selectedAssessment) return;
+  const handleSetOutcome = async (outcome: 'go' | 'nogo', assessment?: any) => {
+    const targetAssessment = assessment || selectedAssessment;
+    if (!targetAssessment) return;
     
     setIsSubmitting(true);
     try {
       await customerAssessmentsService.updateOutcome(
-        selectedAssessment.id, 
+        targetAssessment.id, 
         outcome, 
         outcomeNotes || undefined
       );
@@ -636,7 +637,15 @@ export function ClientMeetingsPage() {
                   <Card 
                     key={`assessment-${meeting.id}`} 
                     className="hover:shadow-md transition-shadow border-l-4 border-l-brand-orange cursor-pointer"
-                    onClick={() => handleViewAssessment(meeting)}
+                    onClick={() => {
+                      // If pending, go directly to outcome modal; otherwise show details
+                      if (!meeting.outcome || meeting.outcome === 'pending') {
+                        setSelectedAssessment(meeting as DbCustomerAssessment);
+                        setIsOutcomeModalOpen(true);
+                      } else {
+                        handleViewAssessment(meeting);
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-4">
@@ -1253,12 +1262,8 @@ export function ClientMeetingsPage() {
                     <Button 
                       variant="success" 
                       leftIcon={<CheckCircle className="h-4 w-4" />}
-                      onClick={() => {
-                        setSelectedAssessment(viewingItem);
-                        setOutcomeNotes('');
-                        // Set directly to GO
-                        handleSetOutcome('go');
-                      }}
+                      onClick={() => handleSetOutcome('go', viewingItem)}
+                      isLoading={isSubmitting}
                     >
                       Change to GO
                     </Button>
@@ -1267,12 +1272,8 @@ export function ClientMeetingsPage() {
                     <Button 
                       variant="danger" 
                       leftIcon={<XCircle className="h-4 w-4" />}
-                      onClick={() => {
-                        setSelectedAssessment(viewingItem);
-                        setOutcomeNotes('Customer changed their decision');
-                        // Set directly to NOGO
-                        handleSetOutcome('nogo');
-                      }}
+                      onClick={() => handleSetOutcome('nogo', viewingItem)}
+                      isLoading={isSubmitting}
                     >
                       Change to NOGO
                     </Button>

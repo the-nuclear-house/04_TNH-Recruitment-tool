@@ -420,7 +420,11 @@ export function RequirementDetailPage() {
 
   const handleScheduleAssessment = async () => {
     if (!selectedApplicationForAssessment || !user || !assessmentForm.scheduled_date || !id) return;
-    if (!assessmentForm.contact_id) {
+    
+    // Use requirement's contact_id if available, otherwise use form selection
+    const contactId = requirement?.contact_id || assessmentForm.contact_id;
+    
+    if (!contactId) {
       toast.error('Validation Error', 'Please select a customer contact');
       return;
     }
@@ -429,7 +433,7 @@ export function RequirementDetailPage() {
     try {
       // Build auto-generated title
       const candidate = selectedApplicationForAssessment.candidate;
-      const contact = contacts.find(c => c.id === assessmentForm.contact_id);
+      const contact = contacts.find(c => c.id === contactId);
       const company = contact?.company || companies.find(co => co.id === contact?.company_id);
       
       const autoTitle = [
@@ -443,7 +447,7 @@ export function RequirementDetailPage() {
         application_id: selectedApplicationForAssessment.id,
         requirement_id: id,
         candidate_id: selectedApplicationForAssessment.candidate_id,
-        contact_id: assessmentForm.contact_id,
+        contact_id: contactId,
         scheduled_date: assessmentForm.scheduled_date,
         scheduled_time: assessmentForm.scheduled_time || undefined,
         location: assessmentForm.location || undefined,
@@ -749,7 +753,7 @@ export function RequirementDetailPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Linked Candidates ({applications.length})</CardTitle>
-            {canEditThisRequirement && (
+            {canEditThisRequirement && requirement?.status !== 'won' && (
               <Button
                 variant="primary"
                 size="sm"
@@ -765,7 +769,7 @@ export function RequirementDetailPage() {
             <div className="text-center py-8">
               <Users className="h-12 w-12 text-brand-grey-300 mx-auto mb-3" />
               <p className="text-brand-grey-400">No candidates linked to this requirement yet</p>
-              {canEditThisRequirement && (
+              {canEditThisRequirement && requirement?.status !== 'won' && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -848,8 +852,8 @@ export function RequirementDetailPage() {
                       Added {formatDate(app.created_at)}
                     </span>
                     
-                    {/* Schedule Client Assessment - available for any candidate */}
-                    {canScheduleAssessments && !hasScheduledAssessment && assessmentOutcome !== 'nogo' && !isWinningCandidate && (
+                    {/* Schedule Client Assessment - available for any candidate, disabled when requirement is won */}
+                    {canScheduleAssessments && !hasScheduledAssessment && assessmentOutcome !== 'nogo' && !isWinningCandidate && requirement?.status !== 'won' && (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -868,8 +872,8 @@ export function RequirementDetailPage() {
                       </Button>
                     )}
                     
-                    {/* Remove candidate - only if NOT presented to customer (no assessment exists) */}
-                    {canEditThisRequirement && !isWinningCandidate && !hasScheduledAssessment && !assessmentOutcome && (
+                    {/* Remove candidate - only if NOT presented to customer (no assessment exists) and requirement not won */}
+                    {canEditThisRequirement && !isWinningCandidate && !hasScheduledAssessment && !assessmentOutcome && requirement?.status !== 'won' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1054,21 +1058,39 @@ export function RequirementDetailPage() {
         size="md"
       >
         <div className="space-y-4">
-          {/* Customer Contact Selection */}
-          <SearchableSelect
-            label="Customer Contact *"
-            placeholder="Search contacts..."
-            options={contacts.map(c => {
-              const company = c.company || companies.find(co => co.id === c.company_id);
-              return {
-                value: c.id,
-                label: `${c.first_name} ${c.last_name}`,
-                sublabel: company ? `${c.role || ''} - ${company.name}`.replace(/^- /, '') : c.role || ''
-              };
-            })}
-            value={assessmentForm.contact_id}
-            onChange={(value) => setAssessmentForm(prev => ({ ...prev, contact_id: value }))}
-          />
+          {/* Customer Contact - locked if requirement has a contact */}
+          {requirement?.contact_id ? (
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Customer Contact</label>
+              <div className="p-3 bg-brand-grey-50 rounded-lg border border-brand-grey-200">
+                {(() => {
+                  const contact = contacts.find(c => c.id === requirement.contact_id);
+                  const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+                  return (
+                    <p className="text-sm font-medium text-brand-slate-900">
+                      {contact ? `${contact.first_name} ${contact.last_name}` : 'Unknown Contact'}
+                      {company && <span className="text-brand-grey-500 ml-2">({company.name})</span>}
+                    </p>
+                  );
+                })()}
+              </div>
+            </div>
+          ) : (
+            <SearchableSelect
+              label="Customer Contact *"
+              placeholder="Search contacts..."
+              options={contacts.map(c => {
+                const company = c.company || companies.find(co => co.id === c.company_id);
+                return {
+                  value: c.id,
+                  label: `${c.first_name} ${c.last_name}`,
+                  sublabel: company ? `${c.role || ''} - ${company.name}`.replace(/^- /, '') : c.role || ''
+                };
+              })}
+              value={assessmentForm.contact_id}
+              onChange={(value) => setAssessmentForm(prev => ({ ...prev, contact_id: value }))}
+            />
+          )}
           
           {/* Auto-generated title preview */}
           {selectedApplicationForAssessment && assessmentForm.contact_id && (() => {

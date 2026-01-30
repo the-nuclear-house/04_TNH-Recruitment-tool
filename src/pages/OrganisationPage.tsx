@@ -22,13 +22,15 @@ const availableRoles = [
   { value: 'recruiter', label: 'Recruiter', colour: 'cyan' },
   { value: 'manager', label: 'Business Manager', colour: 'green' },
   { value: 'director', label: 'Director', colour: 'gold' },
+  { value: 'hr', label: 'HR', colour: 'purple' },
   { value: 'admin', label: 'Admin', colour: 'orange' },
 ];
 
-const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange'> = {
+const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple'> = {
   recruiter: 'cyan',
   manager: 'green',
   director: 'gold',
+  hr: 'purple',
   admin: 'orange',
 };
 
@@ -36,6 +38,7 @@ const roleLabels: Record<string, string> = {
   recruiter: 'Recruiter',
   manager: 'Manager',
   director: 'Director',
+  hr: 'HR',
   admin: 'Admin',
 };
 

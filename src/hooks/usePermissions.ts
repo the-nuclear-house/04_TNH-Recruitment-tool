@@ -162,6 +162,37 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isManager: false,
     isRecruiter: true,
   },
+  
+  hr: {
+    canViewCandidates: false,
+    canAddCandidates: false,
+    canEditCandidates: false,
+    canDeleteCandidates: false,
+    
+    canViewRequirements: false,
+    canCreateRequirements: false,
+    canEditRequirements: false,
+    canDeleteRequirements: false,
+    
+    canViewInterviews: false,
+    canScheduleInterviews: false,
+    canConductInterviews: false,
+    canViewAllInterviewFeedback: false,
+    
+    canViewContracts: true,
+    canCreateContracts: false,
+    canApproveContracts: false,
+    
+    canViewOrganisation: true,
+    canManageUsers: false,
+    canManageBusinessUnits: false,
+    canManageApprovalChains: false,
+    
+    isAdmin: false,
+    isDirector: false,
+    isManager: false,
+    isRecruiter: false,
+  },
 };
 
 // Default permissions for unknown roles
