@@ -8,6 +8,7 @@ export { RequirementDetailPage } from './RequirementDetailPage';
 export { RequirementFormPage } from './RequirementFormPage';
 export { InterviewsPage } from './InterviewsPage';
 export { CustomerAssessmentsPage } from './CustomerAssessmentsPage';
+export { CustomersPage } from './CustomersPage';
 export { ContractsPage } from './ContractsPage';
 export { OrganisationPage } from './OrganisationPage';
 export { SettingsPage } from './SettingsPage';

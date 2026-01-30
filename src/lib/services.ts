@@ -795,3 +795,548 @@ export const customerAssessmentsService = {
     if (error) throw error;
   },
 };
+
+// ============ COMPANIES SERVICE ============
+
+export interface DbCompany {
+  id: string;
+  name: string;
+  trading_name: string | null;
+  companies_house_number: string | null;
+  industry: string | null;
+  company_size: string | null;
+  parent_company_id: string | null;
+  address_line_1: string | null;
+  address_line_2: string | null;
+  city: string | null;
+  county: string | null;
+  postcode: string | null;
+  country: string;
+  main_phone: string | null;
+  main_email: string | null;
+  website: string | null;
+  status: string;
+  notes: string | null;
+  created_by: string | null;
+  assigned_manager_id: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  parent_company?: DbCompany;
+  subsidiaries?: DbCompany[];
+  contacts?: DbContact[];
+  assigned_manager?: DbUser;
+}
+
+export interface CreateCompanyInput {
+  name: string;
+  trading_name?: string;
+  companies_house_number?: string;
+  industry?: string;
+  company_size?: string;
+  parent_company_id?: string;
+  address_line_1?: string;
+  address_line_2?: string;
+  city?: string;
+  county?: string;
+  postcode?: string;
+  country?: string;
+  main_phone?: string;
+  main_email?: string;
+  website?: string;
+  status?: string;
+  notes?: string;
+  assigned_manager_id?: string;
+}
+
+export const companiesService = {
+  async getAll(): Promise<DbCompany[]> {
+    const { data, error } = await supabase
+      .from('companies')
+      .select(`
+        *,
+        parent_company:parent_company_id(*),
+        assigned_manager:assigned_manager_id(*)
+      `)
+      .order('name');
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbCompany | null> {
+    const { data, error } = await supabase
+      .from('companies')
+      .select(`
+        *,
+        parent_company:parent_company_id(*),
+        assigned_manager:assigned_manager_id(*),
+        contacts(*),
+        subsidiaries:companies!parent_company_id(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getParentCompanies(): Promise<DbCompany[]> {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .is('parent_company_id', null)
+      .order('name');
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateCompanyInput): Promise<DbCompany> {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const { data, error } = await supabase
+      .from('companies')
+      .insert({
+        ...input,
+        created_by: user?.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: Partial<CreateCompanyInput>): Promise<DbCompany> {
+    const { data, error } = await supabase
+      .from('companies')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('companies')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
+
+// ============ CONTACTS SERVICE ============
+
+export interface DbContact {
+  id: string;
+  company_id: string;
+  first_name: string;
+  last_name: string;
+  job_title: string | null;
+  department: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  linkedin_url: string | null;
+  is_primary_contact: boolean;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  company?: DbCompany;
+}
+
+export interface CreateContactInput {
+  company_id: string;
+  first_name: string;
+  last_name: string;
+  job_title?: string;
+  department?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  linkedin_url?: string;
+  is_primary_contact?: boolean;
+  notes?: string;
+}
+
+export const contactsService = {
+  async getAll(): Promise<DbContact[]> {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select(`
+        *,
+        company:company_id(id, name, parent_company_id)
+      `)
+      .eq('is_active', true)
+      .order('last_name');
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getByCompany(companyId: string): Promise<DbContact[]> {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('is_primary_contact', { ascending: false })
+      .order('last_name');
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbContact | null> {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select(`
+        *,
+        company:company_id(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async create(input: CreateContactInput): Promise<DbContact> {
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert(input)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: Partial<CreateContactInput>): Promise<DbContact> {
+    const { data, error } = await supabase
+      .from('contacts')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
+
+// ============ CUSTOMER MEETINGS SERVICE ============
+
+export interface DbCustomerMeeting {
+  id: string;
+  company_id: string;
+  contact_id: string | null;
+  meeting_type: string;
+  subject: string;
+  scheduled_at: string | null;
+  completed_at: string | null;
+  duration_minutes: number | null;
+  location: string | null;
+  notes: string | null;
+  outcome: string | null;
+  follow_up_date: string | null;
+  follow_up_notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  company?: DbCompany;
+  contact?: DbContact;
+  creator?: DbUser;
+}
+
+export interface CreateCustomerMeetingInput {
+  company_id: string;
+  contact_id?: string;
+  meeting_type: string;
+  subject: string;
+  scheduled_at?: string;
+  duration_minutes?: number;
+  location?: string;
+  notes?: string;
+}
+
+export const customerMeetingsService = {
+  async getByCompany(companyId: string): Promise<DbCustomerMeeting[]> {
+    const { data, error } = await supabase
+      .from('customer_meetings')
+      .select(`
+        *,
+        contact:contact_id(id, first_name, last_name),
+        creator:created_by(id, full_name)
+      `)
+      .eq('company_id', companyId)
+      .order('scheduled_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateCustomerMeetingInput): Promise<DbCustomerMeeting> {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const { data, error } = await supabase
+      .from('customer_meetings')
+      .insert({
+        ...input,
+        created_by: user?.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: Partial<CreateCustomerMeetingInput & { 
+    completed_at?: string; 
+    outcome?: string;
+    follow_up_date?: string;
+    follow_up_notes?: string;
+  }>): Promise<DbCustomerMeeting> {
+    const { data, error } = await supabase
+      .from('customer_meetings')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('customer_meetings')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
+
+// ============ CUSTOMERS SERVICE ============
+
+export interface DbCustomer {
+  id: string;
+  name: string;
+  industry: string | null;
+  company_size: string | null;
+  website: string | null;
+  address: string | null;
+  city: string | null;
+  country: string;
+  status: 'prospect' | 'active' | 'inactive';
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCustomerInput {
+  name: string;
+  industry?: string;
+  company_size?: string;
+  website?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  status?: 'prospect' | 'active' | 'inactive';
+  notes?: string;
+}
+
+export const customersService = {
+  async getAll(): Promise<DbCustomer[]> {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('name');
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbCustomer | null> {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByStatus(status: string): Promise<DbCustomer[]> {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('status', status)
+      .order('name');
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateCustomerInput): Promise<DbCustomer> {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const { data, error } = await supabase
+      .from('customers')
+      .insert({
+        ...input,
+        created_by: user?.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: Partial<CreateCustomerInput>): Promise<DbCustomer> {
+    const { data, error } = await supabase
+      .from('customers')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
+
+// ============ CUSTOMER CONTACTS SERVICE ============
+
+export interface DbCustomerContact {
+  id: string;
+  customer_id: string;
+  first_name: string;
+  last_name: string;
+  job_title: string | null;
+  email: string | null;
+  phone: string | null;
+  is_primary: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCustomerContactInput {
+  customer_id: string;
+  first_name: string;
+  last_name: string;
+  job_title?: string;
+  email?: string;
+  phone?: string;
+  is_primary?: boolean;
+  notes?: string;
+}
+
+export const customerContactsService = {
+  async getByCustomer(customerId: string): Promise<DbCustomerContact[]> {
+    const { data, error } = await supabase
+      .from('customer_contacts')
+      .select('*')
+      .eq('customer_id', customerId)
+      .order('is_primary', { ascending: false })
+      .order('last_name');
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateCustomerContactInput): Promise<DbCustomerContact> {
+    const { data, error } = await supabase
+      .from('customer_contacts')
+      .insert(input)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: Partial<CreateCustomerContactInput>): Promise<DbCustomerContact> {
+    const { data, error } = await supabase
+      .from('customer_contacts')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('customer_contacts')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async setPrimary(id: string, customerId: string): Promise<void> {
+    // First, unset all primary contacts for this customer
+    await supabase
+      .from('customer_contacts')
+      .update({ is_primary: false })
+      .eq('customer_id', customerId);
+    
+    // Then set the selected one as primary
+    const { error } = await supabase
+      .from('customer_contacts')
+      .update({ is_primary: true })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};

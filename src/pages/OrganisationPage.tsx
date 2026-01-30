@@ -378,6 +378,7 @@ export function OrganisationPage() {
                 <li>• All Recruiter permissions</li>
                 <li>• Create and manage requirements</li>
                 <li>• Conduct technical interviews</li>
+                <li>• Schedule client assessments</li>
               </ul>
             </div>
             <div className="p-4 bg-amber-50 rounded-lg">

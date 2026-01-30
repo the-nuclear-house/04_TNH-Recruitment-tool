@@ -12,6 +12,7 @@ import {
   RequirementFormPage,
   InterviewsPage,
   CustomerAssessmentsPage,
+  CustomersPage,
   ContractsPage,
   OrganisationPage,
   SettingsPage,
@@ -62,6 +63,7 @@ function App() {
           <Route path="/requirements/:id/edit" element={<RequirementFormPage />} />
           <Route path="/interviews" element={<InterviewsPage />} />
           <Route path="/customer-assessments" element={<CustomerAssessmentsPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/organisation" element={<OrganisationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
