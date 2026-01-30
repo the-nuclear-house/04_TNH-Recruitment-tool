@@ -15,6 +15,8 @@ import {
   Users,
   Trash2,
   FileText,
+  Edit2,
+  AlertCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -42,12 +44,14 @@ import {
   companiesService,
   requirementsService,
   applicationsService,
+  usersService,
   type DbCustomerMeeting,
   type DbCustomerAssessment,
   type DbContact,
   type DbCandidate,
   type DbCompany,
   type DbRequirement,
+  type DbUser,
 } from '@/lib/services';
 
 type MeetingType = 'client_meeting' | 'candidate_assessment';
@@ -56,6 +60,12 @@ const outcomeConfig = {
   pending: { label: 'Pending', colour: 'orange', icon: Clock },
   go: { label: 'GO', colour: 'green', icon: CheckCircle },
   nogo: { label: 'NO GO', colour: 'red', icon: XCircle },
+};
+
+const meetingStatusConfig = {
+  planned: { label: 'Planned', colour: 'blue', icon: Clock },
+  completed: { label: 'Completed', colour: 'green', icon: CheckCircle },
+  cancelled: { label: 'Cancelled', colour: 'red', icon: XCircle },
 };
 
 const meetingTypeIcons: Record<string, any> = {
@@ -77,6 +87,7 @@ export function ClientMeetingsPage() {
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [candidates, setCandidates] = useState<DbCandidate[]>([]);
   const [companies, setCompanies] = useState<DbCompany[]>([]);
+  const [users, setUsers] = useState<DbUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Filters
@@ -86,6 +97,11 @@ export function ClientMeetingsPage() {
   const [viewingItem, setViewingItem] = useState<any>(null);
   const [viewingItemType, setViewingItemType] = useState<'meeting' | 'assessment' | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  
+  // Meeting status update modal
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [statusToSet, setStatusToSet] = useState<'completed' | 'cancelled' | null>(null);
+  const [meetingOutcomeNotes, setMeetingOutcomeNotes] = useState('');
   
   // Delete confirmation
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -105,7 +121,7 @@ export function ClientMeetingsPage() {
     scheduled_time: '',
     duration_minutes: '30',
     location: '',
-    notes: '',
+    preparation_notes: '',
   });
   
   // Assessment form - robust flow: Contact -> Requirement -> Candidate
@@ -134,18 +150,20 @@ export function ClientMeetingsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [meetings, assmnts, conts, cands, comps] = await Promise.all([
+      const [meetings, assmnts, conts, cands, comps, usrs] = await Promise.all([
         customerMeetingsService.getAll(),
         customerAssessmentsService.getAll(),
         contactsService.getAll(),
         candidatesService.getAll(),
         companiesService.getAll(),
+        usersService.getAll(),
       ]);
       setCustomerMeetings(meetings);
       setAssessments(assmnts);
       setContacts(conts);
       setCandidates(cands);
       setCompanies(comps);
+      setUsers(usrs);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error', 'Failed to load meetings');
@@ -261,7 +279,7 @@ export function ClientMeetingsPage() {
           scheduled_at: scheduledAt,
           duration_minutes: parseInt(meetingForm.duration_minutes) || undefined,
           location: meetingForm.location || undefined,
-          notes: meetingForm.notes || undefined,
+          preparation_notes: meetingForm.preparation_notes || undefined,
         });
         
         toast.success('Meeting Created', 'Client meeting has been scheduled');
@@ -358,7 +376,7 @@ export function ClientMeetingsPage() {
       scheduled_time: '',
       duration_minutes: '30',
       location: '',
-      notes: '',
+      preparation_notes: '',
     });
     setAssessmentForm({
       contact_id: '',
@@ -372,6 +390,46 @@ export function ClientMeetingsPage() {
     });
     setContactRequirements([]);
     setRequirementCandidates([]);
+  };
+
+  // Handle meeting status update
+  const handleOpenStatusModal = (status: 'completed' | 'cancelled') => {
+    setStatusToSet(status);
+    setMeetingOutcomeNotes('');
+    setIsStatusModalOpen(true);
+  };
+
+  const handleUpdateMeetingStatus = async () => {
+    if (!viewingItem || !statusToSet) return;
+    
+    setIsSubmitting(true);
+    try {
+      await customerMeetingsService.updateStatus(
+        viewingItem.id,
+        statusToSet,
+        meetingOutcomeNotes || undefined
+      );
+      
+      toast.success(
+        statusToSet === 'completed' ? 'Meeting Completed' : 'Meeting Cancelled',
+        statusToSet === 'completed' 
+          ? 'Meeting has been marked as completed' 
+          : 'Meeting has been cancelled'
+      );
+      
+      setIsStatusModalOpen(false);
+      setIsDetailModalOpen(false);
+      setViewingItem(null);
+      setViewingItemType(null);
+      setStatusToSet(null);
+      setMeetingOutcomeNotes('');
+      loadData();
+    } catch (error) {
+      console.error('Error updating meeting status:', error);
+      toast.error('Error', 'Failed to update meeting status');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Build searchable options
@@ -469,22 +527,39 @@ export function ClientMeetingsPage() {
                 // Client meeting card
                 const contact = contacts.find(c => c.id === meeting.contact_id);
                 const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+                const creator = meeting.creator || users.find(u => u.id === meeting.created_by);
                 const MeetingIcon = meetingTypeIcons[meeting.meeting_type] || Phone;
+                const status = meeting.status || 'planned';
+                const statusConfig = meetingStatusConfig[status as keyof typeof meetingStatusConfig] || meetingStatusConfig.planned;
                 
                 return (
                   <Card 
                     key={`meeting-${meeting.id}`} 
-                    className="hover:shadow-md transition-shadow border-l-4 border-l-brand-cyan cursor-pointer"
+                    className={`hover:shadow-md transition-shadow border-l-4 cursor-pointer ${
+                      status === 'completed' ? 'border-l-green-500' :
+                      status === 'cancelled' ? 'border-l-red-400 opacity-75' :
+                      'border-l-brand-cyan'
+                    }`}
                     onClick={() => handleViewMeeting(meeting)}
                   >
                     <div className="flex items-start gap-4">
-                      <div className="p-2 bg-brand-cyan/10 rounded-lg">
-                        <MeetingIcon className="h-5 w-5 text-brand-cyan" />
+                      <div className={`p-2 rounded-lg ${
+                        status === 'completed' ? 'bg-green-100' :
+                        status === 'cancelled' ? 'bg-red-100' :
+                        'bg-brand-cyan/10'
+                      }`}>
+                        <MeetingIcon className={`h-5 w-5 ${
+                          status === 'completed' ? 'text-green-600' :
+                          status === 'cancelled' ? 'text-red-500' :
+                          'text-brand-cyan'
+                        }`} />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-brand-slate-900">{meeting.subject}</h3>
-                          <Badge variant="cyan">Client Meeting</Badge>
+                          <h3 className={`font-semibold ${status === 'cancelled' ? 'text-brand-grey-500 line-through' : 'text-brand-slate-900'}`}>
+                            {meeting.subject}
+                          </h3>
+                          <Badge variant={statusConfig.colour as any}>{statusConfig.label}</Badge>
                         </div>
                         <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
                           {contact && (
@@ -511,9 +586,20 @@ export function ClientMeetingsPage() {
                               {meeting.location}
                             </span>
                           )}
+                          {creator && (
+                            <span className="flex items-center gap-1 text-brand-grey-500">
+                              <Users className="h-4 w-4" />
+                              {creator.full_name}
+                            </span>
+                          )}
                         </div>
-                        {meeting.notes && (
-                          <p className="text-sm text-brand-grey-500 mt-2">{meeting.notes}</p>
+                        {meeting.preparation_notes && status === 'planned' && (
+                          <p className="text-sm text-brand-grey-500 mt-2 line-clamp-2">{meeting.preparation_notes}</p>
+                        )}
+                        {meeting.outcome_notes && status !== 'planned' && (
+                          <p className={`text-sm mt-2 line-clamp-2 ${
+                            status === 'completed' ? 'text-green-700' : 'text-red-600'
+                          }`}>{meeting.outcome_notes}</p>
                         )}
                       </div>
                     </div>
@@ -718,11 +804,11 @@ export function ClientMeetingsPage() {
               )}
 
               <Textarea
-                label="Notes"
-                value={meetingForm.notes}
-                onChange={(e) => setMeetingForm(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Any additional notes..."
-                rows={2}
+                label="Preparation Notes"
+                value={meetingForm.preparation_notes}
+                onChange={(e) => setMeetingForm(prev => ({ ...prev, preparation_notes: e.target.value }))}
+                placeholder="What to prepare for this meeting, topics to discuss, background info..."
+                rows={3}
               />
             </>
           ) : (
@@ -888,6 +974,7 @@ export function ClientMeetingsPage() {
         {viewingItem && viewingItemType === 'meeting' && (() => {
           const contact = contacts.find(c => c.id === viewingItem.contact_id);
           const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+          const creator = viewingItem.creator || users.find(u => u.id === viewingItem.created_by);
           const MeetingIcon = meetingTypeIcons[viewingItem.meeting_type] || Phone;
           const meetingTypeLabels: Record<string, string> = {
             call: 'Phone Call',
@@ -895,19 +982,34 @@ export function ClientMeetingsPage() {
             in_person: 'In Person',
             email: 'Email',
           };
+          const status = viewingItem.status || 'planned';
+          const statusConfig = meetingStatusConfig[status as keyof typeof meetingStatusConfig] || meetingStatusConfig.planned;
+          const StatusIcon = statusConfig.icon;
           
           return (
             <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-brand-cyan/10 rounded-lg">
-                  <MeetingIcon className="h-6 w-6 text-brand-cyan" />
+              {/* Header with status */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-brand-cyan/10 rounded-lg">
+                    <MeetingIcon className="h-6 w-6 text-brand-cyan" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-brand-slate-900">{viewingItem.subject}</h3>
+                    <p className="text-sm text-brand-grey-500">{meetingTypeLabels[viewingItem.meeting_type] || viewingItem.meeting_type}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-brand-slate-900">{viewingItem.subject}</h3>
-                  <p className="text-sm text-brand-grey-500">{meetingTypeLabels[viewingItem.meeting_type] || viewingItem.meeting_type}</p>
+                <div className="flex items-center gap-2">
+                  <StatusIcon className={`h-4 w-4 ${
+                    status === 'completed' ? 'text-green-500' : 
+                    status === 'cancelled' ? 'text-red-500' : 
+                    'text-blue-500'
+                  }`} />
+                  <Badge variant={statusConfig.colour as any}>{statusConfig.label}</Badge>
                 </div>
               </div>
 
+              {/* Details grid */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
                 {contact && (
                   <div>
@@ -935,25 +1037,65 @@ export function ClientMeetingsPage() {
                   </p>
                 </div>
                 {viewingItem.location && (
-                  <div className="col-span-2">
+                  <div>
                     <p className="text-xs text-brand-grey-400">Location</p>
                     <p className="font-medium text-brand-slate-900">{viewingItem.location}</p>
                   </div>
                 )}
+                {creator && (
+                  <div>
+                    <p className="text-xs text-brand-grey-400">Organised by</p>
+                    <p className="font-medium text-brand-slate-900">{creator.full_name}</p>
+                  </div>
+                )}
               </div>
 
-              {viewingItem.notes && (
-                <div>
-                  <h4 className="font-medium text-brand-slate-900 mb-2">Notes</h4>
-                  <p className="text-sm text-brand-grey-600 whitespace-pre-wrap">{viewingItem.notes}</p>
+              {/* Preparation Notes */}
+              {viewingItem.preparation_notes && (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                  <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Preparation Notes
+                  </h4>
+                  <p className="text-sm text-blue-800 whitespace-pre-wrap">{viewingItem.preparation_notes}</p>
                 </div>
               )}
 
+              {/* Outcome Notes (shown after meeting is completed or cancelled) */}
+              {viewingItem.outcome_notes && (
+                <div className={`p-4 rounded-lg border ${
+                  status === 'completed' 
+                    ? 'bg-green-50 border-green-100' 
+                    : 'bg-red-50 border-red-100'
+                }`}>
+                  <h4 className={`font-medium mb-2 flex items-center gap-2 ${
+                    status === 'completed' ? 'text-green-900' : 'text-red-900'
+                  }`}>
+                    {status === 'completed' ? (
+                      <>
+                        <CheckCircle className="h-4 w-4" />
+                        Meeting Outcome
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-4 w-4" />
+                        Cancellation Reason
+                      </>
+                    )}
+                  </h4>
+                  <p className={`text-sm whitespace-pre-wrap ${
+                    status === 'completed' ? 'text-green-800' : 'text-red-800'
+                  }`}>{viewingItem.outcome_notes}</p>
+                </div>
+              )}
+
+              {/* Action buttons */}
               <div className="flex justify-between pt-4 border-t border-brand-grey-200">
-                <div>
+                <div className="flex gap-2">
                   {permissions.isAdmin && (
                     <Button 
                       variant="danger" 
+                      size="sm"
                       leftIcon={<Trash2 className="h-4 w-4" />}
                       onClick={() => handleDeleteClick(viewingItem, 'meeting')}
                     >
@@ -961,9 +1103,32 @@ export function ClientMeetingsPage() {
                     </Button>
                   )}
                 </div>
-                <Button variant="secondary" onClick={() => setIsDetailModalOpen(false)}>
-                  Close
-                </Button>
+                <div className="flex gap-2">
+                  {/* Status change buttons - only show for planned meetings */}
+                  {status === 'planned' && (
+                    <>
+                      <Button 
+                        variant="danger" 
+                        size="sm"
+                        leftIcon={<XCircle className="h-4 w-4" />}
+                        onClick={() => handleOpenStatusModal('cancelled')}
+                      >
+                        Cancel Meeting
+                      </Button>
+                      <Button 
+                        variant="success" 
+                        size="sm"
+                        leftIcon={<CheckCircle className="h-4 w-4" />}
+                        onClick={() => handleOpenStatusModal('completed')}
+                      >
+                        Mark Complete
+                      </Button>
+                    </>
+                  )}
+                  <Button variant="secondary" size="sm" onClick={() => setIsDetailModalOpen(false)}>
+                    Close
+                  </Button>
+                </div>
               </div>
             </div>
           );
@@ -1063,6 +1228,49 @@ export function ClientMeetingsPage() {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Meeting Status Update Modal */}
+      <Modal
+        isOpen={isStatusModalOpen}
+        onClose={() => { setIsStatusModalOpen(false); setStatusToSet(null); setMeetingOutcomeNotes(''); }}
+        title={statusToSet === 'completed' ? 'Complete Meeting' : 'Cancel Meeting'}
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-brand-grey-600">
+            {statusToSet === 'completed' 
+              ? 'Add notes about the meeting outcome and key takeaways.'
+              : 'Please provide a reason for cancelling this meeting.'}
+          </p>
+          
+          <Textarea
+            label={statusToSet === 'completed' ? 'Meeting Outcome / Takeaways' : 'Cancellation Reason'}
+            value={meetingOutcomeNotes}
+            onChange={(e) => setMeetingOutcomeNotes(e.target.value)}
+            placeholder={statusToSet === 'completed' 
+              ? 'What was discussed? What are the next steps?'
+              : 'Why is this meeting being cancelled?'}
+            rows={4}
+          />
+          
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button 
+              variant="secondary" 
+              onClick={() => { setIsStatusModalOpen(false); setStatusToSet(null); setMeetingOutcomeNotes(''); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={statusToSet === 'completed' ? 'success' : 'danger'}
+              leftIcon={statusToSet === 'completed' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+              onClick={handleUpdateMeetingStatus}
+              isLoading={isSubmitting}
+            >
+              {statusToSet === 'completed' ? 'Mark as Complete' : 'Cancel Meeting'}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Delete Confirmation */}

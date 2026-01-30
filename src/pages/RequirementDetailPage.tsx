@@ -86,6 +86,27 @@ export function RequirementDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   
+  // Edit requirement modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    customer: '',
+    industry: '',
+    location: '',
+    status: 'active',
+    fte_count: '1',
+    min_day_rate: '',
+    max_day_rate: '',
+    engineering_discipline: 'software',
+    clearance_required: 'none',
+    description: '',
+    manager_id: '',
+  });
+  const [editSkills, setEditSkills] = useState<string[]>([]);
+  const [editSkillInput, setEditSkillInput] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  
   // Applications (linked candidates)
   const [applications, setApplications] = useState<DbApplication[]>([]);
   
@@ -136,6 +157,7 @@ export function RequirementDetailPage() {
       
       setRequirement(reqData);
       setApplications(appsData);
+      setAllUsers(usersData);
       
       // Check interview status and scheduled assessments for each linked candidate
       const interviewStatus: Record<string, boolean> = {};
@@ -209,6 +231,70 @@ export function RequirementDetailPage() {
 
     return () => clearTimeout(timeoutId);
   }, [candidateSearch, applications, selectedCandidates]);
+
+  const handleOpenEditModal = () => {
+    if (!requirement) return;
+    
+    // Populate form with current requirement data
+    setEditForm({
+      title: requirement.title || '',
+      customer: requirement.customer || '',
+      industry: requirement.industry || '',
+      location: requirement.location || '',
+      status: requirement.status || 'active',
+      fte_count: requirement.fte_count?.toString() || '1',
+      min_day_rate: requirement.min_day_rate?.toString() || '',
+      max_day_rate: requirement.max_day_rate?.toString() || '',
+      engineering_discipline: requirement.engineering_discipline || 'software',
+      clearance_required: requirement.clearance_required || 'none',
+      description: requirement.description || '',
+      manager_id: requirement.manager_id || '',
+    });
+    setEditSkills(requirement.skills || []);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateRequirement = async () => {
+    if (!editForm.title && !editForm.customer) {
+      toast.error('Validation Error', 'Title or Customer is required');
+      return;
+    }
+    
+    setIsUpdating(true);
+    try {
+      await requirementsService.update(id!, {
+        title: editForm.title || undefined,
+        customer: editForm.customer || undefined,
+        industry: editForm.industry || undefined,
+        location: editForm.location || undefined,
+        status: editForm.status,
+        fte_count: editForm.fte_count ? parseInt(editForm.fte_count) : undefined,
+        min_day_rate: editForm.min_day_rate ? parseFloat(editForm.min_day_rate) : undefined,
+        max_day_rate: editForm.max_day_rate ? parseFloat(editForm.max_day_rate) : undefined,
+        engineering_discipline: editForm.engineering_discipline || undefined,
+        clearance_required: editForm.clearance_required || undefined,
+        description: editForm.description || undefined,
+        skills: editSkills.length > 0 ? editSkills : undefined,
+        manager_id: editForm.manager_id || undefined,
+      });
+      
+      toast.success('Requirement Updated', 'Changes have been saved');
+      setIsEditModalOpen(false);
+      loadData(); // Reload to show updated data
+    } catch (error) {
+      console.error('Error updating requirement:', error);
+      toast.error('Error', 'Failed to update requirement');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleEditSkillAdd = () => {
+    if (!editSkillInput.trim()) return;
+    const newSkills = editSkillInput.split(',').map(s => s.trim()).filter(s => s && !editSkills.includes(s));
+    setEditSkills([...editSkills, ...newSkills]);
+    setEditSkillInput('');
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -371,7 +457,7 @@ export function RequirementDetailPage() {
               <Button
                 variant="secondary"
                 leftIcon={<Edit className="h-4 w-4" />}
-                onClick={() => navigate(`/requirements/${id}/edit`)}
+                onClick={handleOpenEditModal}
               >
                 Edit
               </Button>
@@ -881,6 +967,172 @@ export function RequirementDetailPage() {
               disabled={!assessmentForm.scheduled_date}
             >
               Schedule Meeting
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Requirement Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Requirement"
+        description="Update requirement details"
+        size="xl"
+      >
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+          {/* Basic Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Title *"
+              value={editForm.title}
+              onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+              placeholder="e.g., Senior Java Engineer"
+            />
+            <Input
+              label="Customer"
+              value={editForm.customer}
+              onChange={(e) => setEditForm(prev => ({ ...prev, customer: e.target.value }))}
+              placeholder="e.g., Acme Corp"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Location"
+              value={editForm.location}
+              onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))}
+              placeholder="e.g., London, Remote"
+            />
+            <Select
+              label="Status"
+              options={[
+                { value: 'opportunity', label: 'Opportunity' },
+                { value: 'active', label: 'Active' },
+                { value: 'on_hold', label: 'On Hold' },
+                { value: 'filled', label: 'Filled' },
+                { value: 'lost', label: 'Lost' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ]}
+              value={editForm.status}
+              onChange={(e) => setEditForm(prev => ({ ...prev, status: e.target.value }))}
+            />
+          </div>
+
+          {/* Rates */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Min Day Rate (£)"
+              type="number"
+              value={editForm.min_day_rate}
+              onChange={(e) => setEditForm(prev => ({ ...prev, min_day_rate: e.target.value }))}
+              placeholder="e.g., 450"
+            />
+            <Input
+              label="Max Day Rate (£)"
+              type="number"
+              value={editForm.max_day_rate}
+              onChange={(e) => setEditForm(prev => ({ ...prev, max_day_rate: e.target.value }))}
+              placeholder="e.g., 550"
+            />
+          </div>
+
+          {/* Discipline & Clearance */}
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Engineering Discipline"
+              options={[
+                { value: 'software', label: 'Software Engineering' },
+                { value: 'systems', label: 'Systems Engineering' },
+                { value: 'mechanical', label: 'Mechanical Engineering' },
+                { value: 'electrical', label: 'Electrical Engineering' },
+                { value: 'civil', label: 'Civil Engineering' },
+                { value: 'aerospace', label: 'Aerospace Engineering' },
+                { value: 'data', label: 'Data Engineering' },
+                { value: 'devops', label: 'DevOps / Platform' },
+                { value: 'security', label: 'Security Engineering' },
+                { value: 'other', label: 'Other' },
+              ]}
+              value={editForm.engineering_discipline}
+              onChange={(e) => setEditForm(prev => ({ ...prev, engineering_discipline: e.target.value }))}
+            />
+            <Select
+              label="Clearance Required"
+              options={[
+                { value: 'none', label: 'None Required' },
+                { value: 'bpss', label: 'BPSS' },
+                { value: 'ctc', label: 'CTC' },
+                { value: 'sc', label: 'SC' },
+                { value: 'esc', label: 'eSC' },
+                { value: 'dv', label: 'DV' },
+                { value: 'edv', label: 'eDV' },
+              ]}
+              value={editForm.clearance_required}
+              onChange={(e) => setEditForm(prev => ({ ...prev, clearance_required: e.target.value }))}
+            />
+          </div>
+
+          {/* Description */}
+          <Textarea
+            label="Description"
+            value={editForm.description}
+            onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="Describe the requirement, project details, team structure..."
+            rows={4}
+          />
+
+          {/* Skills */}
+          <div>
+            <label className="block text-sm font-medium text-brand-slate-700 mb-2">Required Skills</label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Add skills (comma-separated)..."
+                value={editSkillInput}
+                onChange={(e) => setEditSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleEditSkillAdd();
+                  }
+                }}
+              />
+              <Button variant="secondary" onClick={handleEditSkillAdd}>Add</Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {editSkills.map(skill => (
+                <Badge key={skill} variant="cyan">
+                  {skill}
+                  <button
+                    onClick={() => setEditSkills(editSkills.filter(s => s !== skill))}
+                    className="ml-1.5 hover:text-red-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Manager */}
+          <Select
+            label="Assigned Manager"
+            options={[
+              { value: '', label: 'Select manager' },
+              ...allUsers
+                .filter(u => u.role === 'manager' || u.role === 'director' || u.role === 'admin')
+                .map(u => ({ value: u.id, label: u.full_name || u.email }))
+            ]}
+            value={editForm.manager_id}
+            onChange={(e) => setEditForm(prev => ({ ...prev, manager_id: e.target.value }))}
+          />
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" onClick={handleUpdateRequirement} isLoading={isUpdating}>
+              Save Changes
             </Button>
           </div>
         </div>

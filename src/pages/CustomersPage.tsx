@@ -45,6 +45,8 @@ import {
   Upload,
   Image,
   X,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -243,6 +245,13 @@ export function CustomersPage() {
   const [isContactDetailOpen, setIsContactDetailOpen] = useState(false);
   const [contactMeetings, setContactMeetings] = useState<DbCustomerMeeting[]>([]);
   const [contactRequirements, setContactRequirements] = useState<DbRequirement[]>([]);
+
+  // Meeting detail modal (for viewing/editing meetings from contact profile)
+  const [viewingMeeting, setViewingMeeting] = useState<DbCustomerMeeting | null>(null);
+  const [isMeetingDetailOpen, setIsMeetingDetailOpen] = useState(false);
+  const [isMeetingStatusModalOpen, setIsMeetingStatusModalOpen] = useState(false);
+  const [meetingStatusToSet, setMeetingStatusToSet] = useState<'completed' | 'cancelled' | null>(null);
+  const [meetingOutcomeNotes, setMeetingOutcomeNotes] = useState('');
 
   // Requirement modal
   const [isRequirementModalOpen, setIsRequirementModalOpen] = useState(false);
@@ -585,6 +594,58 @@ export function CustomersPage() {
       candidate_id: '',
     });
     setIsMeetingModalOpen(true);
+  };
+
+  // View meeting detail from contact profile
+  const handleViewMeeting = (meeting: DbCustomerMeeting) => {
+    setViewingMeeting(meeting);
+    setIsMeetingDetailOpen(true);
+  };
+
+  // Open status change modal
+  const handleOpenMeetingStatusModal = (status: 'completed' | 'cancelled') => {
+    setMeetingStatusToSet(status);
+    setMeetingOutcomeNotes('');
+    setIsMeetingStatusModalOpen(true);
+  };
+
+  // Update meeting status
+  const handleUpdateMeetingStatus = async () => {
+    if (!viewingMeeting || !meetingStatusToSet) return;
+    
+    setIsSubmitting(true);
+    try {
+      await customerMeetingsService.updateStatus(
+        viewingMeeting.id,
+        meetingStatusToSet,
+        meetingOutcomeNotes || undefined
+      );
+      
+      toast.success(
+        meetingStatusToSet === 'completed' ? 'Meeting Completed' : 'Meeting Cancelled',
+        meetingStatusToSet === 'completed' 
+          ? 'Meeting has been marked as completed' 
+          : 'Meeting has been cancelled'
+      );
+      
+      // Reload contact meetings
+      if (selectedContact) {
+        const allMeetings = await customerMeetingsService.getAll();
+        const updatedMeetings = allMeetings.filter(m => m.contact_id === selectedContact.id);
+        setContactMeetings(updatedMeetings);
+      }
+      
+      setIsMeetingStatusModalOpen(false);
+      setIsMeetingDetailOpen(false);
+      setViewingMeeting(null);
+      setMeetingStatusToSet(null);
+      setMeetingOutcomeNotes('');
+    } catch (error) {
+      console.error('Error updating meeting status:', error);
+      toast.error('Error', 'Failed to update meeting status');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Load candidates when requirement is selected
@@ -1543,32 +1604,49 @@ export function CustomersPage() {
             </div>
 
             {/* Requirements Stats */}
-            {contactRequirements.length > 0 && (
-              <div className="grid grid-cols-4 gap-3">
-                <div className="bg-brand-grey-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-brand-slate-900">{contactRequirements.length}</p>
-                  <p className="text-xs text-brand-grey-500">Total</p>
+            {contactRequirements.length > 0 && (() => {
+              const total = contactRequirements.length;
+              const active = contactRequirements.filter(r => r.status === 'active' || r.status === 'opportunity').length;
+              const won = contactRequirements.filter(r => r.status === 'filled' || r.status === 'won').length;
+              const lost = contactRequirements.filter(r => r.status === 'lost' || r.status === 'cancelled').length;
+              const closed = won + lost;
+              const conversionRate = closed > 0 ? Math.round((won / closed) * 100) : null;
+              
+              return (
+                <div className="flex items-center gap-4 py-3 px-4 bg-brand-grey-50 rounded-lg">
+                  <div className="flex items-center gap-6 flex-1">
+                    <div className="text-center">
+                      <p className="text-lg font-semibold text-brand-slate-900">{total}</p>
+                      <p className="text-xs text-brand-grey-500">Total</p>
+                    </div>
+                    <div className="h-8 w-px bg-brand-grey-200" />
+                    <div className="text-center">
+                      <p className="text-lg font-semibold text-amber-600">{active}</p>
+                      <p className="text-xs text-brand-grey-500">Active</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg font-semibold text-green-600">{won}</p>
+                      <p className="text-xs text-brand-grey-500">Won</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg font-semibold text-red-500">{lost}</p>
+                      <p className="text-xs text-brand-grey-500">Lost</p>
+                    </div>
+                  </div>
+                  {conversionRate !== null && (
+                    <>
+                      <div className="h-8 w-px bg-brand-grey-200" />
+                      <div className="text-center px-3">
+                        <p className={`text-lg font-semibold ${conversionRate >= 50 ? 'text-green-600' : conversionRate >= 25 ? 'text-amber-600' : 'text-red-500'}`}>
+                          {conversionRate}%
+                        </p>
+                        <p className="text-xs text-brand-grey-500">Win Rate</p>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-green-600">
-                    {contactRequirements.filter(r => r.status === 'active').length}
-                  </p>
-                  <p className="text-xs text-green-600">Active</p>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-blue-600">
-                    {contactRequirements.filter(r => r.status === 'filled').length}
-                  </p>
-                  <p className="text-xs text-blue-600">Filled</p>
-                </div>
-                <div className="bg-red-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-red-600">
-                    {contactRequirements.filter(r => r.status === 'lost' || r.status === 'cancelled').length}
-                  </p>
-                  <p className="text-xs text-red-600">Lost</p>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Requirements List */}
             <div>
@@ -1584,9 +1662,10 @@ export function CustomersPage() {
                   {contactRequirements.map(req => {
                     const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
                       opportunity: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Opportunity' },
-                      active: { bg: 'bg-green-100', text: 'text-green-700', label: 'Active' },
-                      on_hold: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'On Hold' },
-                      filled: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Filled' },
+                      active: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Active' },
+                      on_hold: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'On Hold' },
+                      filled: { bg: 'bg-green-100', text: 'text-green-700', label: 'Won' },
+                      won: { bg: 'bg-green-100', text: 'text-green-700', label: 'Won' },
                       lost: { bg: 'bg-red-100', text: 'text-red-700', label: 'Lost' },
                       cancelled: { bg: 'bg-grey-100', text: 'text-grey-700', label: 'Cancelled' },
                     };
@@ -1633,35 +1712,61 @@ export function CustomersPage() {
                 <p className="text-sm text-brand-grey-400">No meetings scheduled with this contact</p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {contactMeetings.map(meeting => (
-                    <div key={meeting.id} className="flex items-center gap-3 p-3 bg-brand-grey-50 rounded-lg">
-                      <div className={`p-2 rounded-lg ${
-                        meeting.meeting_type === 'call' ? 'bg-blue-100 text-blue-600' :
-                        meeting.meeting_type === 'video' ? 'bg-purple-100 text-purple-600' :
-                        meeting.meeting_type === 'in_person' ? 'bg-green-100 text-green-600' :
-                        'bg-grey-100 text-grey-600'
-                      }`}>
-                        {meeting.meeting_type === 'call' && <Phone className="h-4 w-4" />}
-                        {meeting.meeting_type === 'video' && <Globe className="h-4 w-4" />}
-                        {meeting.meeting_type === 'in_person' && <MapPin className="h-4 w-4" />}
-                        {meeting.meeting_type === 'email' && <Mail className="h-4 w-4" />}
+                  {contactMeetings.map(meeting => {
+                    const status = (meeting as any).status || 'planned';
+                    const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+                      planned: { bg: 'bg-blue-100', text: 'text-blue-600', label: 'Planned' },
+                      completed: { bg: 'bg-green-100', text: 'text-green-600', label: 'Completed' },
+                      cancelled: { bg: 'bg-red-100', text: 'text-red-500', label: 'Cancelled' },
+                    };
+                    const config = statusConfig[status] || statusConfig.planned;
+                    
+                    return (
+                      <div 
+                        key={meeting.id} 
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover:bg-brand-grey-100 ${
+                          status === 'cancelled' ? 'bg-red-50 opacity-75' : 'bg-brand-grey-50'
+                        }`}
+                        onClick={() => handleViewMeeting(meeting)}
+                      >
+                        <div className={`p-2 rounded-lg ${
+                          status === 'completed' ? 'bg-green-100 text-green-600' :
+                          status === 'cancelled' ? 'bg-red-100 text-red-500' :
+                          meeting.meeting_type === 'call' ? 'bg-blue-100 text-blue-600' :
+                          meeting.meeting_type === 'video' ? 'bg-purple-100 text-purple-600' :
+                          meeting.meeting_type === 'in_person' ? 'bg-green-100 text-green-600' :
+                          'bg-grey-100 text-grey-600'
+                        }`}>
+                          {meeting.meeting_type === 'call' && <Phone className="h-4 w-4" />}
+                          {meeting.meeting_type === 'video' && <Globe className="h-4 w-4" />}
+                          {meeting.meeting_type === 'in_person' && <MapPin className="h-4 w-4" />}
+                          {meeting.meeting_type === 'email' && <Mail className="h-4 w-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className={`font-medium truncate ${status === 'cancelled' ? 'text-brand-grey-500 line-through' : 'text-brand-slate-900'}`}>
+                              {meeting.subject}
+                            </p>
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}>
+                              {config.label}
+                            </span>
+                          </div>
+                          {meeting.scheduled_at && (
+                            <p className="text-xs text-brand-grey-400">
+                              {new Date(meeting.scheduled_at).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          )}
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-brand-grey-400 flex-shrink-0" />
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-brand-slate-900">{meeting.subject}</p>
-                        {meeting.scheduled_at && (
-                          <p className="text-xs text-brand-grey-400">
-                            {new Date(meeting.scheduled_at).toLocaleDateString('en-GB', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2342,6 +2447,108 @@ export function CustomersPage() {
         isLoading={isSubmitting}
         requirePassword={deleteTarget?.type === 'company'}
       />
+
+      {/* Meeting Detail Modal */}
+      {viewingMeeting && (
+        <Modal
+          isOpen={isMeetingDetailOpen}
+          onClose={() => { setIsMeetingDetailOpen(false); setViewingMeeting(null); }}
+          title="Meeting Details"
+          size="lg"
+        >
+          {(() => {
+            const contact = contacts.find(c => c.id === viewingMeeting.contact_id);
+            const company = selectedCompany;
+            const status = (viewingMeeting as any).status || 'planned';
+            const meetingTypeLabels: Record<string, string> = {
+              call: 'Phone Call', video: 'Video Call', in_person: 'In Person', email: 'Email',
+            };
+
+            return (
+              <div className="space-y-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-lg ${status === 'completed' ? 'bg-green-100' : status === 'cancelled' ? 'bg-red-100' : 'bg-brand-cyan/10'}`}>
+                      <Phone className={`h-6 w-6 ${status === 'completed' ? 'text-green-600' : status === 'cancelled' ? 'text-red-500' : 'text-brand-cyan'}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-brand-slate-900">{viewingMeeting.subject}</h3>
+                      <p className="text-sm text-brand-grey-500">{meetingTypeLabels[viewingMeeting.meeting_type] || viewingMeeting.meeting_type}</p>
+                    </div>
+                  </div>
+                  <Badge variant={status === 'completed' ? 'green' : status === 'cancelled' ? 'red' : 'cyan'}>{status === 'completed' ? 'Completed' : status === 'cancelled' ? 'Cancelled' : 'Planned'}</Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
+                  {contact && <div><p className="text-xs text-brand-grey-400">Contact</p><p className="font-medium text-brand-slate-900">{contact.first_name} {contact.last_name}</p></div>}
+                  {company && <div><p className="text-xs text-brand-grey-400">Company</p><p className="font-medium text-brand-slate-900">{company.name}</p></div>}
+                  <div><p className="text-xs text-brand-grey-400">Date & Time</p><p className="font-medium text-brand-slate-900">{viewingMeeting.scheduled_at ? new Date(viewingMeeting.scheduled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Not scheduled'}</p></div>
+                  <div><p className="text-xs text-brand-grey-400">Duration</p><p className="font-medium text-brand-slate-900">{viewingMeeting.duration_minutes ? `${viewingMeeting.duration_minutes} minutes` : 'Not specified'}</p></div>
+                  {viewingMeeting.location && <div className="col-span-2"><p className="text-xs text-brand-grey-400">Location</p><p className="font-medium text-brand-slate-900">{viewingMeeting.location}</p></div>}
+                </div>
+
+                {(viewingMeeting as any).preparation_notes && (
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                    <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2"><FileText className="h-4 w-4" />Preparation Notes</h4>
+                    <p className="text-sm text-blue-800 whitespace-pre-wrap">{(viewingMeeting as any).preparation_notes}</p>
+                  </div>
+                )}
+
+                {(viewingMeeting as any).outcome_notes && (
+                  <div className={`p-4 rounded-lg border ${status === 'completed' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                    <h4 className={`font-medium mb-2 flex items-center gap-2 ${status === 'completed' ? 'text-green-900' : 'text-red-900'}`}>
+                      {status === 'completed' ? <><CheckCircle className="h-4 w-4" />Meeting Outcome</> : <><XCircle className="h-4 w-4" />Cancellation Reason</>}
+                    </h4>
+                    <p className={`text-sm whitespace-pre-wrap ${status === 'completed' ? 'text-green-800' : 'text-red-800'}`}>{(viewingMeeting as any).outcome_notes}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-brand-grey-200">
+                  {status === 'planned' && (
+                    <>
+                      <Button variant="danger" size="sm" leftIcon={<XCircle className="h-4 w-4" />} onClick={() => handleOpenMeetingStatusModal('cancelled')}>Cancel Meeting</Button>
+                      <Button variant="success" size="sm" leftIcon={<CheckCircle className="h-4 w-4" />} onClick={() => handleOpenMeetingStatusModal('completed')}>Mark Complete</Button>
+                    </>
+                  )}
+                  <Button variant="secondary" size="sm" onClick={() => { setIsMeetingDetailOpen(false); setViewingMeeting(null); }}>Close</Button>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
+
+      {/* Meeting Status Update Modal */}
+      <Modal
+        isOpen={isMeetingStatusModalOpen}
+        onClose={() => { setIsMeetingStatusModalOpen(false); setMeetingStatusToSet(null); setMeetingOutcomeNotes(''); }}
+        title={meetingStatusToSet === 'completed' ? 'Complete Meeting' : 'Cancel Meeting'}
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-brand-grey-600">
+            {meetingStatusToSet === 'completed' ? 'Add notes about the meeting outcome and key takeaways.' : 'Please provide a reason for cancelling this meeting.'}
+          </p>
+          <Textarea
+            label={meetingStatusToSet === 'completed' ? 'Meeting Outcome / Takeaways' : 'Cancellation Reason'}
+            value={meetingOutcomeNotes}
+            onChange={(e) => setMeetingOutcomeNotes(e.target.value)}
+            placeholder={meetingStatusToSet === 'completed' ? 'What was discussed? What are the next steps?' : 'Why is this meeting being cancelled?'}
+            rows={4}
+          />
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={() => { setIsMeetingStatusModalOpen(false); setMeetingStatusToSet(null); setMeetingOutcomeNotes(''); }}>Cancel</Button>
+            <Button
+              variant={meetingStatusToSet === 'completed' ? 'success' : 'danger'}
+              leftIcon={meetingStatusToSet === 'completed' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+              onClick={handleUpdateMeetingStatus}
+              isLoading={isSubmitting}
+            >
+              {meetingStatusToSet === 'completed' ? 'Mark as Complete' : 'Cancel Meeting'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

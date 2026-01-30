@@ -171,6 +171,7 @@ export interface DbRequirement {
   industry: string | null;
   location: string | null;
   fte_count: number;
+  min_day_rate: number | null;
   max_day_rate: number | null;
   skills: string[];
   description: string | null;
@@ -196,6 +197,7 @@ export interface CreateRequirementInput {
   industry?: string;
   location?: string;
   fte_count?: number;
+  min_day_rate?: number;
   max_day_rate?: number;
   skills?: string[];
   description?: string;
@@ -1181,6 +1183,9 @@ export interface DbCustomerMeeting {
   duration_minutes: number | null;
   location: string | null;
   notes: string | null;
+  status: 'planned' | 'completed' | 'cancelled';
+  preparation_notes: string | null;
+  outcome_notes: string | null;
   outcome: string | null;
   follow_up_date: string | null;
   follow_up_notes: string | null;
@@ -1202,6 +1207,20 @@ export interface CreateCustomerMeetingInput {
   duration_minutes?: number;
   location?: string;
   notes?: string;
+  preparation_notes?: string;
+}
+
+export interface UpdateCustomerMeetingInput {
+  subject?: string;
+  meeting_type?: string;
+  scheduled_at?: string;
+  duration_minutes?: number;
+  location?: string;
+  notes?: string;
+  status?: 'planned' | 'completed' | 'cancelled';
+  preparation_notes?: string;
+  outcome_notes?: string;
+  completed_at?: string;
 }
 
 export const customerMeetingsService = {
@@ -1237,7 +1256,10 @@ export const customerMeetingsService = {
   async create(input: CreateCustomerMeetingInput): Promise<DbCustomerMeeting> {
     const { data, error } = await supabase
       .from('customer_meetings')
-      .insert(input)
+      .insert({
+        ...input,
+        status: 'planned', // Default status for new meetings
+      })
       .select()
       .single();
 
@@ -1245,18 +1267,38 @@ export const customerMeetingsService = {
     return data;
   },
 
-  async update(id: string, input: Partial<CreateCustomerMeetingInput & { 
-    completed_at?: string; 
-    outcome?: string;
-    follow_up_date?: string;
-    follow_up_notes?: string;
-  }>): Promise<DbCustomerMeeting> {
+  async update(id: string, input: UpdateCustomerMeetingInput): Promise<DbCustomerMeeting> {
     const { data, error } = await supabase
       .from('customer_meetings')
       .update({
         ...input,
         updated_at: new Date().toISOString(),
       })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async updateStatus(id: string, status: 'planned' | 'completed' | 'cancelled', outcomeNotes?: string): Promise<DbCustomerMeeting> {
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    
+    if (status === 'completed') {
+      updateData.completed_at = new Date().toISOString();
+    }
+    
+    if (outcomeNotes !== undefined) {
+      updateData.outcome_notes = outcomeNotes;
+    }
+    
+    const { data, error } = await supabase
+      .from('customer_meetings')
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
