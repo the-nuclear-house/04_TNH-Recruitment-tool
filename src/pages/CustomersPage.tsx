@@ -14,6 +14,7 @@ import {
 } from '@/components/ui';
 import {
   Plus,
+  Minus,
   Building2,
   Users,
   Search,
@@ -37,6 +38,11 @@ import {
   Network,
   PanelLeftClose,
   PanelLeft,
+  ZoomIn,
+  ZoomOut,
+  Move,
+  Upload,
+  Image,
 } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -119,6 +125,7 @@ export function CustomersPage() {
   const [sidebarSearch, setSidebarSearch] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [orgChartZoom, setOrgChartZoom] = useState(1);
 
   // Company modal
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
@@ -140,7 +147,10 @@ export function CustomersPage() {
     website: '',
     status: 'prospect',
     notes: '',
+    logo_url: '',
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   // Contact modal
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -329,7 +339,10 @@ export function CustomersPage() {
       website: '',
       status: 'prospect',
       notes: '',
+      logo_url: '',
     });
+    setLogoFile(null);
+    setLogoPreview(null);
     setIsCompanyModalOpen(true);
   };
 
@@ -353,7 +366,10 @@ export function CustomersPage() {
       website: selectedCompany.website || '',
       status: selectedCompany.status,
       notes: selectedCompany.notes || '',
+      logo_url: selectedCompany.logo_url || '',
     });
+    setLogoFile(null);
+    setLogoPreview(selectedCompany.logo_url || null);
     setIsCompanyModalOpen(true);
   };
 
@@ -438,7 +454,8 @@ export function CustomersPage() {
       const inputData = {
         ...contactForm,
         company_id: selectedCompany.id,
-        reports_to_id: contactForm.reports_to_id || undefined,
+        reports_to_id: contactForm.reports_to_id || null,
+        is_primary_contact: false, // Remove this field usage
       };
 
       if (isEditingContact && editingContactId) {
@@ -449,7 +466,7 @@ export function CustomersPage() {
         toast.success('Contact Added', `${contactForm.first_name} ${contactForm.last_name} has been added`);
       }
       setIsContactModalOpen(false);
-      loadCompanyDetails(selectedCompany.id);
+      await loadCompanyDetails(selectedCompany.id);
     } catch (error: any) {
       console.error('Error saving contact:', error);
       toast.error('Error', error.message || 'Failed to save contact');
@@ -582,36 +599,49 @@ export function CustomersPage() {
 
       return (
         <div key={contact.id} className="flex flex-col items-center">
+          {/* Contact Card */}
           <div
-            className="bg-white border border-brand-grey-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer min-w-[200px]"
+            className="bg-white border-2 border-brand-grey-200 rounded-xl p-4 shadow-sm hover:shadow-lg hover:border-brand-cyan transition-all cursor-pointer min-w-[220px]"
             onClick={() => loadContactDetails(contact)}
           >
             <div className="flex items-center gap-3">
               <Avatar name={`${contact.first_name} ${contact.last_name}`} size="md" />
               <div>
-                <p className="font-medium text-brand-slate-900">
+                <p className="font-semibold text-brand-slate-900">
                   {contact.first_name} {contact.last_name}
                 </p>
-                <p className="text-sm text-brand-cyan">{contact.role || 'No role'}</p>
+                <p className="text-sm text-brand-cyan font-medium">{contact.role || 'No role'}</p>
               </div>
             </div>
           </div>
 
+          {/* Connection lines to children */}
           {directReports.length > 0 && (
-            <>
-              <div className="w-px h-6 bg-brand-grey-300" />
-              <div className="flex gap-8">
-                {directReports.length > 1 && (
-                  <div className="absolute h-px bg-brand-grey-300" style={{ width: `${(directReports.length - 1) * 240}px` }} />
-                )}
-                {directReports.map(report => (
+            <div className="flex flex-col items-center">
+              {/* Vertical line down from parent */}
+              <div className="w-0.5 h-8 bg-brand-cyan" />
+              
+              {/* Horizontal connector line */}
+              {directReports.length > 1 && (
+                <div 
+                  className="h-0.5 bg-brand-cyan" 
+                  style={{ 
+                    width: `${(directReports.length - 1) * 260 + 20}px`,
+                  }} 
+                />
+              )}
+              
+              {/* Children with their vertical connectors */}
+              <div className="flex gap-10">
+                {directReports.map((report, index) => (
                   <div key={report.id} className="flex flex-col items-center">
-                    <div className="w-px h-6 bg-brand-grey-300" />
+                    {/* Vertical line up to horizontal connector */}
+                    <div className="w-0.5 h-8 bg-brand-cyan" />
                     {renderOrgNode(report, level + 1)}
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
       );
@@ -628,8 +658,44 @@ export function CustomersPage() {
     }
 
     return (
-      <div className="flex justify-center gap-12 overflow-x-auto py-8">
-        {topLevel.map(contact => renderOrgNode(contact))}
+      <div className="relative">
+        {/* Zoom Controls */}
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white rounded-lg shadow-md p-1">
+          <button
+            onClick={() => setOrgChartZoom(z => Math.max(0.5, z - 0.1))}
+            className="p-2 hover:bg-brand-grey-100 rounded-lg transition-colors"
+            title="Zoom out"
+          >
+            <ZoomOut className="h-4 w-4 text-brand-grey-600" />
+          </button>
+          <span className="text-sm text-brand-grey-600 min-w-[50px] text-center">
+            {Math.round(orgChartZoom * 100)}%
+          </span>
+          <button
+            onClick={() => setOrgChartZoom(z => Math.min(1.5, z + 0.1))}
+            className="p-2 hover:bg-brand-grey-100 rounded-lg transition-colors"
+            title="Zoom in"
+          >
+            <ZoomIn className="h-4 w-4 text-brand-grey-600" />
+          </button>
+          <button
+            onClick={() => setOrgChartZoom(1)}
+            className="p-2 hover:bg-brand-grey-100 rounded-lg transition-colors text-xs text-brand-grey-600"
+            title="Reset zoom"
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Scrollable container */}
+        <div className="overflow-auto max-h-[600px] py-8 px-4">
+          <div 
+            className="flex justify-center gap-16 min-w-max transition-transform duration-200"
+            style={{ transform: `scale(${orgChartZoom})`, transformOrigin: 'top center' }}
+          >
+            {topLevel.map(contact => renderOrgNode(contact))}
+          </div>
+        </div>
       </div>
     );
   };
@@ -1307,6 +1373,63 @@ export function CustomersPage() {
         size="xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+          {/* Logo Upload */}
+          <div className="flex items-center gap-6">
+            <div className="flex-shrink-0">
+              {logoPreview ? (
+                <div className="relative">
+                  <img 
+                    src={logoPreview} 
+                    alt="Company logo" 
+                    className="w-20 h-20 rounded-lg object-contain border border-brand-grey-200 bg-white"
+                  />
+                  <button
+                    onClick={() => {
+                      setLogoFile(null);
+                      setLogoPreview(null);
+                      setCompanyForm(prev => ({ ...prev, logo_url: '' }));
+                    }}
+                    className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-lg border-2 border-dashed border-brand-grey-300 flex items-center justify-center bg-brand-grey-50">
+                  <Image className="h-8 w-8 text-brand-grey-400" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">
+                Company Logo
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setLogoFile(file);
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setLogoPreview(reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="block w-full text-sm text-brand-grey-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-lg file:border-0
+                  file:text-sm file:font-medium
+                  file:bg-brand-cyan file:text-white
+                  hover:file:bg-brand-cyan/90
+                  file:cursor-pointer cursor-pointer"
+              />
+              <p className="text-xs text-brand-grey-400 mt-1">PNG, JPG up to 2MB</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Company Name *"
@@ -1513,16 +1636,6 @@ export function CustomersPage() {
             onChange={(e) => setContactForm(prev => ({ ...prev, linkedin_url: e.target.value }))}
             placeholder="https://linkedin.com/in/..."
           />
-
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={contactForm.is_primary_contact}
-              onChange={(e) => setContactForm(prev => ({ ...prev, is_primary_contact: e.target.checked }))}
-              className="h-4 w-4 text-brand-cyan rounded border-brand-grey-300"
-            />
-            <span className="text-sm text-brand-slate-700">Primary contact for this company</span>
-          </label>
 
           <Textarea
             label="Notes"

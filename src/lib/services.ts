@@ -855,6 +855,7 @@ export interface DbCompany {
   main_phone: string | null;
   main_email: string | null;
   website: string | null;
+  logo_url: string | null;
   status: string;
   notes: string | null;
   created_by: string | null;
@@ -884,6 +885,7 @@ export interface CreateCompanyInput {
   main_phone?: string;
   main_email?: string;
   website?: string;
+  logo_url?: string;
   status?: string;
   notes?: string;
   assigned_manager_id?: string;
@@ -1022,7 +1024,7 @@ export interface CreateContactInput {
   notes?: string;
   // Org chart fields
   role?: string;
-  reports_to_id?: string;
+  reports_to_id?: string | null;
 }
 
 export const contactsService = {
@@ -1088,12 +1090,16 @@ export const contactsService = {
   },
 
   async update(id: string, input: Partial<CreateContactInput>): Promise<DbContact> {
+    // Convert empty strings to null for UUID fields
+    const cleanedInput = {
+      ...input,
+      reports_to_id: input.reports_to_id === '' ? null : input.reports_to_id,
+      updated_at: new Date().toISOString(),
+    };
+    
     const { data, error } = await supabase
       .from('contacts')
-      .update({
-        ...input,
-        updated_at: new Date().toISOString(),
-      })
+      .update(cleanedInput)
       .eq('id', id)
       .select()
       .single();
@@ -1165,14 +1171,9 @@ export const customerMeetingsService = {
   },
 
   async create(input: CreateCustomerMeetingInput): Promise<DbCustomerMeeting> {
-    const { data: { user } } = await supabase.auth.getUser();
-    
     const { data, error } = await supabase
       .from('customer_meetings')
-      .insert({
-        ...input,
-        created_by: user?.id,
-      })
+      .insert(input)
       .select()
       .single();
 
