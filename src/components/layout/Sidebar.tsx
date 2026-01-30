@@ -12,6 +12,8 @@ import {
   LogOut,
   UserCheck,
   Building,
+  UserCog,
+  Rocket,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useUIStore } from '@/lib/stores/ui-store';
@@ -36,6 +38,8 @@ export function Sidebar() {
     { name: 'Interviews', href: '/interviews', icon: Calendar, show: permissions.canViewInterviews },
     { name: 'Client Meetings', href: '/client-meetings', icon: UserCheck, show: canViewCustomers },
     { name: 'Contracts', href: '/contracts', icon: FileText, show: permissions.canViewContracts },
+    { name: 'Consultants', href: '/consultants', icon: UserCog, show: canViewCustomers },
+    { name: 'Missions', href: '/missions', icon: Rocket, show: canViewCustomers },
   ].filter(item => item.show);
 
   const bottomNavigation = [

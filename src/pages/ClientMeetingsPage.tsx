@@ -306,10 +306,6 @@ export function ClientMeetingsPage() {
         toast.error('Validation Error', 'Please select a candidate');
         return;
       }
-      if (!assessmentForm.subject) {
-        toast.error('Validation Error', 'Please enter a title for the assessment');
-        return;
-      }
       if (!assessmentForm.scheduled_date) {
         toast.error('Validation Error', 'Please select a date');
         return;
@@ -317,18 +313,30 @@ export function ClientMeetingsPage() {
       
       setIsSubmitting(true);
       try {
-        // Find the selected application to get candidate_id
+        // Find the selected application and requirement to build the title
         const selectedApp = requirementCandidates.find(rc => rc.id === assessmentForm.application_id);
+        const selectedReq = contactRequirements.find(r => r.id === assessmentForm.requirement_id);
+        const contact = contacts.find(c => c.id === assessmentForm.contact_id);
+        const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+        
+        // Auto-generate standard title: REQ-ID - Company - Requirement Title - Candidate Name
+        const autoTitle = [
+          selectedReq?.reference_id || 'REQ',
+          company?.name || selectedReq?.customer || 'Customer',
+          selectedReq?.title || selectedReq?.customer || 'Requirement',
+          selectedApp?.candidate ? `${selectedApp.candidate.first_name} ${selectedApp.candidate.last_name}` : 'Candidate'
+        ].join(' - ');
         
         await customerAssessmentsService.create({
           application_id: assessmentForm.application_id,
-          requirement_id: assessmentForm.requirement_id, // Direct link to requirement
-          candidate_id: selectedApp?.candidate?.id, // Direct link to candidate
+          requirement_id: assessmentForm.requirement_id,
+          candidate_id: selectedApp?.candidate?.id,
           contact_id: assessmentForm.contact_id,
           scheduled_date: assessmentForm.scheduled_date,
           scheduled_time: assessmentForm.scheduled_time || undefined,
           location: assessmentForm.location || undefined,
-          notes: assessmentForm.subject + (assessmentForm.notes ? '\n\n' + assessmentForm.notes : ''),
+          notes: autoTitle + (assessmentForm.notes ? '\n\n' + assessmentForm.notes : ''),
+          created_by: user?.id,
         });
         
         toast.success('Assessment Scheduled', 'Candidate assessment has been scheduled');
@@ -357,10 +365,15 @@ export function ClientMeetingsPage() {
       
       toast.success(
         outcome === 'go' ? 'Marked as GO!' : 'Marked as NO GO',
-        'Assessment outcome has been recorded'
+        outcome === 'go' 
+          ? 'Assessment outcome has been recorded. Requirement marked as Won!'
+          : 'Assessment outcome has been recorded'
       );
       
       setIsOutcomeModalOpen(false);
+      setIsDetailModalOpen(false);
+      setViewingItem(null);
+      setViewingItemType(null);
       setSelectedAssessment(null);
       setOutcomeNotes('');
       loadData();
@@ -875,12 +888,27 @@ export function ClientMeetingsPage() {
                 )
               )}
 
-              <Input
-                label="Title / Subject *"
-                value={assessmentForm.subject}
-                onChange={(e) => setAssessmentForm(prev => ({ ...prev, subject: e.target.value }))}
-                placeholder="e.g., Technical assessment, Final interview"
-              />
+              {/* Auto-generated title preview */}
+              {assessmentForm.requirement_id && assessmentForm.application_id && (() => {
+                const selectedReq = contactRequirements.find(r => r.id === assessmentForm.requirement_id);
+                const selectedApp = requirementCandidates.find(rc => rc.id === assessmentForm.application_id);
+                const contact = contacts.find(c => c.id === assessmentForm.contact_id);
+                const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+                
+                const autoTitle = [
+                  selectedReq?.reference_id || 'REQ',
+                  company?.name || selectedReq?.customer || 'Customer',
+                  selectedReq?.title || selectedReq?.customer || 'Requirement',
+                  selectedApp?.candidate ? `${selectedApp.candidate.first_name} ${selectedApp.candidate.last_name}` : 'Candidate'
+                ].join(' - ');
+                
+                return (
+                  <div className="p-3 bg-brand-grey-50 rounded-lg border border-brand-grey-200">
+                    <p className="text-xs text-brand-grey-500 mb-1">Meeting Title (auto-generated)</p>
+                    <p className="text-sm font-medium text-brand-slate-900">{autoTitle}</p>
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-4">
                 <Input
@@ -1220,6 +1248,35 @@ export function ClientMeetingsPage() {
                   )}
                 </div>
                 <div className="flex gap-3">
+                  {/* Change outcome buttons - allow changing NOGO to GO or GO to NOGO */}
+                  {outcome === 'nogo' && (
+                    <Button 
+                      variant="success" 
+                      leftIcon={<CheckCircle className="h-4 w-4" />}
+                      onClick={() => {
+                        setSelectedAssessment(viewingItem);
+                        setOutcomeNotes('');
+                        // Set directly to GO
+                        handleSetOutcome('go');
+                      }}
+                    >
+                      Change to GO
+                    </Button>
+                  )}
+                  {outcome === 'go' && (
+                    <Button 
+                      variant="danger" 
+                      leftIcon={<XCircle className="h-4 w-4" />}
+                      onClick={() => {
+                        setSelectedAssessment(viewingItem);
+                        setOutcomeNotes('Customer changed their decision');
+                        // Set directly to NOGO
+                        handleSetOutcome('nogo');
+                      }}
+                    >
+                      Change to NOGO
+                    </Button>
+                  )}
                   <Button variant="secondary" onClick={() => setIsDetailModalOpen(false)}>
                     Close
                   </Button>

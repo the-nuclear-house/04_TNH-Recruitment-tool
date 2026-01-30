@@ -15,6 +15,8 @@ import {
   ClientMeetingsPage,
   CustomersPage,
   ContractsPage,
+  ConsultantsPage,
+  MissionsPage,
   OrganisationPage,
   SettingsPage,
   LoginPage,
@@ -67,6 +69,8 @@ function App() {
           <Route path="/client-meetings" element={<ClientMeetingsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
+          <Route path="/consultants" element={<ConsultantsPage />} />
+          <Route path="/missions" element={<MissionsPage />} />
           <Route path="/organisation" element={<OrganisationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

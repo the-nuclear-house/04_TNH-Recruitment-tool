@@ -146,6 +146,13 @@ const noticePeriodOptions = [
   { value: '6_months', label: '6 Months' },
 ];
 
+// Format notice period value for display
+const formatNoticePeriod = (value: string | null | undefined): string => {
+  if (!value) return '';
+  const option = noticePeriodOptions.find(o => o.value === value);
+  return option?.label || value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
 // Countries list for nationality
 const countries = [
   'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan',
@@ -1015,9 +1022,6 @@ export function CandidateProfilePage() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={app.status === 'applied' ? 'grey' : 'green'}>
-                        {app.status.replace('_', ' ')}
-                      </Badge>
                     </div>
                   ))}
                 </div>
@@ -1106,7 +1110,7 @@ export function CandidateProfilePage() {
                     <Clock className="h-4 w-4 text-brand-grey-400" />
                     <div>
                       <p className="text-xs text-brand-grey-400">Notice Period</p>
-                      <p className="text-sm text-brand-slate-700">{candidate.notice_period}</p>
+                      <p className="text-sm text-brand-slate-700">{formatNoticePeriod(candidate.notice_period)}</p>
                     </div>
                   </div>
                 )}

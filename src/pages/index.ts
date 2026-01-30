@@ -11,6 +11,8 @@ export { CustomerAssessmentsPage } from './CustomerAssessmentsPage';
 export { ClientMeetingsPage } from './ClientMeetingsPage';
 export { CustomersPage } from './CustomersPage';
 export { ContractsPage } from './ContractsPage';
+export { ConsultantsPage } from './ConsultantsPage';
+export { MissionsPage } from './MissionsPage';
 export { OrganisationPage } from './OrganisationPage';
 export { SettingsPage } from './SettingsPage';
 export { LoginPage } from './LoginPage';

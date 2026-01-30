@@ -24,6 +24,7 @@ import {
   Button,
   Textarea,
   StarRating,
+  StarRatingDisplay,
   ConfirmDialog,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
@@ -34,10 +35,10 @@ import { interviewsService, candidatesService, usersService } from '@/lib/servic
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
 
-const stageConfig: Record<InterviewStage, { label: string; icon: typeof Phone; colour: string }> = {
-  phone_qualification: { label: 'Phone', icon: Phone, colour: 'bg-blue-100 text-blue-700' },
-  technical_interview: { label: 'Technical', icon: Settings, colour: 'bg-purple-100 text-purple-700' },
-  director_interview: { label: 'Director', icon: User, colour: 'bg-amber-100 text-amber-700' },
+const stageConfig: Record<InterviewStage, { label: string; fullLabel: string; icon: typeof Phone; colour: string }> = {
+  phone_qualification: { label: 'Phone', fullLabel: 'Phone Interview', icon: Phone, colour: 'bg-blue-100 text-blue-700' },
+  technical_interview: { label: 'Technical', fullLabel: 'Technical Interview', icon: Settings, colour: 'bg-purple-100 text-purple-700' },
+  director_interview: { label: 'Director', fullLabel: 'Director Interview', icon: User, colour: 'bg-amber-100 text-amber-700' },
 };
 
 const outcomeConfig: Record<string, { label: string; colour: string }> = {
@@ -638,7 +639,7 @@ export function InterviewsPage() {
       <Modal
         isOpen={isDetailModalOpen}
         onClose={() => { setIsDetailModalOpen(false); setViewingInterview(null); }}
-        title="Interview Details"
+        title=""
         size="lg"
       >
         {viewingInterview && (() => {
@@ -647,10 +648,21 @@ export function InterviewsPage() {
           const stage = viewingInterview.stage as InterviewStage;
           const stageInfo = stageConfig[stage] || stageConfig.phone_qualification;
           const outcomeInfo = outcomeConfig[viewingInterview.outcome] || outcomeConfig.pending;
+          const StageIcon = stageInfo.icon;
           
           return (
             <div className="space-y-6">
-              {/* Header */}
+              {/* Custom Header with Stage Icon and Title */}
+              <div className="flex items-center gap-3 pb-4 border-b border-brand-grey-200">
+                <div className={`p-2 rounded-lg ${stageInfo.colour}`}>
+                  <StageIcon className="h-5 w-5" />
+                </div>
+                <h2 className="text-xl font-semibold text-brand-slate-900">
+                  {stageInfo.fullLabel} Details
+                </h2>
+              </div>
+
+              {/* Candidate Info + Outcome Badge */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <Avatar name={`${candidate?.first_name} ${candidate?.last_name}`} size="lg" />
@@ -664,13 +676,15 @@ export function InterviewsPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${stageInfo.colour}`}>
-                    {stageInfo.label}
-                  </span>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${outcomeInfo.colour}`}>
-                    {outcomeInfo.label}
-                  </span>
+                {/* Prominent Outcome Badge */}
+                <div className={`px-4 py-2 rounded-lg text-sm font-semibold ${
+                  viewingInterview.outcome === 'pass' 
+                    ? 'bg-green-100 text-green-700 border-2 border-green-300' 
+                    : viewingInterview.outcome === 'fail'
+                      ? 'bg-red-100 text-red-700 border-2 border-red-300'
+                      : 'bg-amber-100 text-amber-700 border-2 border-amber-300'
+                }`}>
+                  {outcomeInfo.label}
                 </div>
               </div>
 
@@ -697,63 +711,45 @@ export function InterviewsPage() {
                 )}
               </div>
 
-              {/* Scores (if completed) */}
+              {/* Scores (if completed) - Visual Star Display */}
               {viewingInterview.outcome !== 'pending' && (
                 <div className="space-y-3">
                   <h4 className="font-medium text-brand-slate-900">Scores</h4>
                   <div className="grid grid-cols-2 gap-3">
                     {viewingInterview.communication_score && (
-                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
-                        <span className="text-sm text-brand-grey-500">Communication</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                          <span className="font-medium">{viewingInterview.communication_score}/5</span>
-                        </div>
+                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
+                        <span className="text-sm text-brand-grey-600">Communication</span>
+                        <StarRatingDisplay rating={viewingInterview.communication_score} size="sm" />
                       </div>
                     )}
                     {viewingInterview.professionalism_score && (
-                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
-                        <span className="text-sm text-brand-grey-500">Professionalism</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                          <span className="font-medium">{viewingInterview.professionalism_score}/5</span>
-                        </div>
+                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
+                        <span className="text-sm text-brand-grey-600">Professionalism</span>
+                        <StarRatingDisplay rating={viewingInterview.professionalism_score} size="sm" />
                       </div>
                     )}
                     {viewingInterview.enthusiasm_score && (
-                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
-                        <span className="text-sm text-brand-grey-500">Enthusiasm</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                          <span className="font-medium">{viewingInterview.enthusiasm_score}/5</span>
-                        </div>
+                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
+                        <span className="text-sm text-brand-grey-600">Enthusiasm</span>
+                        <StarRatingDisplay rating={viewingInterview.enthusiasm_score} size="sm" />
                       </div>
                     )}
                     {viewingInterview.cultural_fit_score && (
-                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
-                        <span className="text-sm text-brand-grey-500">Cultural Fit</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                          <span className="font-medium">{viewingInterview.cultural_fit_score}/5</span>
-                        </div>
+                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
+                        <span className="text-sm text-brand-grey-600">Cultural Fit</span>
+                        <StarRatingDisplay rating={viewingInterview.cultural_fit_score} size="sm" />
                       </div>
                     )}
                     {viewingInterview.technical_depth_score && (
-                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
-                        <span className="text-sm text-brand-grey-500">Technical Depth</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                          <span className="font-medium">{viewingInterview.technical_depth_score}/5</span>
-                        </div>
+                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
+                        <span className="text-sm text-brand-grey-600">Technical Depth</span>
+                        <StarRatingDisplay rating={viewingInterview.technical_depth_score} size="sm" />
                       </div>
                     )}
                     {viewingInterview.problem_solving_score && (
-                      <div className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
-                        <span className="text-sm text-brand-grey-500">Problem Solving</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                          <span className="font-medium">{viewingInterview.problem_solving_score}/5</span>
-                        </div>
+                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
+                        <span className="text-sm text-brand-grey-600">Problem Solving</span>
+                        <StarRatingDisplay rating={viewingInterview.problem_solving_score} size="sm" />
                       </div>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Building2, Calendar, X } from 'lucide-react';
+import { Plus, Users, Building2, Calendar, X, UserCheck, UserX, Trophy, TrendingUp } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
   Card,
@@ -14,12 +14,26 @@ import {
   SearchableSelect,
   Modal,
   Textarea,
+  Avatar,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { requirementsService, usersService, companiesService, contactsService, type DbRequirement, type DbUser, type DbCompany, type DbContact } from '@/lib/services';
+import { 
+  requirementsService, 
+  usersService, 
+  companiesService, 
+  contactsService, 
+  applicationsService,
+  customerAssessmentsService,
+  type DbRequirement, 
+  type DbUser, 
+  type DbCompany, 
+  type DbContact,
+  type DbApplication,
+  type DbCustomerAssessment,
+} from '@/lib/services';
 
 type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';
 
@@ -76,6 +90,16 @@ export function RequirementsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
+  // Requirement stats: applications and assessments per requirement
+  const [requirementStats, setRequirementStats] = useState<Record<string, {
+    applications: DbApplication[];
+    assessments: DbCustomerAssessment[];
+    allocated: number;
+    presented: number;
+    nogo: number;
+    go: number;
+  }>>({});
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [skills, setSkills] = useState<string[]>([]);
@@ -107,16 +131,55 @@ export function RequirementsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [reqs, usrs, comps, conts] = await Promise.all([
+      const [reqs, usrs, comps, conts, allAssessments] = await Promise.all([
         requirementsService.getAll(),
         usersService.getAll(),
         companiesService.getAll(),
         contactsService.getAll(),
+        customerAssessmentsService.getAll(),
       ]);
       setRequirements(reqs);
       setUsers(usrs);
       setCompanies(comps);
       setAllContacts(conts);
+      
+      // Load applications for each requirement and compute stats
+      const stats: Record<string, any> = {};
+      
+      for (const req of reqs) {
+        try {
+          const apps = await applicationsService.getByRequirement(req.id);
+          // Filter assessments for this requirement
+          const reqAssessments = allAssessments.filter(a => 
+            a.requirement_id === req.id || 
+            (a.application?.requirement?.id === req.id)
+          );
+          
+          const presented = reqAssessments.length;
+          const nogo = reqAssessments.filter(a => a.outcome === 'nogo').length;
+          const go = reqAssessments.filter(a => a.outcome === 'go').length;
+          
+          stats[req.id] = {
+            applications: apps,
+            assessments: reqAssessments,
+            allocated: apps.length,
+            presented,
+            nogo,
+            go,
+          };
+        } catch (e) {
+          stats[req.id] = {
+            applications: [],
+            assessments: [],
+            allocated: 0,
+            presented: 0,
+            nogo: 0,
+            go: 0,
+          };
+        }
+      }
+      
+      setRequirementStats(stats);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error', 'Failed to load requirements');
@@ -360,28 +423,34 @@ export function RequirementsPage() {
             {filteredRequirements.map(requirement => {
               const status = requirement.status as RequirementStatus;
               const config = statusConfig[status] || statusConfig.opportunity;
+              const stats = requirementStats[requirement.id] || { applications: [], assessments: [], allocated: 0, presented: 0, nogo: 0, go: 0 };
+              
+              // Calculate conversion rate: if requirement is won, rate = 100/presented, otherwise show progress
+              const conversionRate = status === 'won' && stats.presented > 0 
+                ? Math.round(100 / stats.presented) 
+                : null;
               
               return (
                 <Card
                   key={requirement.id}
                   hover
                   padding="none"
-                  className={`cursor-pointer overflow-hidden border-l-4 ${config.borderColour} ${status === 'active' ? 'bg-green-50' : ''}`}
+                  className={`cursor-pointer overflow-hidden border-l-4 ${config.borderColour} ${status === 'active' ? 'bg-green-50/50' : status === 'won' ? 'bg-green-50' : ''}`}
                   onClick={() => navigate(`/requirements/${requirement.id}`)}
                 >
                   <div className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1">
                           {requirement.reference_id && (
                             <span className="text-xs font-mono text-brand-grey-400 bg-brand-grey-100 px-1.5 py-0.5 rounded">
                               {requirement.reference_id}
                             </span>
                           )}
-                          <h3 className="text-lg font-semibold text-brand-slate-900">
+                          <h3 className="text-lg font-semibold text-brand-slate-900 truncate">
                             {requirement.title || requirement.customer}
                           </h3>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColour} ${config.colour}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColour} ${config.colour} flex-shrink-0`}>
                             {config.label}
                           </span>
                         </div>
@@ -431,16 +500,96 @@ export function RequirementsPage() {
                             )}
                           </div>
                         )}
+                        
+                        {/* Allocated Candidates */}
+                        {stats.allocated > 0 && (
+                          <div className="mt-3 pt-3 border-t border-brand-grey-100">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-brand-grey-500 font-medium">Candidates:</span>
+                              {stats.applications.slice(0, 4).map((app) => {
+                                const assessment = stats.assessments.find(a => 
+                                  a.candidate_id === app.candidate_id || 
+                                  a.application?.candidate?.id === app.candidate_id
+                                );
+                                const isNogo = assessment?.outcome === 'nogo';
+                                const isGo = assessment?.outcome === 'go';
+                                const isWinner = requirement.winning_candidate_id === app.candidate_id;
+                                
+                                return (
+                                  <div 
+                                    key={app.id}
+                                    className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+                                      isWinner 
+                                        ? 'bg-green-100 text-green-700 border border-green-300' 
+                                        : isNogo 
+                                          ? 'bg-red-50 text-red-600 line-through' 
+                                          : isGo
+                                            ? 'bg-green-50 text-green-600'
+                                            : 'bg-brand-grey-100 text-brand-grey-600'
+                                    }`}
+                                  >
+                                    {isWinner && <Trophy className="h-3 w-3" />}
+                                    {isNogo && <UserX className="h-3 w-3" />}
+                                    {isGo && !isWinner && <UserCheck className="h-3 w-3" />}
+                                    {app.candidate?.first_name} {app.candidate?.last_name?.charAt(0)}.
+                                  </div>
+                                );
+                              })}
+                              {stats.allocated > 4 && (
+                                <span className="text-xs text-brand-grey-400">+{stats.allocated - 4} more</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {['active', 'opportunity'].includes(status) && (
-                        <div className="text-right">
-                          <span className="text-lg font-bold text-amber-600">
-                            {getDaysOpen(requirement.created_at)}
-                          </span>
-                          <span className="text-sm text-brand-grey-400 ml-1">days</span>
-                        </div>
-                      )}
+                      {/* Right side: Stats */}
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                        {/* Days open for active/opportunity */}
+                        {['active', 'opportunity'].includes(status) && (
+                          <div className="text-right">
+                            <span className="text-lg font-bold text-amber-600">
+                              {getDaysOpen(requirement.created_at)}
+                            </span>
+                            <span className="text-xs text-brand-grey-400 ml-1">days</span>
+                          </div>
+                        )}
+                        
+                        {/* Conversion rate for won */}
+                        {status === 'won' && conversionRate !== null && (
+                          <div className="text-right px-3 py-2 bg-green-100 rounded-lg">
+                            <div className="flex items-center gap-1 text-green-700">
+                              <TrendingUp className="h-4 w-4" />
+                              <span className="text-lg font-bold">{conversionRate}%</span>
+                            </div>
+                            <span className="text-xs text-green-600">
+                              1/{stats.presented} presented
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Candidate stats */}
+                        {stats.allocated > 0 && (
+                          <div className="flex items-center gap-3 text-xs">
+                            <div className="flex items-center gap-1 text-brand-grey-500" title="Allocated">
+                              <Users className="h-3.5 w-3.5" />
+                              <span>{stats.allocated}</span>
+                            </div>
+                            {stats.presented > 0 && (
+                              <div className="flex items-center gap-1 text-blue-600" title="Presented">
+                                <UserCheck className="h-3.5 w-3.5" />
+                                <span>{stats.presented}</span>
+                              </div>
+                            )}
+                            {stats.nogo > 0 && (
+                              <div className="flex items-center gap-1 text-red-500" title="NOGO">
+                                <UserX className="h-3.5 w-3.5" />
+                                <span>{stats.nogo}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </Card>

@@ -896,8 +896,18 @@ export const customerAssessmentsService = {
 
   // Update assessment outcome
   // If outcome is GO, this also marks the requirement as WON
+  // If changing from GO to NOGO, revert the requirement status to active
   async updateOutcome(id: string, outcome: 'go' | 'nogo', outcomeNotes?: string): Promise<DbCustomerAssessment> {
-    // First update the assessment
+    // First get the current assessment to check previous outcome
+    const { data: currentAssessment } = await supabase
+      .from('customer_assessments')
+      .select('outcome, requirement_id, candidate_id, application:applications(requirement:requirements(id))')
+      .eq('id', id)
+      .single();
+    
+    const previousOutcome = currentAssessment?.outcome;
+    
+    // Update the assessment
     const { data, error } = await supabase
       .from('customer_assessments')
       .update({ 
@@ -920,22 +930,33 @@ export const customerAssessmentsService = {
 
     if (error) throw error;
     
+    const requirementId = data?.requirement_id || data?.application?.requirement?.id;
+    const candidateId = data?.candidate_id || data?.application?.candidate?.id;
+    
     // If outcome is GO, mark the requirement as won
-    if (outcome === 'go' && data) {
-      const requirementId = data.requirement_id || data.application?.requirement?.id;
-      const candidateId = data.candidate_id || data.application?.candidate?.id;
-      
-      if (requirementId && candidateId) {
-        await supabase
-          .from('requirements')
-          .update({
-            status: 'won',
-            winning_candidate_id: candidateId,
-            won_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', requirementId);
-      }
+    if (outcome === 'go' && requirementId && candidateId) {
+      await supabase
+        .from('requirements')
+        .update({
+          status: 'won',
+          winning_candidate_id: candidateId,
+          won_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', requirementId);
+    }
+    
+    // If changing from GO to NOGO, revert the requirement status
+    if (previousOutcome === 'go' && outcome === 'nogo' && requirementId) {
+      await supabase
+        .from('requirements')
+        .update({
+          status: 'active',
+          winning_candidate_id: null,
+          won_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', requirementId);
     }
     
     return data;

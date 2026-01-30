@@ -158,11 +158,25 @@ export const statusColours = {
 } as const;
 
 // Human-readable status labels
-export const statusLabels = {
-  // Candidate status
-  new: 'New',
+export const statusLabels: Record<string, string> = {
+  // Candidate pipeline status (based on interview progress)
+  sourced: 'Sourced',
+  phone_planned: 'Phone Interview Planned',
+  phone_done: 'Phone Interview Done',
+  technical_planned: 'Technical Interview Planned',
+  technical_done: 'Technical Interview Done',
+  director_planned: 'Director Interview Planned',
+  director_done: 'Director Interview Done',
+  offer_pending: 'Offer Pending Approval',
+  offer_approved: 'Offer Approved',
+  contract_sent: 'Contract Sent',
+  contract_signed: 'Contract Signed',
+  active_consultant: 'Active Consultant',
+  
+  // Legacy/fallback status
+  new: 'Sourced',
   screening: 'Screening',
-  phone_qualification: 'Phone Qualification',
+  phone_qualification: 'Phone Interview',
   technical_interview: 'Technical Interview',
   director_interview: 'Director Interview',
   offer: 'Offer Stage',
@@ -173,7 +187,6 @@ export const statusLabels = {
   
   // Application status
   applied: 'Applied',
-  offer_pending: 'Offer Pending',
   offer_sent: 'Offer Sent',
   accepted: 'Accepted',
   
@@ -215,3 +228,82 @@ export const interviewStageLabels = {
   technical_interview: 'Technical Interview',
   director_interview: 'Director Interview',
 } as const;
+
+// Compute candidate pipeline status based on their interviews
+export interface InterviewForStatus {
+  stage: string;
+  outcome: string;
+  scheduled_at?: string | null;
+}
+
+export function computeCandidatePipelineStatus(
+  interviews: InterviewForStatus[],
+  candidateStatus?: string
+): { status: string; label: string; colour: string } {
+  // Check if candidate has contract-related status
+  if (candidateStatus === 'contract_signed' || candidateStatus === 'active_consultant') {
+    return { status: 'active_consultant', label: 'Active Consultant', colour: 'bg-green-100 text-green-700' };
+  }
+  if (candidateStatus === 'contract_sent') {
+    return { status: 'contract_sent', label: 'Contract Sent', colour: 'bg-blue-100 text-blue-700' };
+  }
+  if (candidateStatus === 'offer_approved') {
+    return { status: 'offer_approved', label: 'Offer Approved', colour: 'bg-green-100 text-green-700' };
+  }
+  if (candidateStatus === 'offer_pending') {
+    return { status: 'offer_pending', label: 'Offer Pending', colour: 'bg-amber-100 text-amber-700' };
+  }
+  if (candidateStatus === 'rejected') {
+    return { status: 'rejected', label: 'Rejected', colour: 'bg-red-100 text-red-700' };
+  }
+  if (candidateStatus === 'withdrawn') {
+    return { status: 'withdrawn', label: 'Withdrawn', colour: 'bg-slate-100 text-slate-600' };
+  }
+
+  // Check interview progress
+  const phoneInterview = interviews.find(i => i.stage === 'phone_qualification');
+  const techInterview = interviews.find(i => i.stage === 'technical_interview');
+  const directorInterview = interviews.find(i => i.stage === 'director_interview');
+
+  // Director Interview stage
+  if (directorInterview) {
+    if (directorInterview.outcome === 'pass') {
+      return { status: 'director_done', label: 'Director Interview Done', colour: 'bg-green-100 text-green-700' };
+    }
+    if (directorInterview.outcome === 'fail') {
+      return { status: 'rejected', label: 'Rejected', colour: 'bg-red-100 text-red-700' };
+    }
+    if (directorInterview.scheduled_at) {
+      return { status: 'director_planned', label: 'Director Interview Planned', colour: 'bg-amber-100 text-amber-700' };
+    }
+  }
+
+  // Technical Interview stage
+  if (techInterview) {
+    if (techInterview.outcome === 'pass') {
+      return { status: 'technical_done', label: 'Technical Interview Done', colour: 'bg-purple-100 text-purple-700' };
+    }
+    if (techInterview.outcome === 'fail') {
+      return { status: 'rejected', label: 'Rejected', colour: 'bg-red-100 text-red-700' };
+    }
+    if (techInterview.scheduled_at) {
+      return { status: 'technical_planned', label: 'Technical Interview Planned', colour: 'bg-purple-100 text-purple-700' };
+    }
+  }
+
+  // Phone Interview stage
+  if (phoneInterview) {
+    if (phoneInterview.outcome === 'pass') {
+      return { status: 'phone_done', label: 'Phone Interview Done', colour: 'bg-blue-100 text-blue-700' };
+    }
+    if (phoneInterview.outcome === 'fail') {
+      return { status: 'rejected', label: 'Rejected', colour: 'bg-red-100 text-red-700' };
+    }
+    if (phoneInterview.scheduled_at) {
+      return { status: 'phone_planned', label: 'Phone Interview Planned', colour: 'bg-blue-100 text-blue-700' };
+    }
+  }
+
+  // Default - just sourced/new
+  return { status: 'sourced', label: 'Sourced', colour: 'bg-cyan-100 text-cyan-700' };
+}

@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Trophy,
   XCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -34,12 +35,13 @@ import {
   Avatar,
   Input,
   Textarea,
+  SearchableSelect,
 } from '@/components/ui';
-import { formatDate } from '@/lib/utils';
+import { formatDate, computeCandidatePipelineStatus } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, type DbApplication, type DbCandidate } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, type DbApplication, type DbCandidate, type DbContact, type DbCompany } from '@/lib/services';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
@@ -126,6 +128,13 @@ export function RequirementDetailPage() {
   // Track assessment outcomes per candidate (for showing NOGO badge)
   const [candidateAssessmentOutcomes, setCandidateAssessmentOutcomes] = useState<Record<string, 'pending' | 'go' | 'nogo' | null>>({});
   
+  // Track interviews per candidate for pipeline status
+  const [candidateInterviews, setCandidateInterviews] = useState<Record<string, any[]>>({});
+  
+  // Contacts and companies for assessment modal
+  const [contacts, setContacts] = useState<DbContact[]>([]);
+  const [companies, setCompanies] = useState<DbCompany[]>([]);
+  
   // Add candidate modal
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<DbCandidate[]>([]);
@@ -139,9 +148,9 @@ export function RequirementDetailPage() {
   const [isScheduleAssessmentModalOpen, setIsScheduleAssessmentModalOpen] = useState(false);
   const [selectedApplicationForAssessment, setSelectedApplicationForAssessment] = useState<DbApplication | null>(null);
   const [assessmentForm, setAssessmentForm] = useState({
+    contact_id: '',
     scheduled_date: '',
     scheduled_time: '',
-    customer_contact: '',
     location: '',
     notes: '',
   });
@@ -162,15 +171,31 @@ export function RequirementDetailPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [reqData, usersData, appsData] = await Promise.all([
+      const [reqData, usersData, appsData, contactsData, companiesData, allInterviews] = await Promise.all([
         requirementsService.getById(id!),
         usersService.getAll(),
         applicationsService.getByRequirement(id!),
+        contactsService.getAll(),
+        companiesService.getAll(),
+        interviewsService.getAll(),
       ]);
       
       setRequirement(reqData);
       setApplications(appsData);
       setAllUsers(usersData);
+      setContacts(contactsData);
+      setCompanies(companiesData);
+      
+      // Group interviews by candidate for pipeline status
+      const interviewsByCandidate: Record<string, any[]> = {};
+      for (const interview of allInterviews) {
+        const candidateId = interview.candidate_id;
+        if (!interviewsByCandidate[candidateId]) {
+          interviewsByCandidate[candidateId] = [];
+        }
+        interviewsByCandidate[candidateId].push(interview);
+      }
+      setCandidateInterviews(interviewsByCandidate);
       
       // Check interview status and scheduled assessments for each linked candidate
       const interviewStatus: Record<string, boolean> = {};
@@ -179,7 +204,7 @@ export function RequirementDetailPage() {
       
       for (const app of appsData) {
         try {
-          const interviews = await interviewsService.getByCandidate(app.candidate_id);
+          const interviews = interviewsByCandidate[app.candidate_id] || [];
           // Check if all 3 interviews passed
           const phonePass = interviews.some(i => i.stage === 'phone_qualification' && i.outcome === 'pass');
           const techPass = interviews.some(i => i.stage === 'technical_interview' && i.outcome === 'pass');
@@ -395,18 +420,34 @@ export function RequirementDetailPage() {
 
   const handleScheduleAssessment = async () => {
     if (!selectedApplicationForAssessment || !user || !assessmentForm.scheduled_date || !id) return;
+    if (!assessmentForm.contact_id) {
+      toast.error('Validation Error', 'Please select a customer contact');
+      return;
+    }
     
     setIsSchedulingAssessment(true);
     try {
+      // Build auto-generated title
+      const candidate = selectedApplicationForAssessment.candidate;
+      const contact = contacts.find(c => c.id === assessmentForm.contact_id);
+      const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+      
+      const autoTitle = [
+        requirement?.reference_id || 'REQ',
+        company?.name || requirement?.customer || 'Customer',
+        requirement?.title || requirement?.customer || 'Requirement',
+        candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Candidate'
+      ].join(' - ');
+      
       await customerAssessmentsService.create({
         application_id: selectedApplicationForAssessment.id,
-        requirement_id: id, // Link directly to requirement
-        candidate_id: selectedApplicationForAssessment.candidate_id, // Link directly to candidate
+        requirement_id: id,
+        candidate_id: selectedApplicationForAssessment.candidate_id,
+        contact_id: assessmentForm.contact_id,
         scheduled_date: assessmentForm.scheduled_date,
         scheduled_time: assessmentForm.scheduled_time || undefined,
-        customer_contact: assessmentForm.customer_contact || undefined,
         location: assessmentForm.location || undefined,
-        notes: assessmentForm.notes || undefined,
+        notes: autoTitle + (assessmentForm.notes ? '\n\n' + assessmentForm.notes : ''),
         created_by: user.id,
       });
       
@@ -414,9 +455,9 @@ export function RequirementDetailPage() {
       setIsScheduleAssessmentModalOpen(false);
       setSelectedApplicationForAssessment(null);
       setAssessmentForm({
+        contact_id: '',
         scheduled_date: '',
         scheduled_time: '',
-        customer_contact: '',
         location: '',
         notes: '',
       });
@@ -738,10 +779,13 @@ export function RequirementDetailPage() {
           ) : (
             <div className="space-y-3">
               {applications.map((app) => {
-                const hasPassedAllInterviews = candidateInterviewStatus[app.candidate_id];
                 const hasScheduledAssessment = scheduledAssessments[app.id];
                 const assessmentOutcome = candidateAssessmentOutcomes[app.candidate_id];
                 const isWinningCandidate = requirement.winning_candidate_id === app.candidate_id;
+                
+                // Compute pipeline status for this candidate
+                const interviews = candidateInterviews[app.candidate_id] || [];
+                const pipelineStatus = computeCandidatePipelineStatus(interviews, app.candidate?.status);
                 
                 return (
                 <div 
@@ -779,7 +823,7 @@ export function RequirementDetailPage() {
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    {/* Assessment outcome badges */}
+                    {/* Assessment outcome badges - takes priority */}
                     {assessmentOutcome === 'go' && !isWinningCandidate && (
                       <Badge variant="green">GO</Badge>
                     )}
@@ -793,21 +837,18 @@ export function RequirementDetailPage() {
                       <Badge variant="orange">Assessment Pending</Badge>
                     )}
                     
-                    {/* Interview status */}
-                    {hasPassedAllInterviews && !assessmentOutcome && (
-                      <Badge variant="cyan">Interviews Complete</Badge>
-                    )}
-                    
-                    {/* Assessment scheduled but no outcome yet */}
-                    {hasScheduledAssessment && !assessmentOutcome && (
-                      <Badge variant="grey">Assessment Planned</Badge>
+                    {/* Pipeline status - show if no assessment outcome */}
+                    {!assessmentOutcome && !isWinningCandidate && (
+                      <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${pipelineStatus.colour}`}>
+                        {pipelineStatus.label}
+                      </span>
                     )}
                     
                     <span className="text-xs text-brand-grey-400">
                       Added {formatDate(app.created_at)}
                     </span>
                     
-                    {/* Schedule Client Assessment - available for any candidate, not just those with all interviews */}
+                    {/* Schedule Client Assessment - available for any candidate */}
                     {canScheduleAssessments && !hasScheduledAssessment && assessmentOutcome !== 'nogo' && !isWinningCandidate && (
                       <Button
                         variant="secondary"
@@ -816,6 +857,10 @@ export function RequirementDetailPage() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedApplicationForAssessment(app);
+                          // Pre-select contact from requirement if available
+                          if (requirement?.contact_id) {
+                            setAssessmentForm(prev => ({ ...prev, contact_id: requirement.contact_id }));
+                          }
                           setIsScheduleAssessmentModalOpen(true);
                         }}
                       >
@@ -823,9 +868,13 @@ export function RequirementDetailPage() {
                       </Button>
                     )}
                     
-                    {canEditThisRequirement && !isWinningCandidate && (
+                    {/* Remove candidate - only if NOT presented to customer (no assessment exists) */}
+                    {canEditThisRequirement && !isWinningCandidate && !hasScheduledAssessment && !assessmentOutcome && (
                       <button
-                        onClick={() => handleRemoveCandidate(app.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveCandidate(app.id);
+                        }}
                         className="p-1 text-brand-grey-400 hover:text-red-500 rounded transition-colors"
                         title="Remove candidate"
                       >
@@ -990,21 +1039,58 @@ export function RequirementDetailPage() {
           setIsScheduleAssessmentModalOpen(false);
           setSelectedApplicationForAssessment(null);
           setAssessmentForm({
+            contact_id: '',
             scheduled_date: '',
             scheduled_time: '',
-            customer_contact: '',
             location: '',
             notes: '',
           });
         }}
-        title="Schedule Client Meeting"
+        title="Schedule Client Assessment"
         description={selectedApplicationForAssessment?.candidate 
-          ? `Schedule a customer meeting for ${selectedApplicationForAssessment.candidate.first_name} ${selectedApplicationForAssessment.candidate.last_name}`
+          ? `Schedule a customer assessment for ${selectedApplicationForAssessment.candidate.first_name} ${selectedApplicationForAssessment.candidate.last_name}`
           : 'Schedule customer assessment'
         }
         size="md"
       >
         <div className="space-y-4">
+          {/* Customer Contact Selection */}
+          <SearchableSelect
+            label="Customer Contact *"
+            placeholder="Search contacts..."
+            options={contacts.map(c => {
+              const company = c.company || companies.find(co => co.id === c.company_id);
+              return {
+                value: c.id,
+                label: `${c.first_name} ${c.last_name}`,
+                sublabel: company ? `${c.role || ''} - ${company.name}`.replace(/^- /, '') : c.role || ''
+              };
+            })}
+            value={assessmentForm.contact_id}
+            onChange={(value) => setAssessmentForm(prev => ({ ...prev, contact_id: value }))}
+          />
+          
+          {/* Auto-generated title preview */}
+          {selectedApplicationForAssessment && assessmentForm.contact_id && (() => {
+            const candidate = selectedApplicationForAssessment.candidate;
+            const contact = contacts.find(c => c.id === assessmentForm.contact_id);
+            const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+            
+            const autoTitle = [
+              requirement?.reference_id || 'REQ',
+              company?.name || requirement?.customer || 'Customer',
+              requirement?.title || requirement?.customer || 'Requirement',
+              candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Candidate'
+            ].join(' - ');
+            
+            return (
+              <div className="p-3 bg-brand-grey-50 rounded-lg border border-brand-grey-200">
+                <p className="text-xs text-brand-grey-500 mb-1">Meeting Title (auto-generated)</p>
+                <p className="text-sm font-medium text-brand-slate-900">{autoTitle}</p>
+              </div>
+            );
+          })()}
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Date *"
@@ -1021,15 +1107,8 @@ export function RequirementDetailPage() {
           </div>
           
           <Input
-            label="Customer Contact"
-            placeholder="Name of customer contact..."
-            value={assessmentForm.customer_contact}
-            onChange={(e) => setAssessmentForm(prev => ({ ...prev, customer_contact: e.target.value }))}
-          />
-          
-          <Input
             label="Location"
-            placeholder="Meeting location or video call link..."
+            placeholder="Customer office or video call link..."
             value={assessmentForm.location}
             onChange={(e) => setAssessmentForm(prev => ({ ...prev, location: e.target.value }))}
           />
@@ -1039,7 +1118,7 @@ export function RequirementDetailPage() {
             placeholder="Any preparation notes or context..."
             value={assessmentForm.notes}
             onChange={(e) => setAssessmentForm(prev => ({ ...prev, notes: e.target.value }))}
-            rows={3}
+            rows={2}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
@@ -1056,9 +1135,9 @@ export function RequirementDetailPage() {
               variant="primary"
               onClick={handleScheduleAssessment}
               isLoading={isSchedulingAssessment}
-              disabled={!assessmentForm.scheduled_date}
+              disabled={!assessmentForm.scheduled_date || !assessmentForm.contact_id}
             >
-              Schedule Meeting
+              Schedule Assessment
             </Button>
           </div>
         </div>

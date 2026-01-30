@@ -7,19 +7,17 @@ import {
   Button, 
   Input, 
   Badge, 
-  getStatusVariant, 
   Avatar,
   EmptyState,
   Select,
   Modal,
   Textarea,
 } from '@/components/ui';
-import { formatDate, statusLabels } from '@/lib/utils';
+import { formatDate, computeCandidatePipelineStatus } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { candidatesService, usersService, type DbCandidate } from '@/lib/services';
-import type { CandidateStatus } from '@/types';
+import { candidatesService, usersService, interviewsService, type DbCandidate } from '@/lib/services';
 
 export function CandidatesPage() {
   const navigate = useNavigate();
@@ -32,6 +30,9 @@ export function CandidatesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const permissions = usePermissions();
   const toast = useToast();
+
+  // Store interviews per candidate for computing pipeline status
+  const [candidateInterviews, setCandidateInterviews] = useState<Record<string, any[]>>({});
 
   // Column filters (multi-select)
   const [skillsFilter, setSkillsFilter] = useState<string[]>([]);
@@ -143,16 +144,28 @@ export function CandidatesPage() {
     }
   };
 
-  // Load candidates and users from database
+  // Load candidates, users, and interviews from database
   const loadCandidates = async () => {
     try {
       setIsLoadingData(true);
-      const [candidatesData, usersData] = await Promise.all([
+      const [candidatesData, usersData, allInterviews] = await Promise.all([
         candidatesService.getAll(),
         usersService.getAll(),
+        interviewsService.getAll(),
       ]);
       setCandidates(candidatesData);
       setUsers(usersData);
+      
+      // Group interviews by candidate_id for pipeline status calculation
+      const interviewsByCandidate: Record<string, any[]> = {};
+      for (const interview of allInterviews) {
+        const candidateId = interview.candidate_id;
+        if (!interviewsByCandidate[candidateId]) {
+          interviewsByCandidate[candidateId] = [];
+        }
+        interviewsByCandidate[candidateId].push(interview);
+      }
+      setCandidateInterviews(interviewsByCandidate);
     } catch (error) {
       console.error('Error loading candidates:', error);
       toast.error('Error', 'Failed to load candidates');
@@ -215,7 +228,13 @@ export function CandidatesPage() {
   // Get unique values for filters
   const allSkills = [...new Set(candidates.flatMap(c => c.skills || []))].sort();
   const allLocations = [...new Set(candidates.map(c => c.location).filter(Boolean))].sort() as string[];
-  const allStatuses = [...new Set(candidates.map(c => c.status))];
+  
+  // Compute pipeline statuses for all candidates
+  const candidatePipelineStatuses = candidates.map(c => {
+    const interviews = candidateInterviews[c.id] || [];
+    return computeCandidatePipelineStatus(interviews, c.status);
+  });
+  const allPipelineStatuses = [...new Set(candidatePipelineStatuses.map(s => s.label))].sort();
 
   // Filter candidates
   const filteredCandidates = candidates.filter(c => {
@@ -245,9 +264,11 @@ export function CandidatesPage() {
       }
     }
     
-    // Status filter
+    // Status filter (using computed pipeline status)
+    const interviews = candidateInterviews[c.id] || [];
+    const pipelineStatus = computeCandidatePipelineStatus(interviews, c.status);
     const matchesStatus = statusFilter.length === 0 || 
-      statusFilter.includes(c.status);
+      statusFilter.includes(pipelineStatus.label);
     
     return matchesSearch && matchesSkills && matchesLocation && matchesExperience && matchesStatus;
   });
@@ -463,16 +484,9 @@ export function CandidatesPage() {
                   <th>
                     <ColumnFilter
                       column="Status"
-                      options={allStatuses.map(s => statusLabels[s as CandidateStatus] || s)}
-                      selected={statusFilter.map(s => statusLabels[s as CandidateStatus] || s)}
-                      onChange={(labels: string[]) => {
-                        // Convert labels back to status values
-                        const statusValues = labels.map(label => {
-                          const entry = Object.entries(statusLabels).find(([, v]) => v === label);
-                          return entry ? entry[0] : label;
-                        });
-                        setStatusFilter(statusValues);
-                      }}
+                      options={allPipelineStatuses}
+                      selected={statusFilter}
+                      onChange={(labels: string[]) => setStatusFilter(labels)}
                       type="multi"
                     />
                   </th>
@@ -517,9 +531,15 @@ export function CandidatesPage() {
                       {candidate.minimum_salary_expected ? `£${candidate.minimum_salary_expected.toLocaleString()}` : '-'}
                     </td>
                     <td>
-                      <Badge variant={getStatusVariant(candidate.status as CandidateStatus)}>
-                        {statusLabels[candidate.status as CandidateStatus] || candidate.status}
-                      </Badge>
+                      {(() => {
+                        const interviews = candidateInterviews[candidate.id] || [];
+                        const pipelineStatus = computeCandidatePipelineStatus(interviews, candidate.status);
+                        return (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${pipelineStatus.colour}`}>
+                            {pipelineStatus.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="text-brand-grey-400 text-sm">
                       {formatDate(candidate.created_at)}
