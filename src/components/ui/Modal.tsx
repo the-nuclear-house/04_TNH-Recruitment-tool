@@ -236,14 +236,14 @@ export function ConfirmDialog({
   );
 }
 
-// Delete Dialog with soft/hard delete options (Admin only)
+// Delete Dialog with soft/hard delete options (Superadmin only for hard delete)
 interface DeleteDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onDelete: (hardDelete: boolean) => void;
   itemName: string;
   itemType: string;
-  isAdmin: boolean;
+  canHardDelete: boolean; // Only superadmin
   isLoading?: boolean;
 }
 
@@ -253,7 +253,7 @@ export function DeleteDialog({
   onDelete,
   itemName,
   itemType,
-  isAdmin,
+  canHardDelete,
   isLoading = false,
 }: DeleteDialogProps) {
   const [step, setStep] = useState<'choose' | 'confirm_hard'>('choose');
@@ -295,7 +295,7 @@ export function DeleteDialog({
             <span className="font-medium text-brand-slate-700">{itemName}</span>
           </p>
           
-          {isAdmin ? (
+          {canHardDelete ? (
             <div className="space-y-3">
               <p className="text-sm text-brand-grey-400 mb-4">How would you like to delete this {itemType.toLowerCase()}?</p>
               

@@ -2626,7 +2626,7 @@ export function CandidateProfilePage() {
         onDelete={handleDelete}
         itemName={`${candidate?.first_name} ${candidate?.last_name}`}
         itemType="Candidate"
-        isAdmin={permissions.isAdmin}
+        canHardDelete={permissions.canHardDelete}
         isLoading={isDeleting}
       />
 

@@ -30,8 +30,11 @@ interface Permissions {
   canManageUsers: boolean;
   canManageBusinessUnits: boolean;
   canManageApprovalChains: boolean;
+  canCreateAdmins: boolean; // Only superadmin
+  canHardDelete: boolean;   // Only superadmin
   
   // Role checks
+  isSuperAdmin: boolean;
   isAdmin: boolean;
   isDirector: boolean;
   isManager: boolean;
@@ -40,6 +43,41 @@ interface Permissions {
 }
 
 const rolePermissions: Record<UserRole, Permissions> = {
+  superadmin: {
+    canViewCandidates: true,
+    canAddCandidates: true,
+    canEditCandidates: true,
+    canDeleteCandidates: true,
+    
+    canViewRequirements: true,
+    canCreateRequirements: true,
+    canEditRequirements: true,
+    canDeleteRequirements: true,
+    
+    canViewInterviews: true,
+    canScheduleInterviews: true,
+    canConductInterviews: true,
+    canViewAllInterviewFeedback: true,
+    
+    canViewContracts: true,
+    canCreateContracts: true,
+    canApproveContracts: true,
+    
+    canViewOrganisation: true,
+    canManageUsers: true,
+    canManageBusinessUnits: true,
+    canManageApprovalChains: true,
+    canCreateAdmins: true,
+    canHardDelete: true,
+    
+    isSuperAdmin: true,
+    isAdmin: true,
+    isDirector: false,
+    isManager: false,
+    isRecruiter: false,
+    isHR: false,
+  },
+
   admin: {
     canViewCandidates: true,
     canAddCandidates: true,
@@ -64,7 +102,10 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canManageUsers: true,
     canManageBusinessUnits: true,
     canManageApprovalChains: true,
+    canCreateAdmins: false, // Cannot create other admins
+    canHardDelete: false,   // Cannot hard delete
     
+    isSuperAdmin: false,
     isAdmin: true,
     isDirector: false,
     isManager: false,
@@ -96,7 +137,10 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
     
+    isSuperAdmin: false,
     isAdmin: false,
     isDirector: true,
     isManager: false,
@@ -128,7 +172,10 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
     
+    isSuperAdmin: false,
     isAdmin: false,
     isDirector: false,
     isManager: true,
@@ -160,7 +207,10 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
     
+    isSuperAdmin: false,
     isAdmin: false,
     isDirector: false,
     isManager: false,
@@ -192,7 +242,10 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
     
+    isSuperAdmin: false,
     isAdmin: false,
     isDirector: false,
     isManager: false,
@@ -226,7 +279,10 @@ const defaultPermissions: Permissions = {
   canManageUsers: false,
   canManageBusinessUnits: false,
   canManageApprovalChains: false,
+  canCreateAdmins: false,
+  canHardDelete: false,
   
+  isSuperAdmin: false,
   isAdmin: false,
   isDirector: false,
   isManager: false,
@@ -255,7 +311,8 @@ function mergePermissions(roles: UserRole[]): Permissions {
   }
   
   // Set role flags based on actual roles
-  merged.isAdmin = roles.includes('admin');
+  merged.isSuperAdmin = roles.includes('superadmin');
+  merged.isAdmin = roles.includes('admin') || roles.includes('superadmin');
   merged.isDirector = roles.includes('director');
   merged.isManager = roles.includes('manager');
   merged.isRecruiter = roles.includes('recruiter');

@@ -18,20 +18,26 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { usersService } from '@/lib/services';
 import { supabase } from '@/lib/supabase';
 
-const availableRoles = [
-  { value: 'recruiter', label: 'Recruiter', colour: 'cyan' },
-  { value: 'manager', label: 'Business Manager', colour: 'green' },
-  { value: 'director', label: 'Director', colour: 'gold' },
-  { value: 'hr', label: 'HR', colour: 'purple' },
-  { value: 'admin', label: 'Admin', colour: 'orange' },
+// Base roles - mutually exclusive (pick one)
+const baseRoles = [
+  { value: 'recruiter', label: 'Recruiter', description: 'Source and manage candidates', colour: 'cyan' },
+  { value: 'manager', label: 'Business Manager', description: 'Manage requirements and team', colour: 'green' },
+  { value: 'director', label: 'Director', description: 'Oversee managers and approve contracts', colour: 'gold' },
+  { value: 'hr', label: 'HR', description: 'Handle employee matters and approvals', colour: 'purple' },
 ];
 
-const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple'> = {
+// Add-on roles - can be combined with base role
+const addonRoles = [
+  { value: 'admin', label: 'Admin', description: 'Full system access and user management' },
+];
+
+const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple' | 'red'> = {
   recruiter: 'cyan',
   manager: 'green',
   director: 'gold',
   hr: 'purple',
   admin: 'orange',
+  superadmin: 'red',
 };
 
 const roleLabels: Record<string, string> = {
@@ -40,6 +46,7 @@ const roleLabels: Record<string, string> = {
   director: 'Director',
   hr: 'HR',
   admin: 'Admin',
+  superadmin: 'Super Admin',
 };
 
 export function OrganisationPage() {
@@ -107,7 +114,22 @@ export function OrganisationPage() {
     setIsModalOpen(true);
   };
 
-  const handleRoleToggle = (role: string) => {
+  const handleBaseRoleChange = (role: string) => {
+    setFormData(prev => {
+      // Remove any existing base roles and add the new one
+      const baseRoleValues = baseRoles.map(r => r.value);
+      const currentAddons = prev.roles.filter(r => !baseRoleValues.includes(r));
+      return { ...prev, roles: [role, ...currentAddons] };
+    });
+  };
+
+  const handleAddonToggle = (role: string) => {
+    // Check if user can assign admin role
+    if (role === 'admin' && !permissions.canCreateAdmins) {
+      toast.error('Permission Denied', 'Only Super Admins can assign Admin roles');
+      return;
+    }
+    
     setFormData(prev => {
       const newRoles = prev.roles.includes(role)
         ? prev.roles.filter(r => r !== role)
@@ -115,6 +137,9 @@ export function OrganisationPage() {
       return { ...prev, roles: newRoles };
     });
   };
+
+  // Get the current base role from formData
+  const currentBaseRole = formData.roles.find(r => baseRoles.map(br => br.value).includes(r));
 
   const handleSubmit = async () => {
     if (!formData.email || !formData.full_name || formData.roles.length === 0) {
@@ -431,33 +456,69 @@ export function OrganisationPage() {
             placeholder="john@company.com"
           />
           
-          {/* Role Selection - Checkboxes */}
-          <div>
-            <label className="block text-sm font-medium text-brand-slate-700 mb-2">
-              Roles * <span className="text-brand-grey-400 font-normal">(select one or more)</span>
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {availableRoles.map(role => (
+          {/* Role Selection */}
+          <div className="space-y-4">
+            {/* Base Role - Radio buttons (pick one) */}
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-2">
+                Role * <span className="text-brand-grey-400 font-normal">(select one)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {baseRoles.map(role => (
+                  <label 
+                    key={role.value}
+                    className={`
+                      flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all
+                      ${currentBaseRole === role.value 
+                        ? 'border-brand-cyan bg-brand-cyan/5' 
+                        : 'border-brand-grey-200 hover:border-brand-grey-300'
+                      }
+                    `}
+                  >
+                    <input
+                      type="radio"
+                      name="baseRole"
+                      checked={currentBaseRole === role.value}
+                      onChange={() => handleBaseRoleChange(role.value)}
+                      className="mt-0.5 h-4 w-4 text-brand-cyan border-brand-grey-300 focus:ring-brand-cyan"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-brand-slate-700">{role.label}</span>
+                      <p className="text-xs text-brand-grey-400">{role.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Admin Add-on - Checkbox (only visible to superadmin) */}
+            {permissions.canCreateAdmins && (
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-2">
+                  Additional Permissions
+                </label>
                 <label 
-                  key={role.value}
                   className={`
-                    flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all
-                    ${formData.roles.includes(role.value) 
-                      ? 'border-brand-cyan bg-brand-cyan/5' 
+                    flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all
+                    ${formData.roles.includes('admin') 
+                      ? 'border-orange-400 bg-orange-50' 
                       : 'border-brand-grey-200 hover:border-brand-grey-300'
                     }
                   `}
                 >
                   <input
                     type="checkbox"
-                    checked={formData.roles.includes(role.value)}
-                    onChange={() => handleRoleToggle(role.value)}
-                    className="h-4 w-4 text-brand-cyan rounded border-brand-grey-300 focus:ring-brand-cyan"
+                    checked={formData.roles.includes('admin')}
+                    onChange={() => handleAddonToggle('admin')}
+                    className="mt-0.5 h-4 w-4 text-orange-500 rounded border-brand-grey-300 focus:ring-orange-500"
                   />
-                  <span className="text-sm font-medium text-brand-slate-700">{role.label}</span>
+                  <div>
+                    <span className="text-sm font-medium text-orange-700">Admin Access</span>
+                    <p className="text-xs text-orange-600">Full system access, user management, and soft delete capability</p>
+                  </div>
                 </label>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
           
           {!isEditing && (
