@@ -2262,8 +2262,7 @@ export const consultantsService = {
       .from('consultants')
       .select(`
         *,
-        candidate:candidates(*),
-        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
+        candidate:candidates(*)
       `)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -2277,8 +2276,7 @@ export const consultantsService = {
       .from('consultants')
       .select(`
         *,
-        candidate:candidates(*),
-        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
+        candidate:candidates(*)
       `)
       .eq('id', id)
       .is('deleted_at', null)
@@ -2293,8 +2291,7 @@ export const consultantsService = {
       .from('consultants')
       .select(`
         *,
-        candidate:candidates(*),
-        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
+        candidate:candidates(*)
       `)
       .eq('reference_id', referenceId)
       .is('deleted_at', null)
@@ -2307,11 +2304,7 @@ export const consultantsService = {
   async getByCandidateId(candidateId: string): Promise<DbConsultant | null> {
     const { data, error } = await supabase
       .from('consultants')
-      .select(`
-        *,
-        candidate:candidates(*),
-        assigned_manager:users!consultants_assigned_manager_id_fkey(*)
-      `)
+      .select('*')
       .eq('candidate_id', candidateId)
       .is('deleted_at', null)
       .single();
