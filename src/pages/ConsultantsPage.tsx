@@ -105,7 +105,13 @@ function getWeeksInRange(startDate: Date, numWeeks: number): Date[] {
 function formatWeekLabel(date: Date): string {
   const day = date.getDate();
   const month = date.toLocaleString('en-GB', { month: 'short' });
-  return `${day} ${month}`;
+  // Get ISO week number
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `W${weekNo} - ${day} ${month}`;
 }
 
 function getBarStyle(startDate: string, endDate: string | null, weeks: Date[]): { left: string; width: string } | null {
@@ -593,10 +599,14 @@ export function ConsultantsPage() {
                             return (
                               <div
                                 key={meeting.id}
-                                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold cursor-pointer hover:scale-125 transition-transform ${
-                                  isCompleted ? typeConfig.colour : 'bg-brand-grey-300 border-2 border-dashed'
-                                } ${!isCompleted ? 'border-' + typeConfig.colour.replace('bg-', '') : ''}`}
-                                style={{ left: position }}
+                                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold cursor-pointer hover:scale-125 transition-transform shadow-md border-2 border-white ${
+                                  isCompleted ? typeConfig.colour : 'bg-white border-2'
+                                }`}
+                                style={{ 
+                                  left: position,
+                                  borderColor: !isCompleted ? typeConfig.colour.replace('bg-', '').includes('purple') ? '#9333ea' : typeConfig.colour.replace('bg-', '').includes('cyan') ? '#06b6d4' : '#22c55e' : 'white',
+                                  color: !isCompleted ? (typeConfig.colour.includes('purple') ? '#9333ea' : typeConfig.colour.includes('cyan') ? '#06b6d4' : '#22c55e') : 'white'
+                                }}
                                 title={`${typeConfig.label} - ${formatDate(meeting.scheduled_date)} ${isCompleted ? '(Completed)' : '(Scheduled)'}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1093,9 +1103,12 @@ export function ConsultantProfilePage() {
 
     setIsSubmittingRequest(true);
     try {
-      const currentSalary = salaryIncreaseForm.salary_type === 'annual_salary' 
-        ? consultant?.salary_amount || 0 
-        : consultant?.day_rate || 0;
+      // Auto-detect salary type from consultant contract type
+      const isContractor = consultant?.contract_type === 'contract';
+      const salaryType = isContractor ? 'day_rate' : 'annual_salary';
+      const currentSalary = isContractor 
+        ? consultant?.day_rate || 0 
+        : consultant?.salary_amount || 0;
 
       await approvalRequestsService.create({
         request_type: 'salary_increase',
@@ -1103,7 +1116,7 @@ export function ConsultantProfilePage() {
         request_data: {
           current_salary: currentSalary,
           new_salary: parseFloat(salaryIncreaseForm.new_salary),
-          salary_type: salaryIncreaseForm.salary_type,
+          salary_type: salaryType,
           reason: salaryIncreaseForm.reason,
         } as SalaryIncreaseData,
         effective_month: salaryIncreaseForm.effective_month,
@@ -1112,7 +1125,7 @@ export function ConsultantProfilePage() {
         hr_required: false,
       });
 
-      toast.success('Request Submitted', 'Salary increase request sent for director approval');
+      toast.success('Request Submitted', `${isContractor ? 'Rate' : 'Salary'} increase request sent for director approval`);
       setIsSalaryIncreaseModalOpen(false);
       setSalaryIncreaseForm({
         new_salary: '',
@@ -1455,59 +1468,61 @@ export function ConsultantProfilePage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Financial History</CardTitle>
+                  <CardTitle>
+                    {consultant.contract_type === 'contract' ? 'Rate & Bonus History' : 'Salary & Bonus History'}
+                  </CardTitle>
                   {consultant.status !== 'terminated' && (
                     <div className="relative">
                       <Button
-                        variant="primary"
+                        variant="secondary"
                         size="sm"
                         leftIcon={<Plus className="h-4 w-4" />}
                         onClick={() => setIsProcessMenuOpen(!isProcessMenuOpen)}
                       >
-                        Initiate Process
+                        Request Change
                       </Button>
                       {isProcessMenuOpen && (
-                        <div className="absolute right-0 top-full mt-1 bg-white border border-brand-grey-200 rounded-lg shadow-lg z-10 min-w-[200px]">
-                          <button
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-2"
-                            onClick={() => { setIsProcessMenuOpen(false); setIsSalaryIncreaseModalOpen(true); }}
-                          >
-                            <TrendingUp className="h-4 w-4 text-green-600" />
-                            Request Salary Increase
-                          </button>
-                          <button
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-2"
-                            onClick={() => { setIsProcessMenuOpen(false); setIsBonusModalOpen(true); }}
-                          >
-                            <Gift className="h-4 w-4 text-purple-600" />
-                            Request Bonus Payment
-                          </button>
-                          <button
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-2 text-red-600"
-                            onClick={() => { setIsProcessMenuOpen(false); setIsExitModalOpen(true); }}
-                          >
-                            <LogOut className="h-4 w-4" />
-                            Exit Employee
-                          </button>
-                        </div>
+                        <>
+                          {/* Backdrop to close on click outside */}
+                          <div 
+                            className="fixed inset-0 z-10" 
+                            onClick={() => setIsProcessMenuOpen(false)}
+                          />
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-brand-grey-200 rounded-lg shadow-lg z-20 min-w-[220px]">
+                            <button
+                              className="w-full px-4 py-3 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-3 border-b border-brand-grey-100"
+                              onClick={() => { setIsProcessMenuOpen(false); setIsSalaryIncreaseModalOpen(true); }}
+                            >
+                              <TrendingUp className="h-5 w-5 text-green-600" />
+                              <span>{consultant.contract_type === 'contract' ? 'Request Rate Increase' : 'Request Salary Increase'}</span>
+                            </button>
+                            <button
+                              className="w-full px-4 py-3 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-3"
+                              onClick={() => { setIsProcessMenuOpen(false); setIsBonusModalOpen(true); }}
+                            >
+                              <Gift className="h-5 w-5 text-purple-600" />
+                              <span>Request Bonus Payment</span>
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
                 </div>
               </CardHeader>
 
-              {pendingApprovals.length > 0 && (
+              {/* Pending Financial Approvals */}
+              {pendingApprovals.filter(r => r.request_type !== 'employee_exit').length > 0 && (
                 <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <h4 className="text-sm font-medium text-amber-800 mb-2 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     Pending Approvals
                   </h4>
-                  {pendingApprovals.map(req => (
+                  {pendingApprovals.filter(r => r.request_type !== 'employee_exit').map(req => (
                     <div key={req.id} className="text-sm text-amber-700 flex items-center justify-between py-1">
                       <span>
-                        {req.request_type === 'salary_increase' && `Salary increase to £${(req.request_data as SalaryIncreaseData).new_salary.toLocaleString()}`}
+                        {req.request_type === 'salary_increase' && `${consultant.contract_type === 'contract' ? 'Rate' : 'Salary'} increase to £${(req.request_data as SalaryIncreaseData).new_salary.toLocaleString()}`}
                         {req.request_type === 'bonus_payment' && `Bonus £${(req.request_data as BonusPaymentData).amount.toLocaleString()}`}
-                        {req.request_type === 'employee_exit' && `Exit: ${(req.request_data as EmployeeExitData).exit_reason}`}
                       </span>
                       <Badge variant="amber">{req.status === 'pending' ? 'Awaiting Director' : 'Awaiting HR'}</Badge>
                     </div>
@@ -1516,7 +1531,9 @@ export function ConsultantProfilePage() {
               )}
 
               <div className="mb-4">
-                <h4 className="text-sm font-medium text-brand-slate-700 mb-2">Salary History</h4>
+                <h4 className="text-sm font-medium text-brand-slate-700 mb-2">
+                  {consultant.contract_type === 'contract' ? 'Rate History' : 'Salary History'}
+                </h4>
                 {salaryHistory.length > 0 ? (
                   <div className="space-y-2">
                     {salaryHistory.map((entry) => (
@@ -1524,7 +1541,8 @@ export function ConsultantProfilePage() {
                         <div>
                           <p className="text-sm font-medium text-brand-slate-900">
                             £{entry.amount.toLocaleString()}
-                            <span className="text-brand-grey-400 text-xs ml-1">({entry.salary_type === 'annual_salary' ? 'Annual' : 'Day Rate'})</span>
+                            {consultant.contract_type === 'contract' && <span className="text-brand-grey-400 text-xs ml-1">/day</span>}
+                            {consultant.contract_type !== 'contract' && <span className="text-brand-grey-400 text-xs ml-1">/year</span>}
                           </p>
                           {entry.change_reason && <p className="text-xs text-brand-grey-500">{entry.change_reason}</p>}
                         </div>
@@ -1536,7 +1554,7 @@ export function ConsultantProfilePage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-brand-grey-400">No salary history recorded</p>
+                  <p className="text-sm text-brand-grey-400">No {consultant.contract_type === 'contract' ? 'rate' : 'salary'} history recorded</p>
                 )}
               </div>
 
@@ -1563,11 +1581,123 @@ export function ConsultantProfilePage() {
               </div>
             </Card>
 
-            {exitRecord && (
-              <Card className="border-red-200 bg-red-50">
-                <CardHeader>
-                  <CardTitle className="text-red-700">Exit Record</CardTitle>
-                </CardHeader>
+            {/* Exit Employee Section */}
+            <Card className={exitRecord ? 'border-red-200 bg-red-50' : ''}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className={exitRecord ? 'text-red-700' : ''}>
+                    {exitRecord ? 'Exit Completed' : 'Employee Exit'}
+                  </CardTitle>
+                  {!exitRecord && consultant.status !== 'terminated' && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      leftIcon={<LogOut className="h-4 w-4" />}
+                      onClick={() => setIsExitModalOpen(true)}
+                    >
+                      Initiate Exit
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+
+              {/* Pending Exit Request */}
+              {pendingApprovals.filter(r => r.request_type === 'employee_exit').length > 0 && (
+                <div className="space-y-4">
+                  <p className="text-sm text-brand-grey-600">Exit process in progress:</p>
+                  {pendingApprovals.filter(r => r.request_type === 'employee_exit').map(req => {
+                    const exitData = req.request_data as EmployeeExitData;
+                    return (
+                      <div key={req.id}>
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                          <p className="font-medium text-amber-800">Exit Request: {exitData.exit_reason.replace('_', ' ')}</p>
+                          <p className="text-sm text-amber-700">Last working day: {formatDate(exitData.last_working_day)}</p>
+                        </div>
+                        
+                        {/* Approval Workflow Steps */}
+                        <div className="flex items-center gap-2">
+                          {/* Step 1: Manager Request */}
+                          <div className="flex-1">
+                            <div className={`p-3 rounded-lg border-2 ${true ? 'border-green-500 bg-green-50' : 'border-brand-grey-200'}`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <span className="text-sm font-medium">1. Request Submitted</span>
+                              </div>
+                              <p className="text-xs text-brand-grey-500">By {req.requester?.full_name || 'Manager'}</p>
+                            </div>
+                          </div>
+                          
+                          <ChevronRight className="h-5 w-5 text-brand-grey-300" />
+                          
+                          {/* Step 2: Director Approval */}
+                          <div className="flex-1">
+                            <div className={`p-3 rounded-lg border-2 ${
+                              req.director_status === 'approved' ? 'border-green-500 bg-green-50' : 
+                              req.director_status === 'pending' ? 'border-amber-500 bg-amber-50' : 'border-brand-grey-200'
+                            }`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                {req.director_status === 'approved' ? (
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                ) : req.director_status === 'pending' ? (
+                                  <Clock className="h-4 w-4 text-amber-600" />
+                                ) : (
+                                  <div className="h-4 w-4 rounded-full border-2 border-brand-grey-300" />
+                                )}
+                                <span className="text-sm font-medium">2. Director Approval</span>
+                              </div>
+                              <p className="text-xs text-brand-grey-500">
+                                {req.director_status === 'approved' ? 'Approved' : 
+                                 req.director_status === 'pending' ? 'Awaiting approval' : 'Pending'}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <ChevronRight className="h-5 w-5 text-brand-grey-300" />
+                          
+                          {/* Step 3: HR Approval */}
+                          <div className="flex-1">
+                            <div className={`p-3 rounded-lg border-2 ${
+                              req.hr_status === 'approved' ? 'border-green-500 bg-green-50' : 
+                              req.hr_status === 'pending' && req.director_status === 'approved' ? 'border-amber-500 bg-amber-50' : 'border-brand-grey-200'
+                            }`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                {req.hr_status === 'approved' ? (
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                ) : req.hr_status === 'pending' && req.director_status === 'approved' ? (
+                                  <Clock className="h-4 w-4 text-amber-600" />
+                                ) : (
+                                  <div className="h-4 w-4 rounded-full border-2 border-brand-grey-300" />
+                                )}
+                                <span className="text-sm font-medium">3. HR Approval</span>
+                              </div>
+                              <p className="text-xs text-brand-grey-500">
+                                {req.hr_status === 'approved' ? 'Approved' : 
+                                 req.hr_status === 'pending' && req.director_status === 'approved' ? 'Awaiting approval' : 'Pending'}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <ChevronRight className="h-5 w-5 text-brand-grey-300" />
+                          
+                          {/* Step 4: HR Processing */}
+                          <div className="flex-1">
+                            <div className={`p-3 rounded-lg border-2 border-brand-grey-200`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="h-4 w-4 rounded-full border-2 border-brand-grey-300" />
+                                <span className="text-sm font-medium">4. HR Processing</span>
+                              </div>
+                              <p className="text-xs text-brand-grey-500">Exit letter, interview</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Completed Exit Record */}
+              {exitRecord && (
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-red-600">Exit Reason</span>
@@ -1584,8 +1714,15 @@ export function ConsultantProfilePage() {
                     </div>
                   )}
                 </div>
-              </Card>
-            )}
+              )}
+
+              {/* No exit in progress */}
+              {!exitRecord && pendingApprovals.filter(r => r.request_type === 'employee_exit').length === 0 && consultant.status !== 'terminated' && (
+                <p className="text-sm text-brand-grey-400">
+                  Use the "Initiate Exit" button to start the employee exit process. This requires Director and HR approval.
+                </p>
+              )}
+            </Card>
           </div>
 
           {/* Right Column - Details */}
@@ -1598,7 +1735,9 @@ export function ConsultantProfilePage() {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-brand-grey-400">Contract Type</span>
-                  <span className="text-brand-slate-700 capitalize">{consultant.contract_type || 'N/A'}</span>
+                  <Badge variant={consultant.contract_type === 'contract' ? 'cyan' : 'green'}>
+                    {consultant.contract_type === 'contract' ? 'Contractor' : 'Permanent'}
+                  </Badge>
                 </div>
                 {consultant.salary_amount && (
                   <div className="flex justify-between">
@@ -1992,41 +2131,31 @@ export function ConsultantProfilePage() {
         isLoading={isDeleting}
       />
 
-      {/* Salary Increase Modal */}
+      {/* Salary/Rate Increase Modal */}
       <Modal
         isOpen={isSalaryIncreaseModalOpen}
         onClose={() => setIsSalaryIncreaseModalOpen(false)}
-        title="Request Salary Increase"
+        title={consultant.contract_type === 'contract' ? 'Request Rate Increase' : 'Request Salary Increase'}
         size="md"
       >
         <div className="space-y-4">
           <div className="p-3 bg-brand-grey-50 rounded-lg">
-            <p className="text-sm text-brand-grey-500">Current Salary</p>
+            <p className="text-sm text-brand-grey-500">
+              Current {consultant.contract_type === 'contract' ? 'Day Rate' : 'Annual Salary'}
+            </p>
             <p className="font-medium text-brand-slate-900">
-              {consultant.salary_amount 
-                ? `£${consultant.salary_amount.toLocaleString()} (Annual)`
-                : consultant.day_rate 
-                  ? `£${consultant.day_rate} (Day Rate)`
-                  : 'Not set'}
+              {consultant.contract_type === 'contract'
+                ? `£${consultant.day_rate?.toLocaleString() || 0}/day`
+                : `£${consultant.salary_amount?.toLocaleString() || 0}/year`}
             </p>
           </div>
 
-          <Select
-            label="Salary Type"
-            options={[
-              { value: 'annual_salary', label: 'Annual Salary' },
-              { value: 'day_rate', label: 'Day Rate' },
-            ]}
-            value={salaryIncreaseForm.salary_type}
-            onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, salary_type: e.target.value as any }))}
-          />
-
           <Input
-            label="New Salary Amount (£)"
+            label={consultant.contract_type === 'contract' ? 'New Day Rate (£)' : 'New Annual Salary (£)'}
             type="number"
             value={salaryIncreaseForm.new_salary}
             onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, new_salary: e.target.value }))}
-            placeholder={salaryIncreaseForm.salary_type === 'annual_salary' ? 'e.g. 55000' : 'e.g. 450'}
+            placeholder={consultant.contract_type === 'contract' ? 'e.g. 550' : 'e.g. 65000'}
           />
 
           <div className="grid grid-cols-2 gap-4">
@@ -2048,7 +2177,9 @@ export function ConsultantProfilePage() {
             label="Reason for Increase"
             value={salaryIncreaseForm.reason}
             onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, reason: e.target.value }))}
-            placeholder="Explain the justification for this salary increase..."
+            placeholder={consultant.contract_type === 'contract' 
+              ? 'Explain the justification for this rate increase...'
+              : 'Explain the justification for this salary increase...'}
             rows={3}
           />
 

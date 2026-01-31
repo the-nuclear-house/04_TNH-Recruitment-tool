@@ -45,6 +45,12 @@ CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
 -- RLS
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view customers" ON customers;
+DROP POLICY IF EXISTS "Managers can insert customers" ON customers;
+DROP POLICY IF EXISTS "Managers can update customers" ON customers;
+DROP POLICY IF EXISTS "Admins can delete customers" ON customers;
+
 CREATE POLICY "Users can view customers" ON customers
 FOR SELECT TO authenticated USING (true);
 
@@ -91,6 +97,9 @@ CREATE TABLE IF NOT EXISTS customer_contacts (
 CREATE INDEX IF NOT EXISTS idx_customer_contacts_customer ON customer_contacts(customer_id);
 
 ALTER TABLE customer_contacts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view customer_contacts" ON customer_contacts;
+DROP POLICY IF EXISTS "Users can manage customer_contacts" ON customer_contacts;
 
 CREATE POLICY "Users can view customer_contacts" ON customer_contacts
 FOR SELECT TO authenticated USING (true);
@@ -178,6 +187,11 @@ CREATE INDEX IF NOT EXISTS idx_consultants_deleted ON consultants(deleted_at);
 
 ALTER TABLE consultants ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can read consultants" ON consultants;
+DROP POLICY IF EXISTS "Authenticated users can create consultants" ON consultants;
+DROP POLICY IF EXISTS "Authenticated users can update consultants" ON consultants;
+
 CREATE POLICY "Users can read consultants" ON consultants
   FOR SELECT USING (true);
 
@@ -244,6 +258,9 @@ CREATE INDEX IF NOT EXISTS idx_missions_dates ON missions(start_date, end_date);
 
 ALTER TABLE missions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read missions" ON missions;
+DROP POLICY IF EXISTS "Authenticated users can manage missions" ON missions;
+
 CREATE POLICY "Users can read missions" ON missions FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can manage missions" ON missions FOR ALL USING (auth.uid() IS NOT NULL);
 
@@ -277,6 +294,10 @@ CREATE INDEX IF NOT EXISTS idx_consultant_meetings_consultant ON consultant_meet
 CREATE INDEX IF NOT EXISTS idx_consultant_meetings_status ON consultant_meetings(status);
 
 ALTER TABLE consultant_meetings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can read consultant_meetings" ON consultant_meetings;
+DROP POLICY IF EXISTS "Users can manage consultant_meetings" ON consultant_meetings;
+
 CREATE POLICY "Users can read consultant_meetings" ON consultant_meetings FOR SELECT USING (true);
 CREATE POLICY "Users can manage consultant_meetings" ON consultant_meetings FOR ALL USING (auth.uid() IS NOT NULL);
 
@@ -302,6 +323,10 @@ CREATE TABLE IF NOT EXISTS salary_history (
 
 CREATE INDEX IF NOT EXISTS idx_salary_history_consultant ON salary_history(consultant_id);
 ALTER TABLE salary_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "read_salary" ON salary_history;
+DROP POLICY IF EXISTS "manage_salary" ON salary_history;
+
 CREATE POLICY "read_salary" ON salary_history FOR SELECT USING (true);
 CREATE POLICY "manage_salary" ON salary_history FOR ALL USING (auth.uid() IS NOT NULL);
 
@@ -322,6 +347,10 @@ CREATE TABLE IF NOT EXISTS bonus_payments (
 
 CREATE INDEX IF NOT EXISTS idx_bonus_payments_consultant ON bonus_payments(consultant_id);
 ALTER TABLE bonus_payments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "read_bonus" ON bonus_payments;
+DROP POLICY IF EXISTS "manage_bonus" ON bonus_payments;
+
 CREATE POLICY "read_bonus" ON bonus_payments FOR SELECT USING (true);
 CREATE POLICY "manage_bonus" ON bonus_payments FOR ALL USING (auth.uid() IS NOT NULL);
 
@@ -370,6 +399,10 @@ CREATE TRIGGER set_approval_request_reference_id BEFORE INSERT ON approval_reque
 CREATE INDEX IF NOT EXISTS idx_approval_requests_consultant ON approval_requests(consultant_id);
 CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(status);
 ALTER TABLE approval_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "read_approvals" ON approval_requests;
+DROP POLICY IF EXISTS "manage_approvals" ON approval_requests;
+
 CREATE POLICY "read_approvals" ON approval_requests FOR SELECT USING (true);
 CREATE POLICY "manage_approvals" ON approval_requests FOR ALL USING (auth.uid() IS NOT NULL);
 
@@ -387,6 +420,10 @@ CREATE TABLE IF NOT EXISTS consultant_exits (
 
 CREATE INDEX IF NOT EXISTS idx_consultant_exits_consultant ON consultant_exits(consultant_id);
 ALTER TABLE consultant_exits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "read_exits" ON consultant_exits;
+DROP POLICY IF EXISTS "manage_exits" ON consultant_exits;
+
 CREATE POLICY "read_exits" ON consultant_exits FOR SELECT USING (true);
 CREATE POLICY "manage_exits" ON consultant_exits FOR ALL USING (auth.uid() IS NOT NULL);
 
@@ -427,6 +464,10 @@ CREATE TRIGGER set_hr_ticket_reference_id BEFORE INSERT ON hr_tickets FOR EACH R
 
 CREATE INDEX IF NOT EXISTS idx_hr_tickets_status ON hr_tickets(status);
 ALTER TABLE hr_tickets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "read_hr_tickets" ON hr_tickets;
+DROP POLICY IF EXISTS "manage_hr_tickets" ON hr_tickets;
+
 CREATE POLICY "read_hr_tickets" ON hr_tickets FOR SELECT USING (true);
 CREATE POLICY "manage_hr_tickets" ON hr_tickets FOR ALL USING (auth.uid() IS NOT NULL);
 
