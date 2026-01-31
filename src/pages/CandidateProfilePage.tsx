@@ -47,7 +47,7 @@ import {
   EmptyState,
   StarRating,
   StarRatingDisplay,
-  ConfirmDialog,
+  DeleteDialog,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
@@ -495,11 +495,16 @@ export function CandidateProfilePage() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (hardDelete: boolean) => {
     setIsDeleting(true);
     try {
-      await candidatesService.delete(id!);
-      toast.success('Candidate Deleted', 'The candidate has been permanently deleted');
+      if (hardDelete) {
+        await candidatesService.hardDelete(id!);
+        toast.success('Candidate Deleted', 'The candidate has been permanently deleted');
+      } else {
+        await candidatesService.delete(id!);
+        toast.success('Candidate Archived', 'The candidate has been archived');
+      }
       navigate('/candidates');
     } catch (error) {
       console.error('Error deleting candidate:', error);
@@ -2615,15 +2620,13 @@ export function CandidateProfilePage() {
       </Modal>
 
       {/* Delete Confirmation Dialog */}
-      <ConfirmDialog
+      <DeleteDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={handleDelete}
-        title="Delete Candidate"
-        message={`Are you sure you want to delete ${candidate?.first_name} ${candidate?.last_name}? This will also delete all their interview records. This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        variant="danger"
+        onDelete={handleDelete}
+        itemName={`${candidate?.first_name} ${candidate?.last_name}`}
+        itemType="Candidate"
+        isAdmin={permissions.isAdmin}
         isLoading={isDeleting}
       />
 

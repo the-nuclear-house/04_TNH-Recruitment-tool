@@ -91,66 +91,51 @@ function getSemesterWeeks(): { week: number; label: string; start: Date }[] {
   return weeks;
 }
 
-// Visual Funnel Component
+// Visual Funnel Component - Simple rounded bars
 function InterviewFunnel({ data }: { 
   data: { 
     phone: number; 
     technical: number; 
     director: number; 
-    customer: number; 
     signed: number;
     conversions: {
       phoneToTech: number;
       techToDirector: number;
-      directorToCustomer: number;
-      customerToSigned: number;
+      directorToSigned: number;
     }
   } 
 }) {
   const stages = [
-    { label: 'Phone', value: data.phone, conversion: data.conversions.phoneToTech },
-    { label: 'Technical', value: data.technical, conversion: data.conversions.techToDirector },
-    { label: 'Director', value: data.director, conversion: data.conversions.directorToCustomer },
-    { label: 'Customer', value: data.customer, conversion: data.conversions.customerToSigned },
-    { label: 'Signed', value: data.signed },
+    { label: 'Phone', value: data.phone, colour: '#06b6d4', conversion: data.conversions.phoneToTech },
+    { label: 'Technical', value: data.technical, colour: '#0891b2', conversion: data.conversions.techToDirector },
+    { label: 'Director', value: data.director, colour: '#0e7490', conversion: data.conversions.directorToSigned },
+    { label: 'Signed', value: data.signed, colour: '#134e4a' },
   ];
   
   const maxValue = Math.max(...stages.map(s => s.value), 1);
   
   return (
-    <div className="flex flex-col items-center py-2">
+    <div className="space-y-3 py-2">
       {stages.map((stage, idx) => {
-        const widthPercent = Math.max((stage.value / maxValue) * 100, 25);
-        const isLast = idx === stages.length - 1;
+        const widthPercent = Math.max((stage.value / maxValue) * 100, 15);
         
         return (
-          <div key={stage.label} className="w-full flex flex-col items-center">
-            <div 
-              className="relative flex items-center justify-center py-2.5 text-white font-medium text-sm transition-all"
-              style={{
-                width: `${widthPercent}%`,
-                background: `linear-gradient(135deg, ${
-                  idx === 0 ? '#06b6d4' : 
-                  idx === 1 ? '#0891b2' : 
-                  idx === 2 ? '#0e7490' : 
-                  idx === 3 ? '#155e75' : '#134e4a'
-                } 0%, ${
-                  idx === 0 ? '#0891b2' : 
-                  idx === 1 ? '#0e7490' : 
-                  idx === 2 ? '#155e75' : 
-                  idx === 3 ? '#134e4a' : '#115e59'
-                } 100%)`,
-                clipPath: isLast 
-                  ? 'polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%)'
-                  : 'polygon(0% 0%, 92% 0%, 100% 50%, 92% 100%, 0% 100%)',
-                minHeight: '40px',
-              }}
-            >
-              <span className="z-10">{stage.label}: {stage.value}</span>
+          <div key={stage.label} className="space-y-1">
+            <div className="flex items-center gap-3">
+              <div 
+                className="h-8 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-sm"
+                style={{
+                  width: `${widthPercent}%`,
+                  backgroundColor: stage.colour,
+                  minWidth: '80px'
+                }}
+              >
+                {stage.label}: {stage.value}
+              </div>
             </div>
             {stage.conversion !== undefined && (
-              <div className="text-xs text-brand-grey-500 py-0.5">
-                ↓ {stage.conversion}%
+              <div className="text-xs text-brand-grey-500 pl-2">
+                ↓ {stage.conversion}% conversion
               </div>
             )}
           </div>
@@ -366,8 +351,7 @@ export function DashboardPage() {
       phone: semesterInterviews.filter(i => i.stage === 'phone_qualification').length,
       technical: semesterInterviews.filter(i => i.stage === 'technical_interview').length,
       director: semesterInterviews.filter(i => i.stage === 'director_interview').length,
-      customer: 0,
-      signed: 0,
+      signed: 0, // TODO: count from signed offers
     };
     
     const passedPhone = semesterInterviews.filter(i => i.stage === 'phone_qualification' && i.outcome === 'pass').length;
@@ -377,8 +361,7 @@ export function DashboardPage() {
     const conversions = {
       phoneToTech: interviewCounts.phone > 0 ? Math.round((passedPhone / interviewCounts.phone) * 100) : 0,
       techToDirector: interviewCounts.technical > 0 ? Math.round((passedTech / interviewCounts.technical) * 100) : 0,
-      directorToCustomer: interviewCounts.director > 0 ? Math.round((passedDirector / interviewCounts.director) * 100) : 0,
-      customerToSigned: 0,
+      directorToSigned: interviewCounts.director > 0 ? Math.round((passedDirector / interviewCounts.director) * 100) : 0,
     };
     
     const interviewsByWeek = semesterWeeks.map(w => {
@@ -402,11 +385,13 @@ export function DashboardPage() {
       return { week: w.label, value: count };
     });
     
-    const activeRequirements = requirements.filter(r => 
+    // Filter out soft-deleted requirements
+    const nonDeletedRequirements = requirements.filter(r => !r.deleted_at);
+    const activeRequirements = nonDeletedRequirements.filter(r => 
       r.status === 'active' || r.status === 'opportunity'
     );
-    const wonRequirements = requirements.filter(r => r.status === 'won' || r.status === 'filled');
-    const lostRequirements = requirements.filter(r => r.status === 'lost');
+    const wonRequirements = nonDeletedRequirements.filter(r => r.status === 'won' || r.status === 'filled');
+    const lostRequirements = nonDeletedRequirements.filter(r => r.status === 'lost');
     
     const activeConsultants = consultants.filter(c => c.status === 'in_mission').length;
     const benchConsultants = consultants.filter(c => c.status === 'bench').length;

@@ -498,6 +498,15 @@ export const candidatesService = {
     if (error) throw error;
   },
 
+  async hardDelete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('candidates')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
   // Search candidates
   async search(query: string): Promise<DbCandidate[]> {
     const { data, error } = await supabase
@@ -654,6 +663,15 @@ export const requirementsService = {
     const { error } = await supabase
       .from('requirements')
       .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('requirements')
+      .delete()
       .eq('id', id);
 
     if (error) throw error;
@@ -865,6 +883,15 @@ export const interviewsService = {
     const { error } = await supabase
       .from('interviews')
       .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('interviews')
+      .delete()
       .eq('id', id);
 
     if (error) throw error;
