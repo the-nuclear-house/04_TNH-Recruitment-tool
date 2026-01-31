@@ -1,32 +1,29 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, 
   Briefcase, 
-  Calendar, 
   TrendingUp,
-  Plus,
   CheckCircle,
   XCircle,
   FileText,
   AlertCircle,
   ChevronRight,
+  ChevronLeft,
   Clock,
-  UserCheck,
+  Users,
   Target,
-  Building2,
   Award,
+  Phone,
+  Building2,
+  UserCheck,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardHeader, CardTitle, Button, Badge, Avatar } from '@/components/ui';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
-  requirementsService,
-  interviewsService, 
-  offersService,
   approvalRequestsService,
-  consultantsService,
+  offersService,
   type DbApprovalRequest,
   type DbOffer,
   type DbRequirement,
@@ -40,28 +37,40 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { supabase } from '@/lib/supabase';
 
-// Get current semester range
-function getSemesterRange(): { start: Date; end: Date; label: string } {
+// Semester utilities
+function getSemesterOptions(): { value: string; label: string; start: Date; end: Date }[] {
+  const options: { value: string; label: string; start: Date; end: Date }[] = [];
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  const currentYear = now.getFullYear();
+  const currentHalf = now.getMonth() < 6 ? 1 : 2;
   
-  if (month < 6) {
-    return {
-      start: new Date(year, 0, 1),
-      end: new Date(year, 5, 30),
-      label: `H1 ${year} (Jan-Jun)`
-    };
-  } else {
-    return {
-      start: new Date(year, 6, 1),
-      end: new Date(year, 11, 31),
-      label: `H2 ${year} (Jul-Dec)`
-    };
+  for (let i = 0; i < 6; i++) {
+    let year = currentYear;
+    let half = currentHalf;
+    
+    // Go back i semesters
+    for (let j = 0; j < i; j++) {
+      half--;
+      if (half === 0) {
+        half = 2;
+        year--;
+      }
+    }
+    
+    const start = half === 1 ? new Date(year, 0, 1) : new Date(year, 6, 1);
+    const end = half === 1 ? new Date(year, 5, 30) : new Date(year, 11, 31);
+    
+    options.push({
+      value: `${year}-H${half}`,
+      label: `H${half} ${year}`,
+      start,
+      end,
+    });
   }
+  
+  return options;
 }
 
-// Get ISO week number
 function getWeekNumber(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -70,11 +79,8 @@ function getWeekNumber(date: Date): number {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
-// Generate weeks for semester
-function getSemesterWeeks(): { week: number; label: string; start: Date }[] {
-  const { start, end } = getSemesterRange();
+function getSemesterWeeks(start: Date, end: Date): { week: number; label: string; start: Date }[] {
   const weeks: { week: number; label: string; start: Date }[] = [];
-  
   const current = new Date(start);
   current.setDate(current.getDate() - current.getDay() + 1);
   
@@ -91,7 +97,46 @@ function getSemesterWeeks(): { week: number; label: string; start: Date }[] {
   return weeks;
 }
 
-// Visual Funnel Component - Simple rounded bars
+// Big Number Card
+function BigNumberCard({ 
+  title, 
+  value, 
+  icon: Icon, 
+  colour,
+}: { 
+  title: string; 
+  value: number; 
+  icon: any;
+  colour: 'cyan' | 'green' | 'amber';
+}) {
+  const colours = {
+    cyan: 'from-cyan-500 to-cyan-600',
+    green: 'from-green-500 to-green-600',
+    amber: 'from-amber-500 to-amber-600',
+  };
+  
+  const bgColours = {
+    cyan: 'bg-cyan-50',
+    green: 'bg-green-50',
+    amber: 'bg-amber-50',
+  };
+
+  return (
+    <Card className={`${bgColours[colour]} border-none`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-4xl font-bold text-brand-slate-900">{value}</p>
+          <p className="text-sm text-brand-grey-500 mt-1">{title}</p>
+        </div>
+        <div className={`p-4 rounded-2xl bg-gradient-to-br ${colours[colour]} text-white`}>
+          <Icon className="h-8 w-8" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Centred Interview Funnel
 function InterviewFunnel({ data }: { 
   data: { 
     phone: number; 
@@ -106,46 +151,44 @@ function InterviewFunnel({ data }: {
   } 
 }) {
   const stages = [
-    { label: 'Phone', value: data.phone, colour: '#06b6d4', conversion: data.conversions.phoneToTech },
-    { label: 'Technical', value: data.technical, colour: '#0891b2', conversion: data.conversions.techToDirector },
-    { label: 'Director', value: data.director, colour: '#0e7490', conversion: data.conversions.directorToSigned },
-    { label: 'Signed', value: data.signed, colour: '#134e4a' },
+    { label: 'Phone', value: data.phone, colour: '#06b6d4', width: 100 },
+    { label: 'Technical', value: data.technical, colour: '#0891b2', width: 80 },
+    { label: 'Director', value: data.director, colour: '#0e7490', width: 60 },
+    { label: 'Signed', value: data.signed, colour: '#134e4a', width: 40 },
   ];
   
-  const maxValue = Math.max(...stages.map(s => s.value), 1);
+  const conversions = [
+    data.conversions.phoneToTech,
+    data.conversions.techToDirector,
+    data.conversions.directorToSigned,
+  ];
   
   return (
-    <div className="space-y-3 py-2">
-      {stages.map((stage, idx) => {
-        const widthPercent = Math.max((stage.value / maxValue) * 100, 15);
-        
-        return (
-          <div key={stage.label} className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div 
-                className="h-8 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-sm"
-                style={{
-                  width: `${widthPercent}%`,
-                  backgroundColor: stage.colour,
-                  minWidth: '80px'
-                }}
-              >
-                {stage.label}: {stage.value}
-              </div>
-            </div>
-            {stage.conversion !== undefined && (
-              <div className="text-xs text-brand-grey-500 pl-2">
-                ↓ {stage.conversion}% conversion
-              </div>
-            )}
+    <div className="flex flex-col items-center py-4">
+      {stages.map((stage, idx) => (
+        <div key={stage.label} className="flex flex-col items-center w-full">
+          <div 
+            className="flex items-center justify-center py-3 text-white font-semibold text-sm rounded-lg shadow-sm"
+            style={{
+              width: `${stage.width}%`,
+              backgroundColor: stage.colour,
+              minHeight: '44px',
+            }}
+          >
+            {stage.label}: {stage.value}
           </div>
-        );
-      })}
+          {idx < stages.length - 1 && (
+            <div className="text-xs text-brand-grey-500 py-1">
+              ↓ {conversions[idx]}%
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
 
-// Weekly Bar Chart Component
+// Weekly Bar Chart
 function WeeklyChart({ 
   data, 
   title, 
@@ -161,7 +204,7 @@ function WeeklyChart({
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-medium text-brand-slate-700">{title}</h4>
-      <div className="flex items-end gap-0.5 h-24">
+      <div className="flex items-end gap-0.5 h-20">
         {data.map((item, idx) => {
           const height = (item.value / maxValue) * 100;
           const weekNum = parseInt(item.week.replace('W', ''));
@@ -186,60 +229,58 @@ function WeeklyChart({
           );
         })}
       </div>
-      <div className="flex gap-0.5">
-        {data.map((item, idx) => {
-          const weekNum = parseInt(item.week.replace('W', ''));
-          const isCurrent = weekNum === currentWeek;
-          return (
-            <div key={idx} className="flex-1 text-center">
-              <span className={`text-[7px] ${isCurrent ? 'text-amber-600 font-bold' : 'text-brand-grey-400'}`}>
-                {item.week}
-              </span>
-            </div>
-          );
-        })}
+      <div className="flex gap-0.5 overflow-hidden">
+        {data.filter((_, i) => i % 4 === 0).map((item, idx) => (
+          <div key={idx} className="flex-1 text-center" style={{ flex: 4 }}>
+            <span className="text-[8px] text-brand-grey-400">{item.week}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// Stat Card
-function StatCard({ 
-  title, 
-  value, 
-  icon: Icon, 
-  colour = 'cyan',
-  onClick,
+// Mini Conversion Funnel for Requirements
+function MiniConversionFunnel({ 
+  meetings, 
+  presentations, 
+  projects 
 }: { 
-  title: string; 
-  value: number | string; 
-  icon: any;
-  colour?: 'cyan' | 'green' | 'amber' | 'red' | 'purple';
-  onClick?: () => void;
+  meetings: number; 
+  presentations: number; 
+  projects: number;
 }) {
-  const colours = {
-    cyan: 'bg-brand-cyan/10 text-brand-cyan',
-    green: 'bg-green-100 text-green-600',
-    amber: 'bg-amber-100 text-amber-600',
-    red: 'bg-red-100 text-red-600',
-    purple: 'bg-purple-100 text-purple-600',
-  };
-
+  const meetToPresent = meetings > 0 ? Math.round((presentations / meetings) * 100) : 0;
+  const presentToProject = presentations > 0 ? Math.round((projects / presentations) * 100) : 0;
+  
   return (
-    <Card 
-      className={`${onClick ? 'cursor-pointer hover:shadow-md' : ''} transition-shadow`}
-      onClick={onClick}
-    >
-      <div className="flex items-center gap-3">
-        <div className={`p-2.5 rounded-xl ${colours[colour]}`}>
-          <Icon className="h-5 w-5" />
+    <div className="bg-brand-grey-50 rounded-lg p-3 mt-3">
+      <p className="text-xs font-medium text-brand-grey-600 mb-2">Conversion Rates</p>
+      <div className="flex items-center gap-2 text-xs">
+        <div className="text-center">
+          <p className="font-bold text-brand-slate-900">{meetings}</p>
+          <p className="text-brand-grey-400">Meetings</p>
         </div>
-        <div>
-          <p className="text-xl font-bold text-brand-slate-900">{value}</p>
-          <p className="text-xs text-brand-grey-400">{title}</p>
+        <div className="text-brand-grey-300">→</div>
+        <div className="text-center">
+          <p className="text-green-600 font-medium">{meetToPresent}%</p>
+        </div>
+        <div className="text-brand-grey-300">→</div>
+        <div className="text-center">
+          <p className="font-bold text-brand-slate-900">{presentations}</p>
+          <p className="text-brand-grey-400">Presented</p>
+        </div>
+        <div className="text-brand-grey-300">→</div>
+        <div className="text-center">
+          <p className="text-green-600 font-medium">{presentToProject}%</p>
+        </div>
+        <div className="text-brand-grey-300">→</div>
+        <div className="text-center">
+          <p className="font-bold text-brand-slate-900">{projects}</p>
+          <p className="text-brand-grey-400">Won</p>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -250,12 +291,15 @@ export function DashboardPage() {
   const toast = useToast();
   
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
   
   // Data
   const [requirements, setRequirements] = useState<DbRequirement[]>([]);
   const [interviews, setInterviews] = useState<DbInterview[]>([]);
   const [consultants, setConsultants] = useState<DbConsultant[]>([]);
+  const [missions, setMissions] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
+  const [assessments, setAssessments] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
   
   // Director specific
@@ -264,12 +308,30 @@ export function DashboardPage() {
   const [pendingOffers, setPendingOffers] = useState<DbOffer[]>([]);
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
 
-  const semesterRange = getSemesterRange();
-  const semesterWeeks = getSemesterWeeks();
+  const semesterOptions = useMemo(() => getSemesterOptions(), []);
+  
+  // Set default semester on load
+  useEffect(() => {
+    if (semesterOptions.length > 0 && !selectedSemester) {
+      setSelectedSemester(semesterOptions[0].value);
+    }
+  }, [semesterOptions]);
+
+  const currentSemester = useMemo(() => 
+    semesterOptions.find(s => s.value === selectedSemester) || semesterOptions[0],
+    [selectedSemester, semesterOptions]
+  );
+
+  const semesterWeeks = useMemo(() => 
+    currentSemester ? getSemesterWeeks(currentSemester.start, currentSemester.end) : [],
+    [currentSemester]
+  );
 
   useEffect(() => {
-    loadDashboardData();
-  }, [selectedManagerId]);
+    if (currentSemester) {
+      loadDashboardData();
+    }
+  }, [selectedManagerId, currentSemester]);
 
   const loadDashboardData = async () => {
     try {
@@ -279,7 +341,7 @@ export function DashboardPage() {
       const targetManagerId = selectedManagerId || (isDirectorView ? null : user?.id);
       
       // Load requirements
-      let reqQuery = supabase.from('requirements').select('*');
+      let reqQuery = supabase.from('requirements').select('*').is('deleted_at', null);
       if (targetManagerId) {
         reqQuery = reqQuery.eq('manager_id', targetManagerId);
       }
@@ -287,7 +349,7 @@ export function DashboardPage() {
       setRequirements(reqData || []);
       
       // Load interviews
-      let intQuery = supabase.from('interviews').select('*');
+      let intQuery = supabase.from('interviews').select('*').is('deleted_at', null);
       if (targetManagerId) {
         intQuery = intQuery.eq('interviewer_id', targetManagerId);
       }
@@ -295,11 +357,15 @@ export function DashboardPage() {
       setInterviews(intData || []);
       
       // Load consultants
-      const { data: consData } = await supabase
-        .from('consultants')
-        .select('*')
-        .is('deleted_at', null);
+      let consQuery = supabase.from('consultants').select('*').is('deleted_at', null);
+      // TODO: Filter by manager when we have that relationship
+      const { data: consData } = await consQuery;
       setConsultants(consData || []);
+      
+      // Load missions
+      let missQuery = supabase.from('missions').select('*').is('deleted_at', null);
+      const { data: missData } = await missQuery;
+      setMissions(missData || []);
       
       // Load customer meetings
       let meetQuery = supabase.from('customer_meetings').select('*');
@@ -308,6 +374,11 @@ export function DashboardPage() {
       }
       const { data: meetData } = await meetQuery;
       setMeetings(meetData || []);
+      
+      // Load customer assessments
+      let assessQuery = supabase.from('customer_assessments').select('*');
+      const { data: assessData } = await assessQuery;
+      setAssessments(assessData || []);
       
       // Load managers for director view
       if (isDirectorView && !selectedManagerId) {
@@ -334,26 +405,33 @@ export function DashboardPage() {
 
   // Calculate stats
   const stats = useMemo(() => {
-    const semesterStart = semesterRange.start.toISOString();
-    const semesterEnd = semesterRange.end.toISOString();
+    if (!currentSemester) return null;
     
+    const semesterStart = currentSemester.start.toISOString().split('T')[0];
+    const semesterEnd = currentSemester.end.toISOString().split('T')[0];
+    
+    // Filter to semester
     const semesterInterviews = interviews.filter(i => 
-      i.scheduled_at && i.scheduled_at >= semesterStart.split('T')[0] && 
-      i.scheduled_at <= semesterEnd.split('T')[0]
+      i.scheduled_at && i.scheduled_at >= semesterStart && i.scheduled_at <= semesterEnd
     );
     
     const semesterMeetings = meetings.filter(m => 
-      m.meeting_date >= semesterStart.split('T')[0] && 
-      m.meeting_date <= semesterEnd.split('T')[0]
+      m.meeting_date >= semesterStart && m.meeting_date <= semesterEnd
     );
     
+    const semesterAssessments = assessments.filter(a => 
+      a.assessment_date >= semesterStart && a.assessment_date <= semesterEnd
+    );
+    
+    // Interview counts by stage
     const interviewCounts = {
       phone: semesterInterviews.filter(i => i.stage === 'phone_qualification').length,
       technical: semesterInterviews.filter(i => i.stage === 'technical_interview').length,
       director: semesterInterviews.filter(i => i.stage === 'director_interview').length,
-      signed: 0, // TODO: count from signed offers
+      signed: 0,
     };
     
+    // Conversions
     const passedPhone = semesterInterviews.filter(i => i.stage === 'phone_qualification' && i.outcome === 'pass').length;
     const passedTech = semesterInterviews.filter(i => i.stage === 'technical_interview' && i.outcome === 'pass').length;
     const passedDirector = semesterInterviews.filter(i => i.stage === 'director_interview' && i.outcome === 'pass').length;
@@ -364,17 +442,19 @@ export function DashboardPage() {
       directorToSigned: interviewCounts.director > 0 ? Math.round((passedDirector / interviewCounts.director) * 100) : 0,
     };
     
-    const interviewsByWeek = semesterWeeks.map(w => {
+    // Weekly data for charts - Phone interviews
+    const phoneByWeek = semesterWeeks.map(w => {
       const weekEnd = new Date(w.start);
       weekEnd.setDate(weekEnd.getDate() + 6);
       const count = semesterInterviews.filter(i => {
-        if (!i.scheduled_at) return false;
+        if (!i.scheduled_at || i.stage !== 'phone_qualification') return false;
         const d = new Date(i.scheduled_at);
         return d >= w.start && d <= weekEnd;
       }).length;
       return { week: w.label, value: count };
     });
     
+    // Customer meetings by week
     const meetingsByWeek = semesterWeeks.map(w => {
       const weekEnd = new Date(w.start);
       weekEnd.setDate(weekEnd.getDate() + 6);
@@ -385,7 +465,18 @@ export function DashboardPage() {
       return { week: w.label, value: count };
     });
     
-    // Filter out soft-deleted requirements
+    // Customer assessments (presentations) by week
+    const assessmentsByWeek = semesterWeeks.map(w => {
+      const weekEnd = new Date(w.start);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const count = semesterAssessments.filter(a => {
+        const d = new Date(a.assessment_date);
+        return d >= w.start && d <= weekEnd;
+      }).length;
+      return { week: w.label, value: count };
+    });
+    
+    // Requirements stats
     const nonDeletedRequirements = requirements.filter(r => !r.deleted_at);
     const activeRequirements = nonDeletedRequirements.filter(r => 
       r.status === 'active' || r.status === 'opportunity'
@@ -393,23 +484,27 @@ export function DashboardPage() {
     const wonRequirements = nonDeletedRequirements.filter(r => r.status === 'won' || r.status === 'filled');
     const lostRequirements = nonDeletedRequirements.filter(r => r.status === 'lost');
     
-    const activeConsultants = consultants.filter(c => c.status === 'in_mission').length;
+    // Consultant stats
+    const totalConsultants = consultants.length;
     const benchConsultants = consultants.filter(c => c.status === 'bench').length;
+    const totalMissions = missions.filter(m => !m.end_date || new Date(m.end_date) >= new Date()).length;
     
     return {
       interviewCounts,
       conversions,
-      interviewsByWeek,
+      phoneByWeek,
       meetingsByWeek,
+      assessmentsByWeek,
       activeRequirements,
       wonRequirements,
       lostRequirements,
-      totalInterviews: semesterInterviews.length,
-      totalMeetings: semesterMeetings.length,
-      activeConsultants,
+      totalConsultants,
       benchConsultants,
+      totalMissions,
+      totalMeetings: semesterMeetings.length,
+      totalAssessments: semesterAssessments.length,
     };
-  }, [interviews, meetings, requirements, consultants, semesterRange, semesterWeeks]);
+  }, [interviews, meetings, assessments, requirements, consultants, missions, currentSemester, semesterWeeks]);
 
   // Approval handlers
   const handleApproveRequest = async (requestId: string) => {
@@ -471,6 +566,22 @@ export function DashboardPage() {
   const isDirectorView = (permissions.isDirector || permissions.isAdmin) && !selectedManagerId;
   const totalPendingApprovals = pendingApprovals.length + pendingOffers.length;
 
+  const handlePrevSemester = () => {
+    const currentIndex = semesterOptions.findIndex(s => s.value === selectedSemester);
+    if (currentIndex < semesterOptions.length - 1) {
+      setSelectedSemester(semesterOptions[currentIndex + 1].value);
+    }
+  };
+
+  const handleNextSemester = () => {
+    const currentIndex = semesterOptions.findIndex(s => s.value === selectedSemester);
+    if (currentIndex > 0) {
+      setSelectedSemester(semesterOptions[currentIndex - 1].value);
+    }
+  };
+
+  if (!stats) return null;
+
   return (
     <div className="min-h-screen">
       <Header
@@ -478,7 +589,7 @@ export function DashboardPage() {
         subtitle={
           selectedManagerId 
             ? `Viewing: ${managers.find(m => m.id === selectedManagerId)?.full_name || 'Manager'}`
-            : `${semesterRange.label} Performance`
+            : 'Dashboard'
         }
         actions={
           selectedManagerId ? (
@@ -578,70 +689,87 @@ export function DashboardPage() {
               </Card>
             )}
 
-            {/* Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <StatCard title="Active Requirements" value={stats.activeRequirements.length} icon={Target} colour="cyan" onClick={() => navigate('/requirements')} />
-              <StatCard title="Won" value={stats.wonRequirements.length} icon={CheckCircle} colour="green" />
-              <StatCard title="Lost" value={stats.lostRequirements.length} icon={XCircle} colour="red" />
-              <StatCard title="Interviews" value={stats.totalInterviews} icon={Calendar} colour="purple" />
-              <StatCard title="Active Consultants" value={stats.activeConsultants} icon={UserCheck} colour="green" />
-              <StatCard title="On Bench" value={stats.benchConsultants} icon={Clock} colour="amber" />
+            {/* Top 3 Big Numbers */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <BigNumberCard 
+                title="Total Missions" 
+                value={stats.totalMissions} 
+                icon={Briefcase} 
+                colour="cyan" 
+              />
+              <BigNumberCard 
+                title="Total Consultants" 
+                value={stats.totalConsultants} 
+                icon={Users} 
+                colour="green" 
+              />
+              <BigNumberCard 
+                title="On Bench" 
+                value={stats.benchConsultants} 
+                icon={Clock} 
+                colour="amber" 
+              />
             </div>
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Requirements List */}
-              <Card className="lg:col-span-1">
+              {/* Left: Requirements Block */}
+              <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle>Active Requirements ({stats.activeRequirements.length})</CardTitle>
+                    <CardTitle>Requirements</CardTitle>
                     <Button variant="ghost" size="sm" onClick={() => navigate('/requirements')}>View All</Button>
                   </div>
                 </CardHeader>
-                <div className="space-y-2 max-h-80 overflow-y-auto">
+                
+                {/* Stats Row */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-cyan-500" />
+                    <span className="text-sm text-brand-grey-600">Active: {stats.activeRequirements.length}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span className="text-sm text-brand-grey-600">Won: {stats.wonRequirements.length}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500" />
+                    <span className="text-sm text-brand-grey-600">Lost: {stats.lostRequirements.length}</span>
+                  </div>
+                </div>
+                
+                {/* Requirements List */}
+                <div className="space-y-2 max-h-48 overflow-y-auto mb-4">
                   {stats.activeRequirements.length > 0 ? (
-                    stats.activeRequirements.slice(0, 10).map(req => (
+                    stats.activeRequirements.slice(0, 5).map(req => (
                       <div 
                         key={req.id} 
-                        className="p-3 border border-brand-grey-200 rounded-lg hover:bg-brand-grey-50 cursor-pointer"
+                        className="p-2 border border-brand-grey-200 rounded-lg hover:bg-brand-grey-50 cursor-pointer"
                         onClick={() => navigate(`/requirements/${req.id}`)}
                       >
-                        <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-brand-slate-900 truncate">{req.title || req.reference_id}</span>
-                          <Badge variant={req.status === 'active' ? 'green' : 'amber'} className="text-xs">{req.status}</Badge>
+                          <Badge variant="cyan" className="text-xs">{req.status}</Badge>
                         </div>
-                        <p className="text-xs text-brand-grey-500">{req.reference_id}</p>
                       </div>
                     ))
                   ) : (
                     <p className="text-sm text-brand-grey-400 text-center py-4">No active requirements</p>
                   )}
                 </div>
+                
+                {/* Mini Conversion Funnel */}
+                <MiniConversionFunnel 
+                  meetings={stats.totalMeetings}
+                  presentations={stats.totalAssessments}
+                  projects={stats.wonRequirements.length}
+                />
               </Card>
 
-              {/* Middle Column: Charts */}
-              <Card className="lg:col-span-1">
+              {/* Centre: Interview Funnel */}
+              <Card>
                 <CardHeader>
-                  <CardTitle>Activity This Semester</CardTitle>
-                </CardHeader>
-                <div className="space-y-6">
-                  <WeeklyChart 
-                    data={stats.interviewsByWeek} 
-                    title="Interviews per Week" 
-                    colour="#06b6d4"
-                  />
-                  <WeeklyChart 
-                    data={stats.meetingsByWeek} 
-                    title="Customer Meetings per Week" 
-                    colour="#8b5cf6"
-                  />
-                </div>
-              </Card>
-
-              {/* Right Column: Funnel */}
-              <Card className="lg:col-span-1">
-                <CardHeader>
-                  <CardTitle>Interview Funnel</CardTitle>
+                  <CardTitle className="text-center">Interview Funnel</CardTitle>
                 </CardHeader>
                 <InterviewFunnel 
                   data={{
@@ -650,30 +778,49 @@ export function DashboardPage() {
                   }}
                 />
               </Card>
-            </div>
 
-            {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="bg-green-50 border-green-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-green-800">Add New Candidate</h3>
-                    <p className="text-sm text-green-600">Start building your talent pipeline</p>
+              {/* Right: 3 KPI Charts */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Weekly Activity</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={handlePrevSemester}
+                        disabled={semesterOptions.findIndex(s => s.value === selectedSemester) >= semesterOptions.length - 1}
+                        className="p-1 hover:bg-brand-grey-100 rounded disabled:opacity-30"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-sm font-medium text-brand-slate-700 min-w-[70px] text-center">
+                        {currentSemester?.label}
+                      </span>
+                      <button 
+                        onClick={handleNextSemester}
+                        disabled={semesterOptions.findIndex(s => s.value === selectedSemester) <= 0}
+                        className="p-1 hover:bg-brand-grey-100 rounded disabled:opacity-30"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                  <Button variant="success" leftIcon={<Plus className="h-4 w-4" />} onClick={() => navigate('/candidates')}>
-                    Add Candidate
-                  </Button>
-                </div>
-              </Card>
-              <Card className="bg-cyan-50 border-cyan-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-cyan-800">Create Requirement</h3>
-                    <p className="text-sm text-cyan-600">Define a new customer need</p>
-                  </div>
-                  <Button variant="accent" leftIcon={<Plus className="h-4 w-4" />} onClick={() => navigate('/requirements')}>
-                    New Requirement
-                  </Button>
+                </CardHeader>
+                <div className="space-y-6">
+                  <WeeklyChart 
+                    data={stats.phoneByWeek} 
+                    title="Phone Interviews" 
+                    colour="#06b6d4"
+                  />
+                  <WeeklyChart 
+                    data={stats.meetingsByWeek} 
+                    title="Customer Meetings" 
+                    colour="#8b5cf6"
+                  />
+                  <WeeklyChart 
+                    data={stats.assessmentsByWeek} 
+                    title="Customer Assessments" 
+                    colour="#f59e0b"
+                  />
                 </div>
               </Card>
             </div>
