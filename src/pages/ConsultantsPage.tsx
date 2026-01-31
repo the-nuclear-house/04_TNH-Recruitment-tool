@@ -15,6 +15,7 @@ import {
   Briefcase,
   ArrowLeft,
   Clock,
+  Trash2,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -27,8 +28,11 @@ import {
   Avatar,
   EmptyState,
 } from '@/components/ui';
+import { ConfirmDialog } from '@/components/ui/Modal';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
+import { useAuthStore } from '@/lib/stores/auth-store';
+import { usePermissions } from '@/hooks/usePermissions';
 import { consultantsService, type DbConsultant } from '@/lib/services';
 import type { BadgeVariant } from '@/components/ui/Badge';
 
@@ -268,9 +272,13 @@ export function ConsultantProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuthStore();
+  const permissions = usePermissions();
   
   const [consultant, setConsultant] = useState<DbConsultant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -288,6 +296,20 @@ export function ConsultantProfilePage() {
       toast.error('Error', 'Failed to load consultant');
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await consultantsService.delete(id!, user?.id);
+      toast.success('Consultant Deleted', 'The consultant has been deleted');
+      navigate('/consultants');
+    } catch (error) {
+      console.error('Error deleting consultant:', error);
+      toast.error('Error', 'Failed to delete consultant');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -327,13 +349,24 @@ export function ConsultantProfilePage() {
       <Header
         title="Consultant Profile"
         actions={
-          <Button
-            variant="ghost"
-            leftIcon={<ArrowLeft className="h-4 w-4" />}
-            onClick={() => navigate('/consultants')}
-          >
-            Back
-          </Button>
+          <div className="flex items-center gap-2">
+            {permissions.isAdmin && (
+              <Button
+                variant="danger"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              leftIcon={<ArrowLeft className="h-4 w-4" />}
+              onClick={() => navigate('/consultants')}
+            >
+              Back
+            </Button>
+          </div>
         }
       />
 
@@ -540,6 +573,19 @@ export function ConsultantProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete Consultant"
+        message={`Are you sure you want to delete ${consultant.first_name} ${consultant.last_name} (${consultant.reference_id})? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

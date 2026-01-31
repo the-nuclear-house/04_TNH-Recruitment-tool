@@ -14,6 +14,7 @@ import {
   ThumbsDown,
   AlertCircle,
   UserPlus,
+  Trash2,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -24,9 +25,11 @@ import {
   Modal,
   Textarea,
 } from '@/components/ui';
+import { ConfirmDialog } from '@/components/ui/Modal';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
+import { usePermissions } from '@/hooks/usePermissions';
 import { offersService, usersService, candidatesService, consultantsService, type DbOffer } from '@/lib/services';
 
 const statusConfig: Record<string, { label: string; colour: string; icon: typeof Clock }> = {
@@ -47,6 +50,7 @@ export function ContractsPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const permissions = usePermissions();
   
   // Approval modal
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
@@ -54,6 +58,11 @@ export function ContractsPage() {
   const [approvalAction, setApprovalAction] = useState<'approve' | 'reject' | null>(null);
   const [approvalNotes, setApprovalNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Delete confirmation
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [offerToDelete, setOfferToDelete] = useState<DbOffer | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -73,6 +82,23 @@ export function ContractsPage() {
       toast.error('Error', 'Failed to load contracts data');
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleDeleteOffer = async () => {
+    if (!offerToDelete) return;
+    setIsDeleting(true);
+    try {
+      await offersService.delete(offerToDelete.id, user?.id);
+      toast.success('Offer Deleted', 'The offer has been deleted');
+      setIsDeleteDialogOpen(false);
+      setOfferToDelete(null);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting offer:', error);
+      toast.error('Error', 'Failed to delete offer');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -456,6 +482,20 @@ export function ContractsPage() {
                           View Consultant Profile
                         </Button>
                       )}
+                      
+                      {permissions.isAdmin && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          leftIcon={<Trash2 className="h-4 w-4" />}
+                          onClick={() => {
+                            setOfferToDelete(offer);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -464,6 +504,19 @@ export function ContractsPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => { setIsDeleteDialogOpen(false); setOfferToDelete(null); }}
+        onConfirm={handleDeleteOffer}
+        title="Delete Offer"
+        message={`Are you sure you want to delete this offer for ${offerToDelete?.candidate_full_name}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
 
       {/* Approval Modal */}
       <Modal

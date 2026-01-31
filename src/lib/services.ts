@@ -1768,6 +1768,7 @@ export const offersService = {
         requester:users!offers_requested_by_fkey(*),
         approver:users!offers_approver_id_fkey(*)
       `)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -1785,6 +1786,7 @@ export const offersService = {
         approver:users!offers_approver_id_fkey(*)
       `)
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (error) throw error;
@@ -1800,6 +1802,7 @@ export const offersService = {
         requirement:requirements(*)
       `)
       .eq('candidate_id', candidateId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -1935,10 +1938,13 @@ export const offersService = {
     return data;
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, deletedBy?: string): Promise<void> {
     const { error } = await supabase
       .from('offers')
-      .delete()
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: deletedBy,
+      })
       .eq('id', id);
 
     if (error) throw error;
@@ -1958,7 +1964,7 @@ export const consultantsService = {
         candidate:candidates(*),
         assigned_manager:users!consultants_assigned_manager_id_fkey(*)
       `)
-      .is('terminated_at', null)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -1974,6 +1980,7 @@ export const consultantsService = {
         assigned_manager:users!consultants_assigned_manager_id_fkey(*)
       `)
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (error) throw error;
@@ -1989,6 +1996,7 @@ export const consultantsService = {
         assigned_manager:users!consultants_assigned_manager_id_fkey(*)
       `)
       .eq('reference_id', referenceId)
+      .is('deleted_at', null)
       .single();
 
     if (error) throw error;
@@ -2004,6 +2012,7 @@ export const consultantsService = {
         assigned_manager:users!consultants_assigned_manager_id_fkey(*)
       `)
       .eq('candidate_id', candidateId)
+      .is('deleted_at', null)
       .single();
 
     if (error) return null; // May not exist
@@ -2088,5 +2097,17 @@ export const consultantsService = {
     await candidatesService.update(candidateId, { status: 'converted_to_consultant' });
 
     return consultant;
+  },
+
+  async delete(id: string, deletedBy?: string): Promise<void> {
+    const { error } = await supabase
+      .from('consultants')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: deletedBy,
+      })
+      .eq('id', id);
+
+    if (error) throw error;
   },
 };
