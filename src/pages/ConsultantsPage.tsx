@@ -1345,18 +1345,27 @@ export function ConsultantProfilePage() {
             {/* Career Management Section */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Employee Career Management</CardTitle>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    leftIcon={<Plus className="h-4 w-4" />}
-                    onClick={() => setIsBookMeetingModalOpen(true)}
-                  >
-                    Schedule Meeting
-                  </Button>
-                </div>
+                <CardTitle>Employee Career Management</CardTitle>
               </CardHeader>
+
+              {/* Quick Action - Schedule Meeting */}
+              {consultant.status !== 'terminated' && (
+                <div 
+                  className="mb-6 p-4 bg-gradient-to-r from-brand-cyan/10 to-brand-cyan/5 border border-brand-cyan/20 rounded-xl cursor-pointer hover:from-brand-cyan/20 hover:to-brand-cyan/10 transition-all group"
+                  onClick={() => setIsBookMeetingModalOpen(true)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-brand-cyan rounded-xl text-white group-hover:scale-110 transition-transform">
+                      <Calendar className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-brand-slate-900">Schedule Meeting</h4>
+                      <p className="text-sm text-brand-grey-500">Book an induction, quarterly review, or annual appraisal</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-brand-cyan" />
+                  </div>
+                </div>
+              )}
 
               {/* Scheduled Meetings */}
               {scheduledMeetings.length > 0 && (
@@ -1467,49 +1476,44 @@ export function ConsultantProfilePage() {
             {/* Financial History */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>
-                    {consultant.contract_type === 'contract' ? 'Rate & Bonus History' : 'Salary & Bonus History'}
-                  </CardTitle>
-                  {consultant.status !== 'terminated' && (
-                    <div className="relative">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        leftIcon={<Plus className="h-4 w-4" />}
-                        onClick={() => setIsProcessMenuOpen(!isProcessMenuOpen)}
-                      >
-                        Request Change
-                      </Button>
-                      {isProcessMenuOpen && (
-                        <>
-                          {/* Backdrop to close on click outside */}
-                          <div 
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setIsProcessMenuOpen(false)}
-                          />
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-brand-grey-200 rounded-lg shadow-lg z-20 min-w-[220px]">
-                            <button
-                              className="w-full px-4 py-3 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-3 border-b border-brand-grey-100"
-                              onClick={() => { setIsProcessMenuOpen(false); setIsSalaryIncreaseModalOpen(true); }}
-                            >
-                              <TrendingUp className="h-5 w-5 text-green-600" />
-                              <span>{consultant.contract_type === 'contract' ? 'Request Rate Increase' : 'Request Salary Increase'}</span>
-                            </button>
-                            <button
-                              className="w-full px-4 py-3 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-3"
-                              onClick={() => { setIsProcessMenuOpen(false); setIsBonusModalOpen(true); }}
-                            >
-                              <Gift className="h-5 w-5 text-purple-600" />
-                              <span>Request Bonus Payment</span>
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <CardTitle>
+                  {consultant.contract_type === 'contract' ? 'Rate & Bonus History' : 'Salary & Bonus History'}
+                </CardTitle>
               </CardHeader>
+
+              {/* Quick Actions - Request Changes */}
+              {consultant.status !== 'terminated' && (
+                <div className="mb-6 grid grid-cols-2 gap-3">
+                  <div 
+                    className="p-4 bg-gradient-to-r from-green-50 to-green-50/50 border border-green-200 rounded-xl cursor-pointer hover:from-green-100 hover:to-green-50 transition-all group"
+                    onClick={() => setIsSalaryIncreaseModalOpen(true)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-500 rounded-lg text-white group-hover:scale-110 transition-transform">
+                        <TrendingUp className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-green-800 text-sm">
+                          {consultant.contract_type === 'contract' ? 'Request Rate Increase' : 'Request Salary Increase'}
+                        </h4>
+                      </div>
+                    </div>
+                  </div>
+                  <div 
+                    className="p-4 bg-gradient-to-r from-purple-50 to-purple-50/50 border border-purple-200 rounded-xl cursor-pointer hover:from-purple-100 hover:to-purple-50 transition-all group"
+                    onClick={() => setIsBonusModalOpen(true)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-500 rounded-lg text-white group-hover:scale-110 transition-transform">
+                        <Gift className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-purple-800 text-sm">Request Bonus</h4>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Pending Financial Approvals */}
               {pendingApprovals.filter(r => r.request_type !== 'employee_exit').length > 0 && (
@@ -1584,22 +1588,29 @@ export function ConsultantProfilePage() {
             {/* Exit Employee Section */}
             <Card className={exitRecord ? 'border-red-200 bg-red-50' : ''}>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className={exitRecord ? 'text-red-700' : ''}>
-                    {exitRecord ? 'Exit Completed' : 'Employee Exit'}
-                  </CardTitle>
-                  {!exitRecord && consultant.status !== 'terminated' && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      leftIcon={<LogOut className="h-4 w-4" />}
-                      onClick={() => setIsExitModalOpen(true)}
-                    >
-                      Initiate Exit
-                    </Button>
-                  )}
-                </div>
+                <CardTitle className={exitRecord ? 'text-red-700' : ''}>
+                  {exitRecord ? 'Exit Completed' : 'Employee Exit'}
+                </CardTitle>
               </CardHeader>
+
+              {/* Quick Action - Initiate Exit */}
+              {!exitRecord && consultant.status !== 'terminated' && pendingApprovals.filter(r => r.request_type === 'employee_exit').length === 0 && (
+                <div 
+                  className="mb-4 p-4 bg-gradient-to-r from-red-50 to-red-50/50 border border-red-200 rounded-xl cursor-pointer hover:from-red-100 hover:to-red-50 transition-all group"
+                  onClick={() => setIsExitModalOpen(true)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-red-500 rounded-xl text-white group-hover:scale-110 transition-transform">
+                      <LogOut className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-red-800">Initiate Exit Process</h4>
+                      <p className="text-sm text-red-600">Start the employee exit workflow (requires Director and HR approval)</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-red-400" />
+                  </div>
+                </div>
+              )}
 
               {/* Pending Exit Request */}
               {pendingApprovals.filter(r => r.request_type === 'employee_exit').length > 0 && (
@@ -1716,10 +1727,10 @@ export function ConsultantProfilePage() {
                 </div>
               )}
 
-              {/* No exit in progress */}
-              {!exitRecord && pendingApprovals.filter(r => r.request_type === 'employee_exit').length === 0 && consultant.status !== 'terminated' && (
+              {/* No exit in progress - shows when the action card is visible */}
+              {!exitRecord && pendingApprovals.filter(r => r.request_type === 'employee_exit').length === 0 && consultant.status === 'terminated' && (
                 <p className="text-sm text-brand-grey-400">
-                  Use the "Initiate Exit" button to start the employee exit process. This requires Director and HR approval.
+                  This consultant has been terminated.
                 </p>
               )}
             </Card>

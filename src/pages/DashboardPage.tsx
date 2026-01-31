@@ -1,150 +1,236 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Briefcase, 
   Calendar, 
   TrendingUp,
-  TrendingDown,
   Plus,
-  ArrowRight,
   CheckCircle,
   XCircle,
   FileText,
   AlertCircle,
-  Star,
+  ChevronRight,
+  Clock,
+  UserCheck,
   Target,
   Building2,
-  Clock,
   Award,
-  ChevronRight,
-  Ticket,
-  Play,
-  UserCheck,
-  Filter,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
-import { Card, CardHeader, CardTitle, Button, Badge, Avatar, Select, Modal, Textarea } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Button, Badge, Avatar } from '@/components/ui';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
-  candidatesService, 
-  requirementsService, 
+  requirementsService,
   interviewsService, 
   offersService,
   approvalRequestsService,
-  hrTicketsService,
-  dashboardStatsService,
   consultantsService,
   type DbApprovalRequest,
   type DbOffer,
-  type DbHrTicket,
+  type DbRequirement,
+  type DbInterview,
+  type DbConsultant,
   type SalaryIncreaseData,
   type BonusPaymentData,
   type EmployeeExitData,
 } from '@/lib/services';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
+import { supabase } from '@/lib/supabase';
 
-// Period options for filtering
-const periodOptions = [
-  { value: 'week', label: 'This Week' },
-  { value: 'month', label: 'This Month' },
-  { value: 'semester', label: 'This Semester' },
-  { value: 'year', label: 'This Year' },
-  { value: 'all', label: 'All Time' },
-];
-
-function getDateRange(period: string): { from: string; to: string } | null {
+// Get current semester range
+function getSemesterRange(): { start: Date; end: Date; label: string } {
   const now = new Date();
-  const to = now.toISOString();
+  const year = now.getFullYear();
+  const month = now.getMonth();
   
-  switch (period) {
-    case 'week':
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - 7);
-      return { from: weekStart.toISOString(), to };
-    case 'month':
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from: monthStart.toISOString(), to };
-    case 'semester':
-      const semesterMonth = now.getMonth() < 6 ? 0 : 6;
-      const semesterStart = new Date(now.getFullYear(), semesterMonth, 1);
-      return { from: semesterStart.toISOString(), to };
-    case 'year':
-      const yearStart = new Date(now.getFullYear(), 0, 1);
-      return { from: yearStart.toISOString(), to };
-    default:
-      return null;
+  if (month < 6) {
+    return {
+      start: new Date(year, 0, 1),
+      end: new Date(year, 5, 30),
+      label: `H1 ${year} (Jan-Jun)`
+    };
+  } else {
+    return {
+      start: new Date(year, 6, 1),
+      end: new Date(year, 11, 31),
+      label: `H2 ${year} (Jul-Dec)`
+    };
   }
 }
 
-// Simple bar chart component
-function BarChart({ data, title }: { data: { label: string; value: number }[]; title: string }) {
+// Get ISO week number
+function getWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+// Generate weeks for semester
+function getSemesterWeeks(): { week: number; label: string; start: Date }[] {
+  const { start, end } = getSemesterRange();
+  const weeks: { week: number; label: string; start: Date }[] = [];
+  
+  const current = new Date(start);
+  current.setDate(current.getDate() - current.getDay() + 1);
+  
+  while (current <= end) {
+    const weekNum = getWeekNumber(current);
+    weeks.push({
+      week: weekNum,
+      label: `W${weekNum}`,
+      start: new Date(current)
+    });
+    current.setDate(current.getDate() + 7);
+  }
+  
+  return weeks;
+}
+
+// Visual Funnel Component
+function InterviewFunnel({ data }: { 
+  data: { 
+    phone: number; 
+    technical: number; 
+    director: number; 
+    customer: number; 
+    signed: number;
+    conversions: {
+      phoneToTech: number;
+      techToDirector: number;
+      directorToCustomer: number;
+      customerToSigned: number;
+    }
+  } 
+}) {
+  const stages = [
+    { label: 'Phone', value: data.phone, conversion: data.conversions.phoneToTech },
+    { label: 'Technical', value: data.technical, conversion: data.conversions.techToDirector },
+    { label: 'Director', value: data.director, conversion: data.conversions.directorToCustomer },
+    { label: 'Customer', value: data.customer, conversion: data.conversions.customerToSigned },
+    { label: 'Signed', value: data.signed },
+  ];
+  
+  const maxValue = Math.max(...stages.map(s => s.value), 1);
+  
+  return (
+    <div className="flex flex-col items-center py-2">
+      {stages.map((stage, idx) => {
+        const widthPercent = Math.max((stage.value / maxValue) * 100, 25);
+        const isLast = idx === stages.length - 1;
+        
+        return (
+          <div key={stage.label} className="w-full flex flex-col items-center">
+            <div 
+              className="relative flex items-center justify-center py-2.5 text-white font-medium text-sm transition-all"
+              style={{
+                width: `${widthPercent}%`,
+                background: `linear-gradient(135deg, ${
+                  idx === 0 ? '#06b6d4' : 
+                  idx === 1 ? '#0891b2' : 
+                  idx === 2 ? '#0e7490' : 
+                  idx === 3 ? '#155e75' : '#134e4a'
+                } 0%, ${
+                  idx === 0 ? '#0891b2' : 
+                  idx === 1 ? '#0e7490' : 
+                  idx === 2 ? '#155e75' : 
+                  idx === 3 ? '#134e4a' : '#115e59'
+                } 100%)`,
+                clipPath: isLast 
+                  ? 'polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%)'
+                  : 'polygon(0% 0%, 92% 0%, 100% 50%, 92% 100%, 0% 100%)',
+                minHeight: '40px',
+              }}
+            >
+              <span className="z-10">{stage.label}: {stage.value}</span>
+            </div>
+            {stage.conversion !== undefined && (
+              <div className="text-xs text-brand-grey-500 py-0.5">
+                ↓ {stage.conversion}%
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Weekly Bar Chart Component
+function WeeklyChart({ 
+  data, 
+  title, 
+  colour = '#06b6d4' 
+}: { 
+  data: { week: string; value: number }[]; 
+  title: string;
+  colour?: string;
+}) {
   const maxValue = Math.max(...data.map(d => d.value), 1);
+  const currentWeek = getWeekNumber(new Date());
   
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-medium text-brand-slate-700">{title}</h4>
-      <div className="space-y-1">
-        {data.map((item, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <span className="text-xs text-brand-grey-500 w-12">{item.label}</span>
-            <div className="flex-1 h-4 bg-brand-grey-100 rounded overflow-hidden">
+      <div className="flex items-end gap-0.5 h-24">
+        {data.map((item, idx) => {
+          const height = (item.value / maxValue) * 100;
+          const weekNum = parseInt(item.week.replace('W', ''));
+          const isCurrent = weekNum === currentWeek;
+          
+          return (
+            <div 
+              key={idx} 
+              className="flex-1 flex flex-col items-center"
+              title={`${item.week}: ${item.value}`}
+            >
+              <span className="text-[8px] text-brand-grey-500 mb-0.5">{item.value > 0 ? item.value : ''}</span>
               <div 
-                className="h-full bg-brand-cyan rounded transition-all"
-                style={{ width: `${(item.value / maxValue) * 100}%` }}
+                className={`w-full rounded-t transition-all ${isCurrent ? 'ring-2 ring-amber-400' : ''}`}
+                style={{ 
+                  height: `${Math.max(height, 2)}%`,
+                  backgroundColor: item.value > 0 ? colour : '#f3f4f6',
+                  minHeight: '2px'
+                }}
               />
             </div>
-            <span className="text-xs font-medium text-brand-slate-700 w-8 text-right">{item.value}</span>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+      <div className="flex gap-0.5">
+        {data.map((item, idx) => {
+          const weekNum = parseInt(item.week.replace('W', ''));
+          const isCurrent = weekNum === currentWeek;
+          return (
+            <div key={idx} className="flex-1 text-center">
+              <span className={`text-[7px] ${isCurrent ? 'text-amber-600 font-bold' : 'text-brand-grey-400'}`}>
+                {item.week}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// Funnel chart component
-function FunnelChart({ stages }: { stages: { label: string; value: number; conversion?: number }[] }) {
-  const maxValue = Math.max(...stages.map(s => s.value), 1);
-  
-  return (
-    <div className="space-y-2">
-      {stages.map((stage, idx) => (
-        <div key={idx} className="relative">
-          <div className="flex items-center gap-3">
-            <div 
-              className="h-10 bg-gradient-to-r from-brand-cyan to-brand-cyan/60 rounded flex items-center justify-between px-3 transition-all"
-              style={{ width: `${Math.max((stage.value / maxValue) * 100, 30)}%` }}
-            >
-              <span className="text-sm font-medium text-white">{stage.label}</span>
-              <span className="text-sm font-bold text-white">{stage.value}</span>
-            </div>
-            {stage.conversion !== undefined && (
-              <span className="text-xs text-brand-grey-500">{stage.conversion}% →</span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Stat card with trend
+// Stat Card
 function StatCard({ 
   title, 
   value, 
   icon: Icon, 
-  trend, 
+  colour = 'cyan',
   onClick,
-  colour = 'cyan'
 }: { 
   title: string; 
   value: number | string; 
-  icon: any; 
-  trend?: number;
-  onClick?: () => void;
+  icon: any;
   colour?: 'cyan' | 'green' | 'amber' | 'red' | 'purple';
+  onClick?: () => void;
 }) {
   const colours = {
     cyan: 'bg-brand-cyan/10 text-brand-cyan',
@@ -159,59 +245,16 @@ function StatCard({
       className={`${onClick ? 'cursor-pointer hover:shadow-md' : ''} transition-shadow`}
       onClick={onClick}
     >
-      <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-xl ${colours[colour]}`}>
-          <Icon className="h-6 w-6" />
+      <div className="flex items-center gap-3">
+        <div className={`p-2.5 rounded-xl ${colours[colour]}`}>
+          <Icon className="h-5 w-5" />
         </div>
-        <div className="flex-1">
-          <p className="text-2xl font-bold text-brand-slate-900">{value}</p>
-          <p className="text-sm text-brand-grey-400">{title}</p>
+        <div>
+          <p className="text-xl font-bold text-brand-slate-900">{value}</p>
+          <p className="text-xs text-brand-grey-400">{title}</p>
         </div>
-        {trend !== undefined && (
-          <div className={`flex items-center gap-1 ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {trend >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-            <span className="text-sm font-medium">{Math.abs(trend)}%</span>
-          </div>
-        )}
       </div>
     </Card>
-  );
-}
-
-// Gauge/Progress component
-function Gauge({ value, max, label, colour = 'cyan' }: { value: number; max: number; label: string; colour?: string }) {
-  const percentage = max > 0 ? (value / max) * 100 : 0;
-  
-  return (
-    <div className="text-center">
-      <div className="relative w-20 h-20 mx-auto">
-        <svg className="w-20 h-20 transform -rotate-90">
-          <circle
-            className="text-brand-grey-200"
-            strokeWidth="8"
-            stroke="currentColor"
-            fill="transparent"
-            r="32"
-            cx="40"
-            cy="40"
-          />
-          <circle
-            className="text-brand-cyan"
-            strokeWidth="8"
-            stroke="currentColor"
-            fill="transparent"
-            r="32"
-            cx="40"
-            cy="40"
-            strokeDasharray={`${percentage * 2.01} 999`}
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-lg font-bold text-brand-slate-900">{value}</span>
-        </div>
-      </div>
-      <p className="text-xs text-brand-grey-500 mt-1">{label}</p>
-    </div>
   );
 }
 
@@ -221,74 +264,74 @@ export function DashboardPage() {
   const permissions = usePermissions();
   const toast = useToast();
   
-  const [period, setPeriod] = useState('month');
   const [isLoading, setIsLoading] = useState(true);
   
-  // Manager stats
-  const [managerStats, setManagerStats] = useState<any>(null);
+  // Data
+  const [requirements, setRequirements] = useState<DbRequirement[]>([]);
+  const [interviews, setInterviews] = useState<DbInterview[]>([]);
+  const [consultants, setConsultants] = useState<DbConsultant[]>([]);
+  const [meetings, setMeetings] = useState<any[]>([]);
+  const [managers, setManagers] = useState<any[]>([]);
   
-  // Recruiter stats
-  const [recruiterStats, setRecruiterStats] = useState<any>(null);
-  
-  // Director stats
-  const [directorStats, setDirectorStats] = useState<any>(null);
+  // Director specific
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
-  
-  // HR tickets
-  const [hrTickets, setHrTickets] = useState<DbHrTicket[]>([]);
-  const [selectedTicket, setSelectedTicket] = useState<DbHrTicket | null>(null);
-  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
-  const [completionNotes, setCompletionNotes] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Approvals
   const [pendingApprovals, setPendingApprovals] = useState<DbApprovalRequest[]>([]);
   const [pendingOffers, setPendingOffers] = useState<DbOffer[]>([]);
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
 
+  const semesterRange = getSemesterRange();
+  const semesterWeeks = getSemesterWeeks();
+
   useEffect(() => {
     loadDashboardData();
-  }, [period, selectedManagerId]);
+  }, [selectedManagerId]);
 
   const loadDashboardData = async () => {
     try {
       setIsLoading(true);
-      const dateRange = getDateRange(period);
       
-      // Load based on role
-      if (permissions.isManager && !permissions.isDirector) {
-        const stats = await dashboardStatsService.getManagerStats(
-          user!.id,
-          dateRange?.from,
-          dateRange?.to
-        );
-        setManagerStats(stats);
+      const isDirectorView = permissions.isDirector || permissions.isAdmin;
+      const targetManagerId = selectedManagerId || (isDirectorView ? null : user?.id);
+      
+      // Load requirements
+      let reqQuery = supabase.from('requirements').select('*');
+      if (targetManagerId) {
+        reqQuery = reqQuery.eq('manager_id', targetManagerId);
       }
+      const { data: reqData } = await reqQuery;
+      setRequirements(reqData || []);
       
-      if (permissions.isRecruiter && !permissions.isManager && !permissions.isDirector) {
-        const stats = await dashboardStatsService.getRecruiterStats(
-          user!.id,
-          dateRange?.from,
-          dateRange?.to
-        );
-        setRecruiterStats(stats);
+      // Load interviews
+      let intQuery = supabase.from('interviews').select('*');
+      if (targetManagerId) {
+        intQuery = intQuery.eq('interviewer_id', targetManagerId);
       }
+      const { data: intData } = await intQuery;
+      setInterviews(intData || []);
       
-      if (permissions.isDirector || permissions.isAdmin) {
-        const stats = await dashboardStatsService.getDirectorStats(user!.id);
-        setDirectorStats(stats);
+      // Load consultants
+      const { data: consData } = await supabase
+        .from('consultants')
+        .select('*')
+        .is('deleted_at', null);
+      setConsultants(consData || []);
+      
+      // Load customer meetings
+      let meetQuery = supabase.from('customer_meetings').select('*');
+      if (targetManagerId) {
+        meetQuery = meetQuery.eq('created_by', targetManagerId);
+      }
+      const { data: meetData } = await meetQuery;
+      setMeetings(meetData || []);
+      
+      // Load managers for director view
+      if (isDirectorView && !selectedManagerId) {
+        const { data: usersData } = await supabase
+          .from('users')
+          .select('*')
+          .contains('roles', ['manager']);
+        setManagers(usersData || []);
         
-        // If viewing a specific manager
-        if (selectedManagerId) {
-          const mgrStats = await dashboardStatsService.getManagerStats(
-            selectedManagerId,
-            dateRange?.from,
-            dateRange?.to
-          );
-          setManagerStats(mgrStats);
-        }
-        
-        // Load approvals
         const [approvals, offers] = await Promise.all([
           approvalRequestsService.getPendingForDirector(),
           offersService.getPendingApprovals(user!.id),
@@ -297,18 +340,91 @@ export function DashboardPage() {
         setPendingOffers(offers);
       }
       
-      // HR users see tickets
-      if (permissions.isHR || permissions.isAdmin) {
-        const tickets = await hrTicketsService.getPending();
-        setHrTickets(tickets);
-      }
-      
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    const semesterStart = semesterRange.start.toISOString();
+    const semesterEnd = semesterRange.end.toISOString();
+    
+    const semesterInterviews = interviews.filter(i => 
+      i.scheduled_at && i.scheduled_at >= semesterStart.split('T')[0] && 
+      i.scheduled_at <= semesterEnd.split('T')[0]
+    );
+    
+    const semesterMeetings = meetings.filter(m => 
+      m.meeting_date >= semesterStart.split('T')[0] && 
+      m.meeting_date <= semesterEnd.split('T')[0]
+    );
+    
+    const interviewCounts = {
+      phone: semesterInterviews.filter(i => i.stage === 'phone_qualification').length,
+      technical: semesterInterviews.filter(i => i.stage === 'technical_interview').length,
+      director: semesterInterviews.filter(i => i.stage === 'director_interview').length,
+      customer: 0,
+      signed: 0,
+    };
+    
+    const passedPhone = semesterInterviews.filter(i => i.stage === 'phone_qualification' && i.outcome === 'pass').length;
+    const passedTech = semesterInterviews.filter(i => i.stage === 'technical_interview' && i.outcome === 'pass').length;
+    const passedDirector = semesterInterviews.filter(i => i.stage === 'director_interview' && i.outcome === 'pass').length;
+    
+    const conversions = {
+      phoneToTech: interviewCounts.phone > 0 ? Math.round((passedPhone / interviewCounts.phone) * 100) : 0,
+      techToDirector: interviewCounts.technical > 0 ? Math.round((passedTech / interviewCounts.technical) * 100) : 0,
+      directorToCustomer: interviewCounts.director > 0 ? Math.round((passedDirector / interviewCounts.director) * 100) : 0,
+      customerToSigned: 0,
+    };
+    
+    const interviewsByWeek = semesterWeeks.map(w => {
+      const weekEnd = new Date(w.start);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const count = semesterInterviews.filter(i => {
+        if (!i.scheduled_at) return false;
+        const d = new Date(i.scheduled_at);
+        return d >= w.start && d <= weekEnd;
+      }).length;
+      return { week: w.label, value: count };
+    });
+    
+    const meetingsByWeek = semesterWeeks.map(w => {
+      const weekEnd = new Date(w.start);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const count = semesterMeetings.filter(m => {
+        const d = new Date(m.meeting_date);
+        return d >= w.start && d <= weekEnd;
+      }).length;
+      return { week: w.label, value: count };
+    });
+    
+    const activeRequirements = requirements.filter(r => 
+      r.status === 'active' || r.status === 'opportunity'
+    );
+    const wonRequirements = requirements.filter(r => r.status === 'won' || r.status === 'filled');
+    const lostRequirements = requirements.filter(r => r.status === 'lost');
+    
+    const activeConsultants = consultants.filter(c => c.status === 'in_mission').length;
+    const benchConsultants = consultants.filter(c => c.status === 'bench').length;
+    
+    return {
+      interviewCounts,
+      conversions,
+      interviewsByWeek,
+      meetingsByWeek,
+      activeRequirements,
+      wonRequirements,
+      lostRequirements,
+      totalInterviews: semesterInterviews.length,
+      totalMeetings: semesterMeetings.length,
+      activeConsultants,
+      benchConsultants,
+    };
+  }, [interviews, meetings, requirements, consultants, semesterRange, semesterWeeks]);
 
   // Approval handlers
   const handleApproveRequest = async (requestId: string) => {
@@ -327,7 +443,6 @@ export function DashboardPage() {
   const handleRejectRequest = async (requestId: string) => {
     const reason = prompt('Please provide a reason for rejection:');
     if (!reason) return;
-    
     setProcessingApproval(requestId);
     try {
       await approvalRequestsService.reject(requestId, user!.id, reason, 'director');
@@ -356,7 +471,6 @@ export function DashboardPage() {
   const handleRejectOffer = async (offerId: string) => {
     const reason = prompt('Please provide a reason for rejection:');
     if (!reason) return;
-    
     setProcessingApproval(offerId);
     try {
       await offersService.reject(offerId, reason);
@@ -369,423 +483,84 @@ export function DashboardPage() {
     }
   };
 
-  // HR Ticket handlers
-  const handleStartTicket = async (ticket: DbHrTicket) => {
-    try {
-      await hrTicketsService.startWork(ticket.id);
-      toast.success('Started', 'Ticket marked as in progress');
-      loadDashboardData();
-    } catch (error) {
-      toast.error('Error', 'Failed to update ticket');
-    }
-  };
-
-  const handleCompleteTicket = async () => {
-    if (!selectedTicket) return;
-    
-    setIsProcessing(true);
-    try {
-      await hrTicketsService.complete(selectedTicket.id, user!.id, completionNotes);
-      toast.success('Completed', 'Ticket has been completed and system updated');
-      setIsTicketModalOpen(false);
-      setSelectedTicket(null);
-      setCompletionNotes('');
-      loadDashboardData();
-    } catch (error) {
-      toast.error('Error', 'Failed to complete ticket');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const ticketTypeLabels: Record<string, string> = {
-    contract_send: 'Send Contract',
-    contract_signed: 'Process Signed Contract',
-    salary_increase: 'Implement Salary Increase',
-    bonus_payment: 'Process Bonus Payment',
-    employee_exit: 'Process Employee Exit',
-  };
-
-  const ticketPriorityColours: Record<string, string> = {
-    low: 'bg-brand-grey-100 text-brand-grey-600',
-    normal: 'bg-blue-100 text-blue-700',
-    high: 'bg-amber-100 text-amber-700',
-    urgent: 'bg-red-100 text-red-700',
-  };
-
-  // Determine which dashboard to show
-  const showManagerDashboard = permissions.isManager || (permissions.isDirector && selectedManagerId);
-  const showRecruiterDashboard = permissions.isRecruiter && !permissions.isManager && !permissions.isDirector;
-  const showDirectorDashboard = (permissions.isDirector || permissions.isAdmin) && !selectedManagerId;
-  const showHRDashboard = permissions.isHR || permissions.isAdmin;
+  const isDirectorView = (permissions.isDirector || permissions.isAdmin) && !selectedManagerId;
+  const totalPendingApprovals = pendingApprovals.length + pendingOffers.length;
 
   return (
     <div className="min-h-screen">
       <Header
         title={`Welcome back, ${user?.full_name?.split(' ')[0] || 'User'}`}
         subtitle={
-          selectedManagerId && directorStats
-            ? `Viewing: ${directorStats.managers.find((m: any) => m.id === selectedManagerId)?.name}`
-            : 'Your performance cockpit'
+          selectedManagerId 
+            ? `Viewing: ${managers.find(m => m.id === selectedManagerId)?.full_name || 'Manager'}`
+            : `${semesterRange.label} Performance`
         }
         actions={
-          selectedManagerId && (
+          selectedManagerId ? (
             <Button variant="ghost" onClick={() => setSelectedManagerId(null)}>
               ← Back to Overview
             </Button>
-          )
+          ) : undefined
         }
       />
 
       <div className="p-6 space-y-6">
-        {/* Period Filter */}
-        {(showManagerDashboard || showRecruiterDashboard) && (
-          <div className="flex items-center gap-4">
-            <Filter className="h-4 w-4 text-brand-grey-400" />
-            <Select
-              options={periodOptions}
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="w-40"
-            />
-          </div>
-        )}
-
         {isLoading ? (
           <Card>
             <div className="text-center py-12 text-brand-grey-400">Loading dashboard...</div>
           </Card>
         ) : (
           <>
-            {/* ============================================ */}
-            {/* DIRECTOR OVERVIEW */}
-            {/* ============================================ */}
-            {showDirectorDashboard && directorStats && (
-              <>
-                {/* Pending Approvals */}
-                {(pendingApprovals.length > 0 || pendingOffers.length > 0) && (
-                  <Card className="border-amber-200 bg-amber-50">
-                    <CardHeader>
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="h-5 w-5 text-amber-600" />
-                        <CardTitle className="text-amber-800">
-                          Pending Approvals ({pendingApprovals.length + pendingOffers.length})
-                        </CardTitle>
-                      </div>
-                    </CardHeader>
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {pendingApprovals.map(request => (
-                        <div key={request.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${
-                              request.request_type === 'salary_increase' ? 'bg-green-100' :
-                              request.request_type === 'bonus_payment' ? 'bg-purple-100' : 'bg-red-100'
-                            }`}>
-                              {request.request_type === 'salary_increase' && <TrendingUp className="h-4 w-4 text-green-600" />}
-                              {request.request_type === 'bonus_payment' && <Award className="h-4 w-4 text-purple-600" />}
-                              {request.request_type === 'employee_exit' && <AlertCircle className="h-4 w-4 text-red-600" />}
-                            </div>
-                            <div>
-                              <p className="font-medium text-brand-slate-900">
-                                {request.request_type === 'salary_increase' && `Salary: £${(request.request_data as SalaryIncreaseData).new_salary.toLocaleString()}`}
-                                {request.request_type === 'bonus_payment' && `Bonus: £${(request.request_data as BonusPaymentData).amount.toLocaleString()}`}
-                                {request.request_type === 'employee_exit' && `Exit: ${(request.request_data as EmployeeExitData).exit_reason}`}
-                              </p>
-                              <p className="text-sm text-brand-grey-500">
-                                {request.consultant?.first_name} {request.consultant?.last_name}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="success" size="sm" leftIcon={<CheckCircle className="h-4 w-4" />} onClick={() => handleApproveRequest(request.id)} isLoading={processingApproval === request.id}>Approve</Button>
-                            <Button variant="danger" size="sm" leftIcon={<XCircle className="h-4 w-4" />} onClick={() => handleRejectRequest(request.id)} isLoading={processingApproval === request.id}>Reject</Button>
-                          </div>
-                        </div>
-                      ))}
-                      {pendingOffers.map(offer => (
-                        <div key={offer.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-cyan-100">
-                              <FileText className="h-4 w-4 text-cyan-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-brand-slate-900">Contract: {offer.job_title}</p>
-                              <p className="text-sm text-brand-grey-500">{offer.candidate?.first_name} {offer.candidate?.last_name}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="success" size="sm" leftIcon={<CheckCircle className="h-4 w-4" />} onClick={() => handleApproveOffer(offer.id)} isLoading={processingApproval === offer.id}>Approve</Button>
-                            <Button variant="danger" size="sm" leftIcon={<XCircle className="h-4 w-4" />} onClick={() => handleRejectOffer(offer.id)} isLoading={processingApproval === offer.id}>Reject</Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
-
-                {/* Business Unit Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <StatCard title="Total Interviews" value={directorStats.totals.interviews} icon={Calendar} colour="cyan" />
-                  <StatCard title="Active Consultants" value={directorStats.totals.consultantsActive} icon={UserCheck} colour="green" />
-                  <StatCard title="On Bench" value={directorStats.totals.consultantsBench} icon={Clock} colour="amber" />
-                  <StatCard title="Pending Approvals" value={directorStats.pendingApprovals} icon={AlertCircle} colour="red" />
-                </div>
-
-                {/* Manager Cards */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Manager Performance</CardTitle>
-                  </CardHeader>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {directorStats.managers.map((manager: any) => (
-                      <div 
-                        key={manager.id}
-                        className="p-4 border border-brand-grey-200 rounded-lg hover:shadow-md cursor-pointer transition-all"
-                        onClick={() => setSelectedManagerId(manager.id)}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <Avatar name={manager.name} size="sm" />
-                            <div>
-                              <p className="font-medium text-brand-slate-900">{manager.name}</p>
-                              <p className="text-xs text-brand-grey-500">Manager</p>
-                            </div>
-                          </div>
-                          <ChevronRight className="h-5 w-5 text-brand-grey-400" />
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div>
-                            <p className="text-lg font-bold text-brand-slate-900">{manager.interviews}</p>
-                            <p className="text-xs text-brand-grey-500">Interviews</p>
-                          </div>
-                          <div>
-                            <p className="text-lg font-bold text-green-600">{manager.conversions}%</p>
-                            <p className="text-xs text-brand-grey-500">Conversion</p>
-                          </div>
-                          <div>
-                            <p className="text-lg font-bold text-brand-cyan">{manager.consultantsActive}</p>
-                            <p className="text-xs text-brand-grey-500">Active</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </>
-            )}
-
-            {/* ============================================ */}
-            {/* MANAGER DASHBOARD */}
-            {/* ============================================ */}
-            {showManagerDashboard && managerStats && (
-              <>
-                {/* Key Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <StatCard title="Phone Interviews" value={managerStats.interviews.phone} icon={Calendar} colour="cyan" />
-                  <StatCard title="Technical" value={managerStats.interviews.technical} icon={Target} colour="purple" />
-                  <StatCard title="Director" value={managerStats.interviews.director} icon={Users} colour="amber" />
-                  <StatCard title="Customer" value={managerStats.interviews.customer} icon={Building2} colour="green" />
-                  <StatCard title="Active Consultants" value={managerStats.consultantsActive} icon={UserCheck} colour="green" />
-                  <StatCard title="On Bench" value={managerStats.consultantsBench} icon={Clock} colour="amber" />
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Interview Funnel */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Interview Funnel</CardTitle>
-                    </CardHeader>
-                    <FunnelChart stages={[
-                      { label: 'Phone Qualification', value: managerStats.interviews.phone, conversion: managerStats.conversions.phoneToTech },
-                      { label: 'Technical Interview', value: managerStats.interviews.technical, conversion: managerStats.conversions.techToDirector },
-                      { label: 'Director Interview', value: managerStats.interviews.director, conversion: managerStats.conversions.directorToCustomer },
-                      { label: 'Customer Assessment', value: managerStats.interviews.customer, conversion: managerStats.conversions.customerToSigned },
-                      { label: 'Signed', value: Math.round(managerStats.interviews.customer * managerStats.conversions.customerToSigned / 100) },
-                    ]} />
-                  </Card>
-
-                  {/* Conversion Rates */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Conversion Rates</CardTitle>
-                    </CardHeader>
-                    <div className="grid grid-cols-2 gap-4">
-                      <Gauge value={managerStats.conversions.phoneToTech} max={100} label="Phone → Tech" />
-                      <Gauge value={managerStats.conversions.techToDirector} max={100} label="Tech → Director" />
-                      <Gauge value={managerStats.conversions.directorToCustomer} max={100} label="Director → Customer" />
-                      <Gauge value={managerStats.conversions.customerToSigned} max={100} label="Customer → Signed" />
-                    </div>
-                  </Card>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Weekly Activity */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Weekly Interviews</CardTitle>
-                    </CardHeader>
-                    <BarChart 
-                      data={managerStats.weeklyInterviews.map((w: any) => ({ label: w.week, value: w.count }))}
-                      title=""
-                    />
-                  </Card>
-
-                  {/* Other Stats */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Activity Summary</CardTitle>
-                    </CardHeader>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
-                        <span className="text-brand-grey-600">Customer Meetings</span>
-                        <span className="text-xl font-bold text-brand-slate-900">{managerStats.customerMeetings}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
-                        <span className="text-brand-grey-600">New Customers Added</span>
-                        <span className="text-xl font-bold text-brand-slate-900">{managerStats.newCustomers}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                        <span className="text-green-600">Requirements Won</span>
-                        <span className="text-xl font-bold text-green-700">{managerStats.requirementsWon}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                        <span className="text-red-600">Requirements Lost</span>
-                        <span className="text-xl font-bold text-red-700">{managerStats.requirementsLost}</span>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-              </>
-            )}
-
-            {/* ============================================ */}
-            {/* RECRUITER DASHBOARD */}
-            {/* ============================================ */}
-            {showRecruiterDashboard && recruiterStats && (
-              <>
-                {/* Key Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <StatCard title="Candidates Added" value={recruiterStats.candidatesAdded} icon={Users} colour="cyan" />
-                  <StatCard title="This Week" value={recruiterStats.candidatesThisWeek} icon={TrendingUp} colour="green" />
-                  <StatCard title="Offers Generated" value={recruiterStats.offersGenerated} icon={FileText} colour="purple" />
-                  <StatCard title="Contracts Signed" value={recruiterStats.offersSigned} icon={CheckCircle} colour="green" />
-                </div>
-
-                {/* Quality Score */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Candidate Quality Score</CardTitle>
-                  </CardHeader>
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      {[1, 2, 3, 4, 5].map(star => (
-                        <Star 
-                          key={star} 
-                          className={`h-8 w-8 ${star <= Math.round(recruiterStats.averageQuality) ? 'text-amber-400 fill-amber-400' : 'text-brand-grey-200'}`} 
-                        />
-                      ))}
-                    </div>
-                    <div>
-                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.averageQuality}</p>
-                      <p className="text-sm text-brand-grey-500">Average across all candidates</p>
-                    </div>
-                  </div>
-                </Card>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Interview Funnel */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Your Candidates&apos; Interview Funnel</CardTitle>
-                    </CardHeader>
-                    <FunnelChart stages={[
-                      { label: 'Phone Qualification', value: recruiterStats.interviews.phone, conversion: recruiterStats.conversions.phoneToTech },
-                      { label: 'Technical Interview', value: recruiterStats.interviews.technical, conversion: recruiterStats.conversions.techToDirector },
-                      { label: 'Director Interview', value: recruiterStats.interviews.director, conversion: recruiterStats.conversions.directorToOffer },
-                      { label: 'Offers Made', value: recruiterStats.offersGenerated },
-                    ]} />
-                  </Card>
-
-                  {/* Weekly Activity */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Weekly Candidates Added</CardTitle>
-                    </CardHeader>
-                    <BarChart 
-                      data={recruiterStats.weeklyCandidates.map((w: any) => ({ label: w.week, value: w.count }))}
-                      title=""
-                    />
-                  </Card>
-                </div>
-              </>
-            )}
-
-            {/* ============================================ */}
-            {/* HR TICKET SYSTEM */}
-            {/* ============================================ */}
-            {showHRDashboard && hrTickets.length > 0 && (
-              <Card>
+            {/* Director Only: Pending Approvals */}
+            {isDirectorView && totalPendingApprovals > 0 && (
+              <Card className="border-amber-200 bg-amber-50">
                 <CardHeader>
                   <div className="flex items-center gap-2">
-                    <Ticket className="h-5 w-5 text-brand-cyan" />
-                    <CardTitle>HR Action Items ({hrTickets.length})</CardTitle>
+                    <AlertCircle className="h-5 w-5 text-amber-600" />
+                    <CardTitle className="text-amber-800">Pending Approvals ({totalPendingApprovals})</CardTitle>
                   </div>
                 </CardHeader>
-                <div className="space-y-3">
-                  {hrTickets.map(ticket => (
-                    <div 
-                      key={ticket.id} 
-                      className={`flex items-center justify-between p-4 rounded-lg border ${
-                        ticket.status === 'in_progress' ? 'bg-blue-50 border-blue-200' : 'bg-white border-brand-grey-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {pendingApprovals.map(request => (
+                    <div key={request.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                      <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg ${
-                          ticket.ticket_type === 'employee_exit' ? 'bg-red-100' :
-                          ticket.ticket_type === 'salary_increase' ? 'bg-green-100' :
-                          ticket.ticket_type === 'bonus_payment' ? 'bg-purple-100' :
-                          'bg-cyan-100'
+                          request.request_type === 'salary_increase' ? 'bg-green-100' :
+                          request.request_type === 'bonus_payment' ? 'bg-purple-100' : 'bg-red-100'
                         }`}>
-                          {ticket.ticket_type === 'employee_exit' && <AlertCircle className="h-5 w-5 text-red-600" />}
-                          {ticket.ticket_type === 'salary_increase' && <TrendingUp className="h-5 w-5 text-green-600" />}
-                          {ticket.ticket_type === 'bonus_payment' && <Award className="h-5 w-5 text-purple-600" />}
-                          {(ticket.ticket_type === 'contract_send' || ticket.ticket_type === 'contract_signed') && <FileText className="h-5 w-5 text-cyan-600" />}
+                          {request.request_type === 'salary_increase' && <TrendingUp className="h-4 w-4 text-green-600" />}
+                          {request.request_type === 'bonus_payment' && <Award className="h-4 w-4 text-purple-600" />}
+                          {request.request_type === 'employee_exit' && <AlertCircle className="h-4 w-4 text-red-600" />}
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-brand-slate-900">{ticketTypeLabels[ticket.ticket_type]}</p>
-                            <Badge className={ticketPriorityColours[ticket.priority]}>{ticket.priority}</Badge>
-                            {ticket.status === 'in_progress' && <Badge variant="blue">In Progress</Badge>}
-                          </div>
-                          <p className="text-sm text-brand-grey-500">
-                            {ticket.consultant?.first_name} {ticket.consultant?.last_name} ({ticket.consultant?.reference_id})
+                          <p className="text-sm font-medium text-brand-slate-900">
+                            {request.request_type === 'salary_increase' && `Salary: £${(request.request_data as SalaryIncreaseData).new_salary.toLocaleString()}`}
+                            {request.request_type === 'bonus_payment' && `Bonus: £${(request.request_data as BonusPaymentData).amount.toLocaleString()}`}
+                            {request.request_type === 'employee_exit' && `Exit: ${(request.request_data as EmployeeExitData).exit_reason}`}
                           </p>
-                          {ticket.ticket_data && (
-                            <p className="text-xs text-brand-grey-400 mt-1">
-                              {ticket.ticket_type === 'salary_increase' && `New salary: £${ticket.ticket_data.new_salary?.toLocaleString()} from ${ticket.ticket_data.effective_date}`}
-                              {ticket.ticket_type === 'bonus_payment' && `Amount: £${ticket.ticket_data.amount?.toLocaleString()} - ${ticket.ticket_data.bonus_type}`}
-                              {ticket.ticket_type === 'employee_exit' && `Reason: ${ticket.ticket_data.exit_reason} - Last day: ${ticket.ticket_data.last_working_day}`}
-                            </p>
-                          )}
+                          <p className="text-xs text-brand-grey-500">{request.consultant?.first_name} {request.consultant?.last_name}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {ticket.status === 'pending' && (
-                          <Button variant="secondary" size="sm" leftIcon={<Play className="h-4 w-4" />} onClick={() => handleStartTicket(ticket)}>
-                            Start
-                          </Button>
-                        )}
-                        <Button 
-                          variant="success" 
-                          size="sm" 
-                          leftIcon={<CheckCircle className="h-4 w-4" />}
-                          onClick={() => {
-                            setSelectedTicket(ticket);
-                            setIsTicketModalOpen(true);
-                          }}
-                        >
-                          Complete
-                        </Button>
+                        <Button variant="success" size="sm" onClick={() => handleApproveRequest(request.id)} isLoading={processingApproval === request.id}>Approve</Button>
+                        <Button variant="danger" size="sm" onClick={() => handleRejectRequest(request.id)} isLoading={processingApproval === request.id}>Reject</Button>
+                      </div>
+                    </div>
+                  ))}
+                  {pendingOffers.map(offer => (
+                    <div key={offer.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-cyan-100">
+                          <FileText className="h-4 w-4 text-cyan-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-brand-slate-900">Contract: {offer.job_title}</p>
+                          <p className="text-xs text-brand-grey-500">{offer.candidate?.first_name} {offer.candidate?.last_name}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="success" size="sm" onClick={() => handleApproveOffer(offer.id)} isLoading={processingApproval === offer.id}>Approve</Button>
+                        <Button variant="danger" size="sm" onClick={() => handleRejectOffer(offer.id)} isLoading={processingApproval === offer.id}>Reject</Button>
                       </div>
                     </div>
                   ))}
@@ -793,7 +568,106 @@ export function DashboardPage() {
               </Card>
             )}
 
-            {/* Quick Actions - For all roles */}
+            {/* Director Only: Manager Cards */}
+            {isDirectorView && managers.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Your Managers</CardTitle>
+                </CardHeader>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {managers.map(manager => (
+                    <div 
+                      key={manager.id}
+                      className="p-3 border border-brand-grey-200 rounded-lg hover:shadow-md hover:border-brand-cyan cursor-pointer transition-all flex items-center gap-3"
+                      onClick={() => setSelectedManagerId(manager.id)}
+                    >
+                      <Avatar name={manager.full_name || manager.email} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-brand-slate-900 truncate">{manager.full_name || manager.email}</p>
+                        <p className="text-xs text-brand-grey-500">View dashboard</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-brand-grey-400" />
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Stats Row */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <StatCard title="Active Requirements" value={stats.activeRequirements.length} icon={Target} colour="cyan" onClick={() => navigate('/requirements')} />
+              <StatCard title="Won" value={stats.wonRequirements.length} icon={CheckCircle} colour="green" />
+              <StatCard title="Lost" value={stats.lostRequirements.length} icon={XCircle} colour="red" />
+              <StatCard title="Interviews" value={stats.totalInterviews} icon={Calendar} colour="purple" />
+              <StatCard title="Active Consultants" value={stats.activeConsultants} icon={UserCheck} colour="green" />
+              <StatCard title="On Bench" value={stats.benchConsultants} icon={Clock} colour="amber" />
+            </div>
+
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Requirements List */}
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Active Requirements ({stats.activeRequirements.length})</CardTitle>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/requirements')}>View All</Button>
+                  </div>
+                </CardHeader>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {stats.activeRequirements.length > 0 ? (
+                    stats.activeRequirements.slice(0, 10).map(req => (
+                      <div 
+                        key={req.id} 
+                        className="p-3 border border-brand-grey-200 rounded-lg hover:bg-brand-grey-50 cursor-pointer"
+                        onClick={() => navigate(`/requirements/${req.id}`)}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-brand-slate-900 truncate">{req.title || req.reference_id}</span>
+                          <Badge variant={req.status === 'active' ? 'green' : 'amber'} className="text-xs">{req.status}</Badge>
+                        </div>
+                        <p className="text-xs text-brand-grey-500">{req.reference_id}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-brand-grey-400 text-center py-4">No active requirements</p>
+                  )}
+                </div>
+              </Card>
+
+              {/* Middle Column: Charts */}
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle>Activity This Semester</CardTitle>
+                </CardHeader>
+                <div className="space-y-6">
+                  <WeeklyChart 
+                    data={stats.interviewsByWeek} 
+                    title="Interviews per Week" 
+                    colour="#06b6d4"
+                  />
+                  <WeeklyChart 
+                    data={stats.meetingsByWeek} 
+                    title="Customer Meetings per Week" 
+                    colour="#8b5cf6"
+                  />
+                </div>
+              </Card>
+
+              {/* Right Column: Funnel */}
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle>Interview Funnel</CardTitle>
+                </CardHeader>
+                <InterviewFunnel 
+                  data={{
+                    ...stats.interviewCounts,
+                    conversions: stats.conversions,
+                  }}
+                />
+              </Card>
+            </div>
+
+            {/* Quick Actions */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="bg-green-50 border-green-200">
                 <div className="flex items-center justify-between">
@@ -821,61 +695,6 @@ export function DashboardPage() {
           </>
         )}
       </div>
-
-      {/* Complete Ticket Modal */}
-      <Modal
-        isOpen={isTicketModalOpen}
-        onClose={() => {
-          setIsTicketModalOpen(false);
-          setSelectedTicket(null);
-          setCompletionNotes('');
-        }}
-        title="Complete HR Action"
-        size="md"
-      >
-        {selectedTicket && (
-          <div className="space-y-4">
-            <div className="p-4 bg-brand-grey-50 rounded-lg">
-              <p className="font-medium text-brand-slate-900">{ticketTypeLabels[selectedTicket.ticket_type]}</p>
-              <p className="text-sm text-brand-grey-500 mt-1">
-                {selectedTicket.consultant?.first_name} {selectedTicket.consultant?.last_name}
-              </p>
-              {selectedTicket.ticket_data && (
-                <div className="mt-2 text-sm">
-                  {selectedTicket.ticket_type === 'salary_increase' && (
-                    <p>Implement salary change to £{selectedTicket.ticket_data.new_salary?.toLocaleString()} effective {selectedTicket.ticket_data.effective_date}</p>
-                  )}
-                  {selectedTicket.ticket_type === 'bonus_payment' && (
-                    <p>Process bonus payment of £{selectedTicket.ticket_data.amount?.toLocaleString()}</p>
-                  )}
-                  {selectedTicket.ticket_type === 'employee_exit' && (
-                    <>
-                      <p>Process exit for: {selectedTicket.ticket_data.exit_reason}</p>
-                      <p>Last working day: {selectedTicket.ticket_data.last_working_day}</p>
-                      <p className="mt-2 text-brand-grey-500">Required actions: Send exit letter, conduct exit interview, process final pay</p>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <Textarea
-              label="Completion Notes"
-              value={completionNotes}
-              onChange={(e) => setCompletionNotes(e.target.value)}
-              placeholder="Document what was done to complete this action..."
-              rows={4}
-            />
-
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button variant="secondary" onClick={() => setIsTicketModalOpen(false)}>Cancel</Button>
-              <Button variant="success" onClick={handleCompleteTicket} isLoading={isProcessing}>
-                Mark as Complete
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
