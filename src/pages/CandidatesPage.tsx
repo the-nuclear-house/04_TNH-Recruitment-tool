@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Upload, FileText, ChevronDown } from 'lucide-react';
+import { Plus, X, Upload, FileText, ChevronDown, Loader2, CheckCircle } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -18,6 +18,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { candidatesService, usersService, interviewsService, type DbCandidate } from '@/lib/services';
+import { parseCV, extractTextFromFile, type ParsedCV } from '@/lib/cv-parser';
 
 export function CandidatesPage() {
   const navigate = useNavigate();
@@ -61,6 +62,8 @@ export function CandidatesPage() {
   const [companyInput, setCompanyInput] = useState('');
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [cvParsed, setCvParsed] = useState(false);
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -87,7 +90,7 @@ export function CandidatesPage() {
     setIsDragging(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     
@@ -101,12 +104,60 @@ export function CandidatesPage() {
       if (validTypes.includes(file.type) || hasValidExtension) {
         if (file.size <= 10 * 1024 * 1024) { // 10MB limit
           setCvFile(file);
+          await parseAndFillCV(file);
         } else {
           toast.error('File too large', 'Please upload a file smaller than 10MB');
         }
       } else {
         toast.error('Invalid file type', 'Please upload a PDF, DOC, or DOCX file');
       }
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCvFile(file);
+      await parseAndFillCV(file);
+    }
+  };
+
+  const parseAndFillCV = async (file: File) => {
+    setIsParsing(true);
+    setCvParsed(false);
+    try {
+      const text = await extractTextFromFile(file);
+      const parsed = parseCV(text);
+      
+      // Fill form with parsed data
+      setFormData(prev => ({
+        ...prev,
+        first_name: parsed.firstName || prev.first_name,
+        last_name: parsed.lastName || prev.last_name,
+        email: parsed.email || prev.email,
+        phone: parsed.phone || prev.phone,
+        location: parsed.location || prev.location,
+        linkedin_url: parsed.linkedinUrl || prev.linkedin_url,
+        summary: parsed.summary || prev.summary,
+      }));
+      
+      // Add parsed skills
+      if (parsed.skills.length > 0) {
+        setSkills(prev => [...new Set([...prev, ...parsed.skills])]);
+      }
+      
+      // Add parsed companies
+      if (parsed.previousCompanies.length > 0) {
+        setPreviousCompanies(prev => [...new Set([...prev, ...parsed.previousCompanies])]);
+      }
+      
+      setCvParsed(true);
+      toast.success('CV Parsed', `Extracted: ${parsed.skills.length} skills, ${parsed.previousCompanies.length} companies`);
+    } catch (error) {
+      console.error('Error parsing CV:', error);
+      toast.error('Parse Error', 'Could not extract data from CV. Please fill in manually.');
+    } finally {
+      setIsParsing(false);
     }
   };
 
@@ -214,6 +265,7 @@ export function CandidatesPage() {
       setSkills([]);
       setPreviousCompanies([]);
       setCvFile(null);
+      setCvParsed(false);
       
       // Reload candidates
       loadCandidates();
@@ -611,7 +663,7 @@ export function CandidatesPage() {
           {/* CV Upload */}
           <div>
             <label className="block text-sm font-medium text-brand-slate-700 mb-1">
-              CV / Resume
+              CV / Resume <span className="text-brand-cyan font-normal">(auto-fills form)</span>
             </label>
             <div 
               className={`
@@ -619,7 +671,9 @@ export function CandidatesPage() {
                 ${isDragging 
                   ? 'border-brand-cyan bg-brand-cyan/5' 
                   : cvFile 
-                    ? 'border-green-300 bg-green-50' 
+                    ? cvParsed 
+                      ? 'border-green-300 bg-green-50' 
+                      : 'border-amber-300 bg-amber-50'
                     : 'border-brand-grey-200 hover:border-brand-cyan'
                 }
               `}
@@ -630,23 +684,33 @@ export function CandidatesPage() {
               <input
                 type="file"
                 accept=".pdf,.doc,.docx"
-                onChange={(e) => setCvFile(e.target.files?.[0] || null)}
+                onChange={handleFileSelect}
                 className="hidden"
                 id="cv-upload"
               />
               <label htmlFor="cv-upload" className="cursor-pointer block">
-                {cvFile ? (
+                {isParsing ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-10 w-10 text-brand-cyan animate-spin" />
+                    <p className="font-medium text-brand-cyan">Parsing CV...</p>
+                    <p className="text-sm text-brand-grey-400">Extracting information</p>
+                  </div>
+                ) : cvFile ? (
                   <div className="flex items-center justify-center gap-3">
-                    <FileText className="h-8 w-8 text-green-600" />
+                    {cvParsed ? (
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    ) : (
+                      <FileText className="h-8 w-8 text-amber-600" />
+                    )}
                     <div className="text-left">
                       <p className="font-medium text-brand-slate-900">{cvFile.name}</p>
                       <p className="text-sm text-brand-grey-400">
-                        {(cvFile.size / 1024 / 1024).toFixed(2)} MB
+                        {cvParsed ? 'Parsed and applied to form' : 'Uploaded'}
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCvFile(null); }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCvFile(null); setCvParsed(false); }}
                       className="p-1 rounded-full hover:bg-red-100 text-brand-grey-400 hover:text-red-500 transition-colors"
                     >
                       <X className="h-5 w-5" />
@@ -659,7 +723,7 @@ export function CandidatesPage() {
                       {isDragging ? 'Drop your CV here' : 'Drag & drop your CV here'}
                     </p>
                     <p className="text-sm mt-1">or click to browse</p>
-                    <p className="text-xs mt-2 text-brand-grey-300">PDF, DOC, DOCX (max 10MB)</p>
+                    <p className="text-xs mt-2 text-brand-grey-300">PDF, DOC, DOCX (max 10MB) - Will auto-fill form</p>
                   </div>
                 )}
               </label>
