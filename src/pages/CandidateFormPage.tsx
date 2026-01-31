@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, X, Plus } from 'lucide-react';
+import { ArrowLeft, Upload, X, Plus, FileText, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
   Card, 
@@ -11,9 +11,11 @@ import {
   Select, 
   Textarea,
   Badge,
+  Modal,
 } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
 import { candidatesService } from '@/lib/services';
+import { parseCV, extractTextFromFile, type ParsedCV } from '@/lib/cv-parser';
 
 const rightToWorkOptions = [
   { value: 'british_citizen', label: 'British Citizen' },
@@ -51,6 +53,7 @@ export function CandidateFormPage() {
   const { id } = useParams();
   const toast = useToast();
   const isEditing = !!id;
+  const cvInputRef = useRef<HTMLInputElement>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(isEditing);
@@ -60,6 +63,12 @@ export function CandidateFormPage() {
   const [companyInput, setCompanyInput] = useState('');
   const [nationalities, setNationalities] = useState<string[]>([]);
   const [nationalityInput, setNationalityInput] = useState('');
+  
+  // CV Parsing state
+  const [isParsing, setIsParsing] = useState(false);
+  const [parsedCV, setParsedCV] = useState<ParsedCV | null>(null);
+  const [showParsedPreview, setShowParsedPreview] = useState(false);
+  const [cvFileName, setCvFileName] = useState<string>('');
   
   const [formData, setFormData] = useState({
     first_name: '',
@@ -162,6 +171,63 @@ export function CandidateFormPage() {
     setNationalities(nationalities.filter(n => n !== nationality));
   };
 
+  // CV Upload and Parsing
+  const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setCvFileName(file.name);
+    setIsParsing(true);
+    
+    try {
+      const text = await extractTextFromFile(file);
+      const parsed = parseCV(text);
+      setParsedCV(parsed);
+      setShowParsedPreview(true);
+      toast.success('CV Parsed', 'Review the extracted information and apply to form.');
+    } catch (error) {
+      console.error('Error parsing CV:', error);
+      toast.error('Error', error instanceof Error ? error.message : 'Failed to parse CV');
+    } finally {
+      setIsParsing(false);
+      // Reset file input
+      if (cvInputRef.current) {
+        cvInputRef.current.value = '';
+      }
+    }
+  };
+
+  const applyParsedCV = () => {
+    if (!parsedCV) return;
+    
+    // Apply parsed data to form
+    setFormData(prev => ({
+      ...prev,
+      first_name: parsedCV.firstName || prev.first_name,
+      last_name: parsedCV.lastName || prev.last_name,
+      email: parsedCV.email || prev.email,
+      phone: parsedCV.phone || prev.phone,
+      location: parsedCV.location || prev.location,
+      linkedin_url: parsedCV.linkedinUrl || prev.linkedin_url,
+      years_experience: parsedCV.yearsExperience?.toString() || prev.years_experience,
+      degree: parsedCV.degree || prev.degree,
+      summary: parsedCV.summary || prev.summary,
+    }));
+    
+    // Merge skills (avoid duplicates)
+    if (parsedCV.skills.length > 0) {
+      setSkills(prev => [...new Set([...prev, ...parsedCV.skills])]);
+    }
+    
+    // Merge companies (avoid duplicates)
+    if (parsedCV.previousCompanies.length > 0) {
+      setPreviousCompanies(prev => [...new Set([...prev, ...parsedCV.previousCompanies])]);
+    }
+    
+    setShowParsedPreview(false);
+    toast.success('Applied', 'CV data has been applied to the form. Review and modify as needed.');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -243,6 +309,51 @@ export function CandidateFormPage() {
       />
 
       <form onSubmit={handleSubmit} className="p-6 space-y-6 max-w-4xl">
+        {/* CV Upload Section - Only show for new candidates */}
+        {!isEditing && (
+          <Card className="border-2 border-dashed border-brand-cyan/30 bg-gradient-to-br from-cyan-50/50 to-white">
+            <div className="text-center py-6">
+              <div className="mx-auto w-16 h-16 bg-brand-cyan/10 rounded-2xl flex items-center justify-center mb-4">
+                <FileText className="h-8 w-8 text-brand-cyan" />
+              </div>
+              <h3 className="text-lg font-semibold text-brand-slate-900 mb-2">
+                Quick Start: Upload CV
+              </h3>
+              <p className="text-sm text-brand-grey-500 mb-4 max-w-md mx-auto">
+                Upload a CV to automatically extract candidate information. Supports PDF and Word documents.
+              </p>
+              
+              <input
+                ref={cvInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                onChange={handleCVUpload}
+                className="hidden"
+                id="cv-upload"
+              />
+              
+              <label htmlFor="cv-upload">
+                <Button
+                  type="button"
+                  variant="accent"
+                  leftIcon={isParsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  disabled={isParsing}
+                  onClick={() => cvInputRef.current?.click()}
+                >
+                  {isParsing ? 'Parsing CV...' : 'Upload CV'}
+                </Button>
+              </label>
+              
+              {cvFileName && (
+                <p className="text-sm text-green-600 mt-3 flex items-center justify-center gap-2">
+                  <CheckCircle className="h-4 w-4" />
+                  {cvFileName}
+                </p>
+              )}
+            </div>
+          </Card>
+        )}
+
         {/* Personal Information */}
         <Card>
           <CardHeader>
@@ -509,6 +620,141 @@ export function CandidateFormPage() {
           </Button>
         </div>
       </form>
+
+      {/* CV Parsed Preview Modal */}
+      <Modal
+        isOpen={showParsedPreview}
+        onClose={() => setShowParsedPreview(false)}
+        title="CV Parsed Successfully"
+        description="Review the extracted information before applying to the form"
+        size="lg"
+      >
+        {parsedCV && (
+          <div className="space-y-4">
+            {/* Extraction Summary */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-green-700 mb-2">
+                <CheckCircle className="h-5 w-5" />
+                <span className="font-medium">Information Extracted</span>
+              </div>
+              <p className="text-sm text-green-600">
+                Found {parsedCV.skills.length} skills, {parsedCV.previousCompanies.length} companies, 
+                {parsedCV.yearsExperience ? ` ${parsedCV.yearsExperience} years experience` : ' experience not detected'}
+              </p>
+            </div>
+
+            {/* Personal Details */}
+            <div>
+              <h4 className="font-medium text-brand-slate-700 mb-2">Personal Details</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-brand-grey-500">Name:</span>
+                  <span className="ml-2 text-brand-slate-900">
+                    {parsedCV.firstName} {parsedCV.lastName || '(not found)'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-brand-grey-500">Email:</span>
+                  <span className="ml-2 text-brand-slate-900">{parsedCV.email || '(not found)'}</span>
+                </div>
+                <div>
+                  <span className="text-brand-grey-500">Phone:</span>
+                  <span className="ml-2 text-brand-slate-900">{parsedCV.phone || '(not found)'}</span>
+                </div>
+                <div>
+                  <span className="text-brand-grey-500">Location:</span>
+                  <span className="ml-2 text-brand-slate-900">{parsedCV.location || '(not found)'}</span>
+                </div>
+                <div>
+                  <span className="text-brand-grey-500">Experience:</span>
+                  <span className="ml-2 text-brand-slate-900">
+                    {parsedCV.yearsExperience ? `${parsedCV.yearsExperience} years` : '(not found)'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-brand-grey-500">Degree:</span>
+                  <span className="ml-2 text-brand-slate-900">{parsedCV.degree || '(not found)'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Skills */}
+            {parsedCV.skills.length > 0 && (
+              <div>
+                <h4 className="font-medium text-brand-slate-700 mb-2">Skills Detected ({parsedCV.skills.length})</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {parsedCV.skills.map((skill, idx) => (
+                    <Badge key={idx} variant="cyan">{skill}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Companies */}
+            {parsedCV.previousCompanies.length > 0 && (
+              <div>
+                <h4 className="font-medium text-brand-slate-700 mb-2">Companies Detected ({parsedCV.previousCompanies.length})</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {parsedCV.previousCompanies.map((company, idx) => (
+                    <Badge key={idx} variant="purple">{company}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Job Titles */}
+            {parsedCV.jobTitles.length > 0 && (
+              <div>
+                <h4 className="font-medium text-brand-slate-700 mb-2">Job Titles Found</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {parsedCV.jobTitles.map((title, idx) => (
+                    <Badge key={idx} variant="green">{title}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* LinkedIn */}
+            {parsedCV.linkedinUrl && (
+              <div>
+                <h4 className="font-medium text-brand-slate-700 mb-2">LinkedIn</h4>
+                <a 
+                  href={parsedCV.linkedinUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-brand-cyan hover:underline text-sm"
+                >
+                  {parsedCV.linkedinUrl}
+                </a>
+              </div>
+            )}
+
+            {/* Warning if little was extracted */}
+            {parsedCV.skills.length === 0 && parsedCV.previousCompanies.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 text-amber-700">
+                  <AlertCircle className="h-5 w-5" />
+                  <span className="font-medium">Limited extraction</span>
+                </div>
+                <p className="text-sm text-amber-600 mt-1">
+                  Could not extract many details. This may happen with scanned PDFs or unusual formats. 
+                  You can still apply what was found and fill in the rest manually.
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+              <Button variant="secondary" onClick={() => setShowParsedPreview(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={applyParsedCV}>
+                Apply to Form
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
