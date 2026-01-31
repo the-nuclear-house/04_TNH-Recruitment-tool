@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Building2, Calendar, X, UserCheck, UserX, Trophy, TrendingUp } from 'lucide-react';
+import { Plus, Users, Building2, Calendar, X, UserCheck, UserX, Trophy, TrendingUp, Rocket } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
   Card,
@@ -20,6 +20,7 @@ import { formatDate } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
+import { CreateMissionModal } from '@/components/CreateMissionModal';
 import { 
   requirementsService, 
   usersService, 
@@ -27,6 +28,7 @@ import {
   contactsService, 
   applicationsService,
   customerAssessmentsService,
+  missionsService,
   type DbRequirement, 
   type DbUser, 
   type DbCompany, 
@@ -104,6 +106,10 @@ export function RequirementsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState('');
+  
+  // Create Mission modal
+  const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
+  const [missionRequirement, setMissionRequirement] = useState<DbRequirement | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -568,6 +574,22 @@ export function RequirementsPage() {
                           </div>
                         )}
                         
+                        {/* Create Mission button for won requirements */}
+                        {(status === 'won' || requirement.status === 'filled') && requirement.winning_candidate_id && (
+                          <Button
+                            variant="success"
+                            size="sm"
+                            leftIcon={<Rocket className="h-4 w-4" />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMissionRequirement(requirement);
+                              setIsCreateMissionModalOpen(true);
+                            }}
+                          >
+                            Create Mission
+                          </Button>
+                        )}
+                        
                         {/* Candidate stats */}
                         {stats.allocated > 0 && (
                           <div className="flex items-center gap-3 text-xs">
@@ -716,6 +738,25 @@ export function RequirementsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Create Mission Modal */}
+      {missionRequirement && (
+        <CreateMissionModal
+          isOpen={isCreateMissionModalOpen}
+          onClose={() => {
+            setIsCreateMissionModalOpen(false);
+            setMissionRequirement(null);
+          }}
+          onSuccess={() => {
+            loadData();
+            navigate('/missions');
+          }}
+          requirement={missionRequirement}
+          customer={missionRequirement.company as any}
+          contact={missionRequirement.contact}
+          winningCandidateId={missionRequirement.winning_candidate_id || undefined}
+        />
+      )}
     </div>
   );
 }

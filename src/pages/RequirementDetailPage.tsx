@@ -20,6 +20,7 @@ import {
   Trophy,
   XCircle,
   CheckCircle,
+  Rocket,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -41,7 +42,8 @@ import { formatDate, computeCandidatePipelineStatus } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, type DbApplication, type DbCandidate, type DbContact, type DbCompany } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany } from '@/lib/services';
+import { CreateMissionModal } from '@/components/CreateMissionModal';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
@@ -159,6 +161,10 @@ export function RequirementDetailPage() {
   // Track which candidates have passed all interviews
   const [candidateInterviewStatus, setCandidateInterviewStatus] = useState<Record<string, boolean>>({});
   
+  // Create Mission modal
+  const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
+  const [existingMission, setExistingMission] = useState<any>(null);
+  
   // Check if user can schedule assessments (Manager, Director, Admin)
   const canScheduleAssessments = user?.roles?.some(r => ['admin', 'director', 'manager'].includes(r)) ?? false;
 
@@ -231,6 +237,12 @@ export function RequirementDetailPage() {
       setCandidateInterviewStatus(interviewStatus);
       setScheduledAssessments(assessmentStatus);
       setCandidateAssessmentOutcomes(assessmentOutcomes);
+      
+      // Check if mission already exists for this requirement
+      if (reqData?.status === 'won' || reqData?.status === 'filled') {
+        const mission = await missionsService.getByRequirement(id!);
+        setExistingMission(mission);
+      }
       
       if (reqData?.manager_id) {
         const mgr = usersData.find(u => u.id === reqData.manager_id);
@@ -628,7 +640,7 @@ export function RequirementDetailPage() {
         </Card>
 
         {/* Winning Candidate Banner - shown when requirement is won */}
-        {requirement.status === 'won' && requirement.winning_candidate && (
+        {(requirement.status === 'won' || requirement.status === 'filled') && requirement.winning_candidate && (
           <Card className="border-green-200 bg-green-50">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-green-100 rounded-full">
@@ -652,12 +664,32 @@ export function RequirementDetailPage() {
                   </div>
                 </div>
               </div>
-              {requirement.won_at && (
-                <div className="text-right">
-                  <p className="text-xs text-green-600">Won on</p>
-                  <p className="text-sm font-medium text-green-700">{formatDate(requirement.won_at)}</p>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                {requirement.won_at && (
+                  <div className="text-right">
+                    <p className="text-xs text-green-600">Won on</p>
+                    <p className="text-sm font-medium text-green-700">{formatDate(requirement.won_at)}</p>
+                  </div>
+                )}
+                {existingMission ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => navigate('/missions')}
+                  >
+                    View Mission
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Rocket className="h-4 w-4" />}
+                    onClick={() => setIsCreateMissionModalOpen(true)}
+                  >
+                    Create Mission
+                  </Button>
+                )}
+              </div>
             </div>
           </Card>
         )}
@@ -1348,6 +1380,20 @@ export function RequirementDetailPage() {
         cancelText="Cancel"
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Create Mission Modal */}
+      <CreateMissionModal
+        isOpen={isCreateMissionModalOpen}
+        onClose={() => setIsCreateMissionModalOpen(false)}
+        onSuccess={() => {
+          loadData();
+          navigate('/missions');
+        }}
+        requirement={requirement}
+        customer={requirement?.company as any}
+        contact={contacts.find(c => c.id === requirement?.contact_id)}
+        winningCandidateId={requirement?.winning_candidate_id}
       />
     </div>
   );

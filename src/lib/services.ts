@@ -129,6 +129,305 @@ export interface UpdateConsultantInput extends Partial<CreateConsultantInput> {
 }
 
 // ============================================
+// MISSION TYPES
+// ============================================
+
+export interface DbMission {
+  id: string;
+  reference_id: string | null;
+  name: string;
+  requirement_id: string | null;
+  consultant_id: string;
+  customer_id: string;
+  contact_id: string | null;
+  start_date: string;
+  end_date: string;
+  sold_daily_rate: number;
+  location: string | null;
+  work_mode: 'full_onsite' | 'hybrid' | 'remote';
+  status: 'active' | 'completed' | 'cancelled' | 'on_hold';
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  // Joined
+  requirement?: DbRequirement;
+  consultant?: DbConsultant;
+  customer?: DbCustomer;
+  contact?: DbContact;
+}
+
+export interface CreateMissionInput {
+  name: string;
+  requirement_id?: string;
+  consultant_id: string;
+  customer_id: string;
+  contact_id?: string;
+  start_date: string;
+  end_date: string;
+  sold_daily_rate: number;
+  location?: string;
+  work_mode: 'full_onsite' | 'hybrid' | 'remote';
+  notes?: string;
+  created_by?: string;
+}
+
+export interface UpdateMissionInput extends Partial<CreateMissionInput> {
+  status?: 'active' | 'completed' | 'cancelled' | 'on_hold';
+}
+
+// ============================================
+// CONSULTANT MEETING TYPES
+// ============================================
+
+export interface InductionChecklist {
+  induction_pack_presented: boolean;
+  risk_assessment_presented: boolean;
+  health_safety_briefing: boolean;
+  it_systems_access: boolean;
+  company_policies_reviewed: boolean;
+  emergency_procedures: boolean;
+  team_introductions: boolean;
+  mission_briefing: boolean;
+}
+
+export interface QuarterlyFeedback {
+  customer_satisfaction: number; // 1-5
+  mission_satisfaction: number; // 1-5
+  company_satisfaction: number; // 1-5
+  work_life_balance: number; // 1-5
+  career_development: number; // 1-5
+  communication_rating: number; // 1-5
+}
+
+export interface AppraisalData {
+  overall_performance: number; // 1-5
+  technical_skills: number; // 1-5
+  communication_skills: number; // 1-5
+  teamwork: number; // 1-5
+  initiative: number; // 1-5
+  reliability: number; // 1-5
+  goals_achieved: string;
+  areas_of_strength: string;
+  development_areas: string;
+  training_needs: string;
+  career_aspirations: string;
+  salary_discussion_notes: string;
+  next_year_objectives: string;
+}
+
+export interface DbConsultantMeeting {
+  id: string;
+  consultant_id: string;
+  meeting_type: 'induction' | 'quarterly_review' | 'annual_appraisal';
+  scheduled_date: string;
+  scheduled_time: string | null;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  completed_at: string | null;
+  conducted_by: string | null;
+  general_comments: string | null;
+  risks_identified: string | null;
+  consultant_requests: string | null;
+  induction_checklist: InductionChecklist | null;
+  quarterly_feedback: QuarterlyFeedback | null;
+  appraisal_data: AppraisalData | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  // Joined
+  consultant?: DbConsultant;
+  conductor?: DbUser;
+}
+
+export interface CreateConsultantMeetingInput {
+  consultant_id: string;
+  meeting_type: 'induction' | 'quarterly_review' | 'annual_appraisal';
+  scheduled_date: string;
+  scheduled_time?: string;
+  created_by?: string;
+}
+
+export interface UpdateConsultantMeetingInput {
+  scheduled_date?: string;
+  scheduled_time?: string;
+  status?: 'scheduled' | 'completed' | 'cancelled';
+  completed_at?: string;
+  conducted_by?: string;
+  general_comments?: string;
+  risks_identified?: string;
+  consultant_requests?: string;
+  induction_checklist?: InductionChecklist;
+  quarterly_feedback?: QuarterlyFeedback;
+  appraisal_data?: AppraisalData;
+}
+
+// ============================================
+// APPROVAL SYSTEM TYPES
+// ============================================
+
+export type ApprovalRequestType = 'salary_increase' | 'bonus_payment' | 'employee_exit';
+export type ApprovalStatus = 'pending' | 'pending_hr' | 'approved' | 'rejected' | 'cancelled';
+export type ApprovalStepStatus = 'pending' | 'approved' | 'rejected' | 'not_required';
+
+export interface SalaryIncreaseData {
+  current_salary: number;
+  new_salary: number;
+  salary_type: 'annual_salary' | 'day_rate';
+  reason: string;
+}
+
+export interface BonusPaymentData {
+  amount: number;
+  bonus_type: 'performance' | 'retention' | 'project' | 'referral' | 'other';
+  reason: string;
+}
+
+export interface EmployeeExitData {
+  exit_reason: 'resignation' | 'redundancy' | 'end_of_contract' | 'dismissal' | 'mutual_agreement' | 'retirement';
+  exit_details: string;
+  last_working_day: string;
+}
+
+export interface DbApprovalRequest {
+  id: string;
+  reference_id: string | null;
+  request_type: ApprovalRequestType;
+  consultant_id: string;
+  request_data: SalaryIncreaseData | BonusPaymentData | EmployeeExitData;
+  effective_month: number;
+  effective_year: number;
+  status: ApprovalStatus;
+  requested_by: string;
+  requested_at: string;
+  request_notes: string | null;
+  director_status: ApprovalStepStatus;
+  director_approved_by: string | null;
+  director_approved_at: string | null;
+  director_notes: string | null;
+  hr_required: boolean;
+  hr_status: ApprovalStepStatus;
+  hr_approved_by: string | null;
+  hr_approved_at: string | null;
+  hr_notes: string | null;
+  rejection_reason: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  consultant?: DbConsultant;
+  requester?: DbUser;
+  director_approver?: DbUser;
+  hr_approver?: DbUser;
+}
+
+export interface CreateApprovalRequestInput {
+  request_type: ApprovalRequestType;
+  consultant_id: string;
+  request_data: SalaryIncreaseData | BonusPaymentData | EmployeeExitData;
+  effective_month: number;
+  effective_year: number;
+  request_notes?: string;
+  requested_by: string;
+  hr_required?: boolean;
+}
+
+export interface DbSalaryHistory {
+  id: string;
+  consultant_id: string;
+  salary_type: 'annual_salary' | 'day_rate';
+  amount: number;
+  currency: string;
+  effective_month: number;
+  effective_year: number;
+  change_type: 'initial' | 'increase' | 'decrease' | 'adjustment';
+  change_reason: string | null;
+  approval_request_id: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface DbBonusPayment {
+  id: string;
+  consultant_id: string;
+  amount: number;
+  currency: string;
+  bonus_type: 'performance' | 'retention' | 'project' | 'referral' | 'other';
+  reason: string;
+  payment_month: number;
+  payment_year: number;
+  approval_request_id: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface DbConsultantExit {
+  id: string;
+  consultant_id: string;
+  exit_reason: 'resignation' | 'redundancy' | 'end_of_contract' | 'dismissal' | 'mutual_agreement' | 'retirement';
+  exit_details: string | null;
+  last_working_day: string;
+  approval_request_id: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+// ============================================
+// HR TICKET TYPES
+// ============================================
+
+export type HrTicketType = 'contract_send' | 'contract_signed' | 'salary_increase' | 'bonus_payment' | 'employee_exit';
+export type HrTicketStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type HrTicketPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface DbHrTicket {
+  id: string;
+  reference_id: string | null;
+  ticket_type: HrTicketType;
+  consultant_id: string | null;
+  candidate_id: string | null;
+  offer_id: string | null;
+  approval_request_id: string | null;
+  ticket_data: Record<string, any> | null;
+  status: HrTicketStatus;
+  priority: HrTicketPriority;
+  due_date: string | null;
+  assigned_to: string | null;
+  notes: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  completion_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  // Joined
+  consultant?: DbConsultant;
+  candidate?: DbCandidate;
+  offer?: DbOffer;
+  approval_request?: DbApprovalRequest;
+  assignee?: DbUser;
+}
+
+export interface CreateHrTicketInput {
+  ticket_type: HrTicketType;
+  consultant_id?: string;
+  candidate_id?: string;
+  offer_id?: string;
+  approval_request_id?: string;
+  ticket_data?: Record<string, any>;
+  priority?: HrTicketPriority;
+  due_date?: string;
+  assigned_to?: string;
+  notes?: string;
+  created_by?: string;
+}
+
+// ============================================
 // CANDIDATES SERVICE
 // ============================================
 
@@ -279,6 +578,8 @@ export interface CreateRequirementInput {
   // Customer module fields
   company_id?: string;
   contact_id?: string;
+  // Winning candidate
+  winning_candidate_id?: string;
 }
 
 export const requirementsService = {
@@ -2111,3 +2412,1158 @@ export const consultantsService = {
     if (error) throw error;
   },
 };
+
+// ============================================
+// MISSIONS SERVICE
+// ============================================
+
+export const missionsService = {
+  async getAll(): Promise<DbMission[]> {
+    const { data, error } = await supabase
+      .from('missions')
+      .select(`
+        *,
+        requirement:requirements(*),
+        consultant:consultants(*),
+        customer:customers(*),
+        contact:customer_contacts(*)
+      `)
+      .is('deleted_at', null)
+      .order('start_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbMission | null> {
+    const { data, error } = await supabase
+      .from('missions')
+      .select(`
+        *,
+        requirement:requirements(*),
+        consultant:consultants(*),
+        customer:customers(*),
+        contact:customer_contacts(*)
+      `)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByConsultant(consultantId: string): Promise<DbMission[]> {
+    const { data, error } = await supabase
+      .from('missions')
+      .select(`
+        *,
+        requirement:requirements(*),
+        customer:customers(*),
+        contact:customer_contacts(*)
+      `)
+      .eq('consultant_id', consultantId)
+      .is('deleted_at', null)
+      .order('start_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getByCustomer(customerId: string): Promise<DbMission[]> {
+    const { data, error } = await supabase
+      .from('missions')
+      .select(`
+        *,
+        requirement:requirements(*),
+        consultant:consultants(*),
+        contact:customer_contacts(*)
+      `)
+      .eq('customer_id', customerId)
+      .is('deleted_at', null)
+      .order('start_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getByRequirement(requirementId: string): Promise<DbMission | null> {
+    const { data, error } = await supabase
+      .from('missions')
+      .select(`
+        *,
+        consultant:consultants(*),
+        customer:customers(*)
+      `)
+      .eq('requirement_id', requirementId)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) return null; // May not exist
+    return data;
+  },
+
+  async create(input: CreateMissionInput): Promise<DbMission> {
+    const { data, error } = await supabase
+      .from('missions')
+      .insert({
+        ...input,
+        status: 'active',
+      })
+      .select(`
+        *,
+        requirement:requirements(*),
+        consultant:consultants(*),
+        customer:customers(*),
+        contact:customer_contacts(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    
+    // Update consultant status to in_mission
+    await consultantsService.update(input.consultant_id, { status: 'in_mission' });
+    
+    return data;
+  },
+
+  async update(id: string, input: UpdateMissionInput): Promise<DbMission> {
+    const { data, error } = await supabase
+      .from('missions')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        requirement:requirements(*),
+        consultant:consultants(*),
+        customer:customers(*),
+        contact:customer_contacts(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string, deletedBy?: string): Promise<void> {
+    // Get mission first to update consultant status
+    const mission = await this.getById(id);
+    
+    const { error } = await supabase
+      .from('missions')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: deletedBy,
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+    
+    // Check if consultant has other active missions, if not set to bench
+    if (mission?.consultant_id) {
+      const otherMissions = await this.getByConsultant(mission.consultant_id);
+      const activeMissions = otherMissions.filter(m => m.id !== id && m.status === 'active');
+      if (activeMissions.length === 0) {
+        await consultantsService.update(mission.consultant_id, { status: 'bench' });
+      }
+    }
+  },
+};
+
+// ============================================
+// CONSULTANT MEETINGS SERVICE
+// ============================================
+
+export const consultantMeetingsService = {
+  async getAll(): Promise<DbConsultantMeeting[]> {
+    const { data, error } = await supabase
+      .from('consultant_meetings')
+      .select(`
+        *,
+        consultant:consultants(*),
+        conductor:users!consultant_meetings_conducted_by_fkey(*)
+      `)
+      .is('deleted_at', null)
+      .order('scheduled_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbConsultantMeeting | null> {
+    const { data, error } = await supabase
+      .from('consultant_meetings')
+      .select(`
+        *,
+        consultant:consultants(*),
+        conductor:users!consultant_meetings_conducted_by_fkey(*)
+      `)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByConsultant(consultantId: string): Promise<DbConsultantMeeting[]> {
+    const { data, error } = await supabase
+      .from('consultant_meetings')
+      .select(`
+        *,
+        conductor:users!consultant_meetings_conducted_by_fkey(*)
+      `)
+      .eq('consultant_id', consultantId)
+      .is('deleted_at', null)
+      .order('scheduled_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getUpcoming(): Promise<DbConsultantMeeting[]> {
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase
+      .from('consultant_meetings')
+      .select(`
+        *,
+        consultant:consultants(*),
+        conductor:users!consultant_meetings_conducted_by_fkey(*)
+      `)
+      .eq('status', 'scheduled')
+      .gte('scheduled_date', today)
+      .is('deleted_at', null)
+      .order('scheduled_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateConsultantMeetingInput): Promise<DbConsultantMeeting> {
+    const { data, error } = await supabase
+      .from('consultant_meetings')
+      .insert({
+        ...input,
+        status: 'scheduled',
+      })
+      .select(`
+        *,
+        consultant:consultants(*),
+        conductor:users!consultant_meetings_conducted_by_fkey(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: UpdateConsultantMeetingInput): Promise<DbConsultantMeeting> {
+    const { data, error } = await supabase
+      .from('consultant_meetings')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        consultant:consultants(*),
+        conductor:users!consultant_meetings_conducted_by_fkey(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async complete(id: string, input: UpdateConsultantMeetingInput): Promise<DbConsultantMeeting> {
+    return this.update(id, {
+      ...input,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+    });
+  },
+
+  async cancel(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('consultant_meetings')
+      .update({
+        status: 'cancelled',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async delete(id: string, deletedBy?: string): Promise<void> {
+    const { error } = await supabase
+      .from('consultant_meetings')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: deletedBy,
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
+
+// ============================================
+// APPROVAL REQUESTS SERVICE
+// ============================================
+
+export const approvalRequestsService = {
+  async getAll(): Promise<DbApprovalRequest[]> {
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*),
+        director_approver:users!approval_requests_director_approved_by_fkey(*),
+        hr_approver:users!approval_requests_hr_approved_by_fkey(*)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbApprovalRequest | null> {
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*),
+        director_approver:users!approval_requests_director_approved_by_fkey(*),
+        hr_approver:users!approval_requests_hr_approved_by_fkey(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByConsultant(consultantId: string): Promise<DbApprovalRequest[]> {
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .select(`
+        *,
+        requester:users!approval_requests_requested_by_fkey(*),
+        director_approver:users!approval_requests_director_approved_by_fkey(*),
+        hr_approver:users!approval_requests_hr_approved_by_fkey(*)
+      `)
+      .eq('consultant_id', consultantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getPendingForDirector(): Promise<DbApprovalRequest[]> {
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*)
+      `)
+      .eq('director_status', 'pending')
+      .in('status', ['pending', 'pending_hr'])
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getPendingForHR(): Promise<DbApprovalRequest[]> {
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*),
+        director_approver:users!approval_requests_director_approved_by_fkey(*)
+      `)
+      .eq('hr_required', true)
+      .eq('hr_status', 'pending')
+      .eq('director_status', 'approved')
+      .eq('status', 'pending_hr')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateApprovalRequestInput): Promise<DbApprovalRequest> {
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .insert({
+        ...input,
+        status: 'pending',
+        director_status: 'pending',
+        hr_status: input.hr_required ? 'pending' : 'not_required',
+        requested_at: new Date().toISOString(),
+      })
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async directorApprove(id: string, userId: string, notes?: string): Promise<DbApprovalRequest> {
+    const request = await this.getById(id);
+    if (!request) throw new Error('Request not found');
+
+    const newStatus = request.hr_required ? 'pending_hr' : 'approved';
+    
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .update({
+        director_status: 'approved',
+        director_approved_by: userId,
+        director_approved_at: new Date().toISOString(),
+        director_notes: notes,
+        status: newStatus,
+        completed_at: newStatus === 'approved' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*)
+      `)
+      .single();
+
+    if (error) throw error;
+
+    if (newStatus === 'approved') {
+      await this.processApprovedRequest(data);
+    }
+
+    return data;
+  },
+
+  async hrApprove(id: string, userId: string, notes?: string): Promise<DbApprovalRequest> {
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .update({
+        hr_status: 'approved',
+        hr_approved_by: userId,
+        hr_approved_at: new Date().toISOString(),
+        hr_notes: notes,
+        status: 'approved',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    await this.processApprovedRequest(data);
+    return data;
+  },
+
+  async reject(id: string, userId: string, reason: string, stage: 'director' | 'hr'): Promise<DbApprovalRequest> {
+    const updateData: any = {
+      status: 'rejected',
+      rejection_reason: reason,
+      rejected_by: userId,
+      rejected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (stage === 'director') {
+      updateData.director_status = 'rejected';
+    } else {
+      updateData.hr_status = 'rejected';
+    }
+
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        consultant:consultants(*),
+        requester:users!approval_requests_requested_by_fkey(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async processApprovedRequest(request: DbApprovalRequest): Promise<void> {
+    const { request_type, request_data, consultant_id, effective_month, effective_year, id } = request;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    if (request_type === 'salary_increase') {
+      const data = request_data as SalaryIncreaseData;
+      // Create HR ticket for implementation
+      await hrTicketsService.create({
+        ticket_type: 'salary_increase',
+        consultant_id,
+        approval_request_id: id,
+        ticket_data: {
+          current_salary: data.current_salary,
+          new_salary: data.new_salary,
+          salary_type: data.salary_type,
+          effective_date: `${monthNames[effective_month - 1]} ${effective_year}`,
+          reason: data.reason,
+        },
+        priority: 'normal',
+      });
+      // Also create the salary history record immediately (but HR needs to process payroll)
+      await salaryHistoryService.create({
+        consultant_id,
+        salary_type: data.salary_type,
+        amount: data.new_salary,
+        effective_month,
+        effective_year,
+        change_type: 'increase',
+        change_reason: data.reason,
+        approval_request_id: id,
+      });
+      if (data.salary_type === 'annual_salary') {
+        await consultantsService.update(consultant_id, { salary_amount: data.new_salary });
+      } else {
+        await consultantsService.update(consultant_id, { day_rate: data.new_salary });
+      }
+    } else if (request_type === 'bonus_payment') {
+      const data = request_data as BonusPaymentData;
+      // Create HR ticket for implementation
+      await hrTicketsService.create({
+        ticket_type: 'bonus_payment',
+        consultant_id,
+        approval_request_id: id,
+        ticket_data: {
+          amount: data.amount,
+          bonus_type: data.bonus_type,
+          payment_date: `${monthNames[effective_month - 1]} ${effective_year}`,
+          reason: data.reason,
+        },
+        priority: 'normal',
+      });
+      await bonusPaymentsService.create({
+        consultant_id,
+        amount: data.amount,
+        bonus_type: data.bonus_type,
+        reason: data.reason,
+        payment_month: effective_month,
+        payment_year: effective_year,
+        approval_request_id: id,
+      });
+    } else if (request_type === 'employee_exit') {
+      const data = request_data as EmployeeExitData;
+      // Create HR ticket for exit processing (exit interview, letter, etc.)
+      await hrTicketsService.create({
+        ticket_type: 'employee_exit',
+        consultant_id,
+        approval_request_id: id,
+        ticket_data: {
+          exit_reason: data.exit_reason,
+          last_working_day: data.last_working_day,
+          exit_details: data.exit_details,
+        },
+        priority: 'high',
+      });
+      // Create exit record but don't terminate until HR completes
+      await consultantExitsService.create({
+        consultant_id,
+        exit_reason: data.exit_reason,
+        exit_details: data.exit_details,
+        last_working_day: data.last_working_day,
+        approval_request_id: id,
+      });
+      // Note: Don't set status to terminated yet - HR ticket completion will do that
+    }
+  },
+};
+
+// ============================================
+// SALARY HISTORY SERVICE
+// ============================================
+
+export const salaryHistoryService = {
+  async getByConsultant(consultantId: string): Promise<DbSalaryHistory[]> {
+    const { data, error } = await supabase
+      .from('salary_history')
+      .select('*')
+      .eq('consultant_id', consultantId)
+      .order('effective_year', { ascending: false })
+      .order('effective_month', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: {
+    consultant_id: string;
+    salary_type: 'annual_salary' | 'day_rate';
+    amount: number;
+    effective_month: number;
+    effective_year: number;
+    change_type: 'initial' | 'increase' | 'decrease' | 'adjustment';
+    change_reason?: string;
+    approval_request_id?: string;
+    created_by?: string;
+  }): Promise<DbSalaryHistory> {
+    const { data, error } = await supabase
+      .from('salary_history')
+      .insert({ ...input, currency: 'GBP' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+
+// ============================================
+// BONUS PAYMENTS SERVICE
+// ============================================
+
+export const bonusPaymentsService = {
+  async getByConsultant(consultantId: string): Promise<DbBonusPayment[]> {
+    const { data, error } = await supabase
+      .from('bonus_payments')
+      .select('*')
+      .eq('consultant_id', consultantId)
+      .order('payment_year', { ascending: false })
+      .order('payment_month', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: {
+    consultant_id: string;
+    amount: number;
+    bonus_type: 'performance' | 'retention' | 'project' | 'referral' | 'other';
+    reason: string;
+    payment_month: number;
+    payment_year: number;
+    approval_request_id?: string;
+    created_by?: string;
+  }): Promise<DbBonusPayment> {
+    const { data, error } = await supabase
+      .from('bonus_payments')
+      .insert({ ...input, currency: 'GBP' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+
+// ============================================
+// CONSULTANT EXITS SERVICE
+// ============================================
+
+export const consultantExitsService = {
+  async getByConsultant(consultantId: string): Promise<DbConsultantExit | null> {
+    const { data, error } = await supabase
+      .from('consultant_exits')
+      .select('*')
+      .eq('consultant_id', consultantId)
+      .single();
+
+    if (error) return null;
+    return data;
+  },
+
+  async create(input: {
+    consultant_id: string;
+    exit_reason: string;
+    exit_details?: string;
+    last_working_day: string;
+    approval_request_id?: string;
+    created_by?: string;
+  }): Promise<DbConsultantExit> {
+    const { data, error } = await supabase
+      .from('consultant_exits')
+      .insert(input)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+};
+
+// ============================================
+// HR TICKETS SERVICE
+// ============================================
+
+export const hrTicketsService = {
+  async getAll(): Promise<DbHrTicket[]> {
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .select(`
+        *,
+        consultant:consultants(*),
+        candidate:candidates(*),
+        assignee:users!hr_tickets_assigned_to_fkey(*)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbHrTicket | null> {
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .select(`
+        *,
+        consultant:consultants(*),
+        candidate:candidates(*),
+        assignee:users!hr_tickets_assigned_to_fkey(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getPending(): Promise<DbHrTicket[]> {
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .select(`
+        *,
+        consultant:consultants(*),
+        candidate:candidates(*),
+        assignee:users!hr_tickets_assigned_to_fkey(*)
+      `)
+      .in('status', ['pending', 'in_progress'])
+      .order('priority', { ascending: false })
+      .order('due_date', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getByAssignee(userId: string): Promise<DbHrTicket[]> {
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .select(`
+        *,
+        consultant:consultants(*),
+        candidate:candidates(*),
+        assignee:users!hr_tickets_assigned_to_fkey(*)
+      `)
+      .eq('assigned_to', userId)
+      .in('status', ['pending', 'in_progress'])
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateHrTicketInput): Promise<DbHrTicket> {
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .insert({
+        ...input,
+        status: 'pending',
+      })
+      .select(`
+        *,
+        consultant:consultants(*),
+        candidate:candidates(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: Partial<DbHrTicket>): Promise<DbHrTicket> {
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        consultant:consultants(*),
+        candidate:candidates(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async startWork(id: string): Promise<DbHrTicket> {
+    return this.update(id, { status: 'in_progress' });
+  },
+
+  async complete(id: string, userId: string, notes?: string): Promise<DbHrTicket> {
+    const ticket = await this.getById(id);
+    if (!ticket) throw new Error('Ticket not found');
+
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        completed_by: userId,
+        completion_notes: notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Process completion based on ticket type
+    await this.processCompletedTicket(ticket);
+
+    return data;
+  },
+
+  async processCompletedTicket(ticket: DbHrTicket): Promise<void> {
+    // When HR completes a ticket, update the related records
+    if (ticket.ticket_type === 'salary_increase' && ticket.approval_request_id) {
+      // Salary increase already processed when approved - just mark complete
+    } else if (ticket.ticket_type === 'bonus_payment' && ticket.approval_request_id) {
+      // Bonus already processed when approved
+    } else if (ticket.ticket_type === 'employee_exit' && ticket.consultant_id) {
+      // Mark exit as fully processed
+      await consultantsService.update(ticket.consultant_id, {
+        status: 'terminated',
+      });
+    } else if (ticket.ticket_type === 'contract_send' && ticket.offer_id) {
+      // Update offer status to contract_sent
+      await offersService.markContractSent(ticket.offer_id, ticket.completed_by || '');
+    }
+  },
+
+  async cancel(id: string): Promise<DbHrTicket> {
+    return this.update(id, { status: 'cancelled' });
+  },
+};
+
+// ============================================
+// DASHBOARD STATS SERVICE
+// ============================================
+
+export const dashboardStatsService = {
+  // Get manager stats
+  async getManagerStats(managerId: string, dateFrom?: string, dateTo?: string): Promise<{
+    interviews: { phone: number; technical: number; director: number; customer: number; };
+    conversions: { phoneToTech: number; techToDirector: number; directorToCustomer: number; customerToSigned: number; };
+    customerMeetings: number;
+    newCustomers: number;
+    consultantsActive: number;
+    consultantsBench: number;
+    weeklyInterviews: { week: string; count: number; }[];
+    requirementsWon: number;
+    requirementsLost: number;
+  }> {
+    // Get all interviews
+    const { data: interviews } = await supabase
+      .from('interviews')
+      .select('*')
+      .eq('interviewer_id', managerId);
+    
+    const allInterviews = interviews || [];
+    
+    // Filter by date if provided
+    const filteredInterviews = dateFrom && dateTo 
+      ? allInterviews.filter(i => i.scheduled_date >= dateFrom && i.scheduled_date <= dateTo)
+      : allInterviews;
+
+    // Count by stage
+    const interviewCounts = {
+      phone: filteredInterviews.filter(i => i.stage === 'phone_qualification').length,
+      technical: filteredInterviews.filter(i => i.stage === 'technical_interview').length,
+      director: filteredInterviews.filter(i => i.stage === 'director_interview').length,
+      customer: 0, // Will get from customer assessments
+    };
+
+    // Get customer assessments (as "customer interviews")
+    const { data: assessments } = await supabase
+      .from('customer_assessments')
+      .select('*, application:applications(requirement:requirements(manager_id))')
+      .not('application', 'is', null);
+    
+    const managerAssessments = (assessments || []).filter(
+      a => a.application?.requirement?.manager_id === managerId
+    );
+    interviewCounts.customer = dateFrom && dateTo
+      ? managerAssessments.filter(a => a.scheduled_date >= dateFrom && a.scheduled_date <= dateTo).length
+      : managerAssessments.length;
+
+    // Calculate conversions (passed interviews)
+    const passedPhone = filteredInterviews.filter(i => i.stage === 'phone_qualification' && i.outcome === 'pass').length;
+    const passedTech = filteredInterviews.filter(i => i.stage === 'technical_interview' && i.outcome === 'pass').length;
+    const passedDirector = filteredInterviews.filter(i => i.stage === 'director_interview' && i.outcome === 'pass').length;
+    const passedCustomer = managerAssessments.filter(a => a.outcome === 'go').length;
+
+    const conversions = {
+      phoneToTech: interviewCounts.phone > 0 ? Math.round((passedPhone / interviewCounts.phone) * 100) : 0,
+      techToDirector: interviewCounts.technical > 0 ? Math.round((passedTech / interviewCounts.technical) * 100) : 0,
+      directorToCustomer: interviewCounts.director > 0 ? Math.round((passedDirector / interviewCounts.director) * 100) : 0,
+      customerToSigned: interviewCounts.customer > 0 ? Math.round((passedCustomer / interviewCounts.customer) * 100) : 0,
+    };
+
+    // Get customer meetings
+    const { data: meetings } = await supabase
+      .from('customer_meetings')
+      .select('*')
+      .eq('created_by', managerId);
+    
+    const filteredMeetings = dateFrom && dateTo
+      ? (meetings || []).filter(m => m.meeting_date >= dateFrom && m.meeting_date <= dateTo)
+      : meetings || [];
+    
+    // Get new customers
+    const { data: customers } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('created_by', managerId);
+    
+    const filteredCustomers = dateFrom && dateTo
+      ? (customers || []).filter(c => c.created_at >= dateFrom && c.created_at <= dateTo)
+      : customers || [];
+
+    // Get consultant stats (from manager's requirements)
+    const { data: requirements } = await supabase
+      .from('requirements')
+      .select('id, status')
+      .eq('manager_id', managerId);
+    
+    const reqIds = (requirements || []).map(r => r.id);
+    
+    const { data: missions } = await supabase
+      .from('missions')
+      .select('*, consultant:consultants(*)')
+      .in('requirement_id', reqIds.length > 0 ? reqIds : ['none']);
+    
+    const activeMissions = (missions || []).filter(m => m.status === 'active');
+    const consultantsActive = new Set(activeMissions.map(m => m.consultant_id)).size;
+
+    // Get consultants on bench (all consultants from missions that aren't active)
+    const allConsultantIds = new Set((missions || []).map(m => m.consultant_id));
+    const { data: allConsultants } = await supabase
+      .from('consultants')
+      .select('*')
+      .eq('status', 'bench');
+    
+    const consultantsBench = (allConsultants || []).length;
+
+    // Weekly interviews for chart
+    const weeklyInterviews = getWeeklyData(filteredInterviews, 'scheduled_date', 8);
+
+    // Requirements won/lost
+    const wonRequirements = (requirements || []).filter(r => r.status === 'won' || r.status === 'filled').length;
+    const lostRequirements = (requirements || []).filter(r => r.status === 'lost').length;
+
+    return {
+      interviews: interviewCounts,
+      conversions,
+      customerMeetings: filteredMeetings.length,
+      newCustomers: filteredCustomers.length,
+      consultantsActive,
+      consultantsBench,
+      weeklyInterviews,
+      requirementsWon: wonRequirements,
+      requirementsLost: lostRequirements,
+    };
+  },
+
+  // Get recruiter stats
+  async getRecruiterStats(recruiterId: string, dateFrom?: string, dateTo?: string): Promise<{
+    candidatesAdded: number;
+    candidatesThisWeek: number;
+    averageQuality: number;
+    interviews: { phone: number; technical: number; director: number; };
+    conversions: { phoneToTech: number; techToDirector: number; directorToOffer: number; };
+    weeklyCandidates: { week: string; count: number; }[];
+    offersGenerated: number;
+    offersSigned: number;
+  }> {
+    // Get candidates added by recruiter
+    const { data: candidates } = await supabase
+      .from('candidates')
+      .select('*')
+      .eq('assigned_recruiter', recruiterId)
+      .is('deleted_at', null);
+    
+    const allCandidates = candidates || [];
+    const filteredCandidates = dateFrom && dateTo
+      ? allCandidates.filter(c => c.created_at >= dateFrom && c.created_at <= dateTo)
+      : allCandidates;
+
+    // Candidates this week
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const candidatesThisWeek = allCandidates.filter(c => new Date(c.created_at) >= oneWeekAgo).length;
+
+    // Average quality (star ratings)
+    const candidatesWithRating = allCandidates.filter(c => c.star_rating);
+    const averageQuality = candidatesWithRating.length > 0
+      ? candidatesWithRating.reduce((sum, c) => sum + (c.star_rating || 0), 0) / candidatesWithRating.length
+      : 0;
+
+    // Get interviews for their candidates
+    const candidateIds = allCandidates.map(c => c.id);
+    const { data: interviews } = await supabase
+      .from('interviews')
+      .select('*')
+      .in('candidate_id', candidateIds.length > 0 ? candidateIds : ['none']);
+    
+    const filteredInterviews = dateFrom && dateTo
+      ? (interviews || []).filter(i => i.scheduled_date >= dateFrom && i.scheduled_date <= dateTo)
+      : interviews || [];
+
+    const interviewCounts = {
+      phone: filteredInterviews.filter(i => i.stage === 'phone_qualification').length,
+      technical: filteredInterviews.filter(i => i.stage === 'technical_interview').length,
+      director: filteredInterviews.filter(i => i.stage === 'director_interview').length,
+    };
+
+    // Conversions
+    const passedPhone = filteredInterviews.filter(i => i.stage === 'phone_qualification' && i.outcome === 'pass').length;
+    const passedTech = filteredInterviews.filter(i => i.stage === 'technical_interview' && i.outcome === 'pass').length;
+    const passedDirector = filteredInterviews.filter(i => i.stage === 'director_interview' && i.outcome === 'pass').length;
+
+    const conversions = {
+      phoneToTech: interviewCounts.phone > 0 ? Math.round((passedPhone / interviewCounts.phone) * 100) : 0,
+      techToDirector: interviewCounts.technical > 0 ? Math.round((passedTech / interviewCounts.technical) * 100) : 0,
+      directorToOffer: interviewCounts.director > 0 ? Math.round((passedDirector / interviewCounts.director) * 100) : 0,
+    };
+
+    // Weekly candidates chart
+    const weeklyCandidates = getWeeklyData(filteredCandidates, 'created_at', 8);
+
+    // Offers
+    const { data: offers } = await supabase
+      .from('offers')
+      .select('*')
+      .in('candidate_id', candidateIds.length > 0 ? candidateIds : ['none'])
+      .is('deleted_at', null);
+    
+    const offersGenerated = (offers || []).length;
+    const offersSigned = (offers || []).filter(o => o.status === 'contract_signed').length;
+
+    return {
+      candidatesAdded: filteredCandidates.length,
+      candidatesThisWeek,
+      averageQuality: Math.round(averageQuality * 10) / 10,
+      interviews: interviewCounts,
+      conversions,
+      weeklyCandidates,
+      offersGenerated,
+      offersSigned,
+    };
+  },
+
+  // Get director stats (aggregated across managers)
+  async getDirectorStats(directorId: string): Promise<{
+    managers: { id: string; name: string; interviews: number; conversions: number; consultantsActive: number; }[];
+    totals: { interviews: number; customerMeetings: number; consultantsActive: number; consultantsBench: number; };
+    pendingApprovals: number;
+  }> {
+    // Get all managers (users with manager role)
+    const { data: users } = await supabase
+      .from('users')
+      .select('*')
+      .contains('roles', ['manager']);
+    
+    const managers = users || [];
+    const managerStats = [];
+
+    for (const manager of managers) {
+      const stats = await this.getManagerStats(manager.id);
+      managerStats.push({
+        id: manager.id,
+        name: manager.full_name || manager.email,
+        interviews: stats.interviews.phone + stats.interviews.technical + stats.interviews.director + stats.interviews.customer,
+        conversions: stats.conversions.customerToSigned,
+        consultantsActive: stats.consultantsActive,
+      });
+    }
+
+    // Totals
+    const totals = {
+      interviews: managerStats.reduce((sum, m) => sum + m.interviews, 0),
+      customerMeetings: 0, // Would need to aggregate
+      consultantsActive: managerStats.reduce((sum, m) => sum + m.consultantsActive, 0),
+      consultantsBench: 0,
+    };
+
+    // Get total bench consultants
+    const { data: benchConsultants } = await supabase
+      .from('consultants')
+      .select('id')
+      .eq('status', 'bench');
+    totals.consultantsBench = (benchConsultants || []).length;
+
+    // Pending approvals count
+    const { data: pendingApprovals } = await supabase
+      .from('approval_requests')
+      .select('id')
+      .eq('director_status', 'pending');
+    
+    const { data: pendingOffers } = await supabase
+      .from('offers')
+      .select('id')
+      .eq('status', 'pending_approval');
+
+    return {
+      managers: managerStats,
+      totals,
+      pendingApprovals: (pendingApprovals || []).length + (pendingOffers || []).length,
+    };
+  },
+};
+
+// Helper to group data by week
+function getWeeklyData(items: any[], dateField: string, weeks: number): { week: string; count: number }[] {
+  const result: { week: string; count: number }[] = [];
+  const now = new Date();
+  
+  for (let i = weeks - 1; i >= 0; i--) {
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    
+    const count = items.filter(item => {
+      const itemDate = new Date(item[dateField]);
+      return itemDate >= weekStart && itemDate <= weekEnd;
+    }).length;
+    
+    const weekLabel = `${weekStart.getDate()}/${weekStart.getMonth() + 1}`;
+    result.push({ week: weekLabel, count });
+  }
+  
+  return result;
+}

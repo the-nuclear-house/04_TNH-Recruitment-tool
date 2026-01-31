@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Users, 
@@ -16,6 +16,22 @@ import {
   ArrowLeft,
   Clock,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  CalendarDays,
+  List,
+  Plus,
+  CheckCircle,
+  Edit,
+  ClipboardList,
+  TrendingUp,
+  Gift,
+  LogOut,
+  AlertCircle,
+  XCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -27,30 +43,191 @@ import {
   Badge,
   Avatar,
   EmptyState,
+  Modal,
+  Select,
+  Textarea,
 } from '@/components/ui';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { consultantsService, type DbConsultant } from '@/lib/services';
+import { 
+  consultantsService, 
+  consultantMeetingsService,
+  missionsService,
+  approvalRequestsService,
+  salaryHistoryService,
+  bonusPaymentsService,
+  consultantExitsService,
+  type DbConsultant, 
+  type DbConsultantMeeting,
+  type DbMission,
+  type DbApprovalRequest,
+  type DbSalaryHistory,
+  type DbBonusPayment,
+  type DbConsultantExit,
+  type InductionChecklist,
+  type QuarterlyFeedback,
+  type AppraisalData,
+  type SalaryIncreaseData,
+  type BonusPaymentData,
+  type EmployeeExitData,
+} from '@/lib/services';
 import type { BadgeVariant } from '@/components/ui/Badge';
 
 const statusConfig: Record<string, { label: string; colour: BadgeVariant }> = {
-  bench: { label: 'Bench', colour: 'amber' },
+  bench: { label: 'On Bench', colour: 'amber' },
   in_mission: { label: 'In Mission', colour: 'green' },
   on_leave: { label: 'On Leave', colour: 'blue' },
   terminated: { label: 'Terminated', colour: 'red' },
 };
 
+const meetingTypeConfig: Record<string, { label: string; colour: string; shortLabel: string }> = {
+  induction: { label: 'Induction Meeting', colour: 'bg-purple-500', shortLabel: 'IND' },
+  quarterly_review: { label: 'Quarterly Review', colour: 'bg-blue-500', shortLabel: 'QTR' },
+  annual_appraisal: { label: 'Annual Appraisal', colour: 'bg-green-500', shortLabel: 'APR' },
+};
+
+// Timeline helpers
+function getWeeksInRange(startDate: Date, numWeeks: number): Date[] {
+  const weeks: Date[] = [];
+  const current = new Date(startDate);
+  current.setDate(current.getDate() - current.getDay() + 1);
+  
+  for (let i = 0; i < numWeeks; i++) {
+    weeks.push(new Date(current));
+    current.setDate(current.getDate() + 7);
+  }
+  return weeks;
+}
+
+function formatWeekLabel(date: Date): string {
+  const day = date.getDate();
+  const month = date.toLocaleString('en-GB', { month: 'short' });
+  return `${day} ${month}`;
+}
+
+function getBarStyle(startDate: string, endDate: string | null, weeks: Date[]): { left: string; width: string } | null {
+  if (weeks.length === 0) return null;
+  
+  const timelineStart = weeks[0];
+  const timelineEnd = new Date(weeks[weeks.length - 1]);
+  timelineEnd.setDate(timelineEnd.getDate() + 6);
+  
+  const itemStart = new Date(startDate);
+  const itemEnd = endDate ? new Date(endDate) : timelineEnd;
+  
+  const visibleStart = itemStart < timelineStart ? timelineStart : itemStart;
+  const visibleEnd = itemEnd > timelineEnd ? timelineEnd : itemEnd;
+  
+  const totalDays = (timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
+  const startOffset = (visibleStart.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
+  const duration = (visibleEnd.getTime() - visibleStart.getTime()) / (1000 * 60 * 60 * 24);
+  
+  const left = (startOffset / totalDays) * 100;
+  const width = (duration / totalDays) * 100;
+  
+  if (width <= 0) return null;
+  
+  return {
+    left: `${Math.max(0, left)}%`,
+    width: `${Math.min(100 - left, width)}%`,
+  };
+}
+
+function getMeetingPosition(meetingDate: string, weeks: Date[]): string | null {
+  if (weeks.length === 0) return null;
+  
+  const timelineStart = weeks[0];
+  const timelineEnd = new Date(weeks[weeks.length - 1]);
+  timelineEnd.setDate(timelineEnd.getDate() + 6);
+  
+  const meeting = new Date(meetingDate);
+  if (meeting < timelineStart || meeting > timelineEnd) return null;
+  
+  const totalDays = (timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
+  const offset = (meeting.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
+  
+  return `${(offset / totalDays) * 100}%`;
+}
+
+// Default checklist for induction
+const defaultInductionChecklist: InductionChecklist = {
+  induction_pack_presented: false,
+  risk_assessment_presented: false,
+  health_safety_briefing: false,
+  it_systems_access: false,
+  company_policies_reviewed: false,
+  emergency_procedures: false,
+  team_introductions: false,
+  mission_briefing: false,
+};
+
+// Default feedback for quarterly review
+const defaultQuarterlyFeedback: QuarterlyFeedback = {
+  customer_satisfaction: 3,
+  mission_satisfaction: 3,
+  company_satisfaction: 3,
+  work_life_balance: 3,
+  career_development: 3,
+  communication_rating: 3,
+};
+
+// Default appraisal data
+const defaultAppraisalData: AppraisalData = {
+  overall_performance: 3,
+  technical_skills: 3,
+  communication_skills: 3,
+  teamwork: 3,
+  initiative: 3,
+  reliability: 3,
+  goals_achieved: '',
+  areas_of_strength: '',
+  development_areas: '',
+  training_needs: '',
+  career_aspirations: '',
+  salary_discussion_notes: '',
+  next_year_objectives: '',
+};
+
+// ============================================
+// CONSULTANTS LIST PAGE
+// ============================================
+
 export function ConsultantsPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuthStore();
+  const permissions = usePermissions();
   
   const [consultants, setConsultants] = useState<DbConsultant[]>([]);
+  const [meetings, setMeetings] = useState<DbConsultantMeeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'gantt' | 'cards' | 'meetings'>('gantt');
+  
+  // Timeline state
+  const [timelineStart, setTimelineStart] = useState<Date>(() => {
+    const today = new Date();
+    today.setDate(today.getDate() - 14);
+    return today;
+  });
+  const numWeeks = 12;
+
+  // Meeting modal state
+  const [isBookMeetingModalOpen, setIsBookMeetingModalOpen] = useState(false);
+  const [selectedConsultantForMeeting, setSelectedConsultantForMeeting] = useState<DbConsultant | null>(null);
+  const [bookMeetingForm, setBookMeetingForm] = useState({
+    meeting_type: 'quarterly_review' as 'induction' | 'quarterly_review' | 'annual_appraisal',
+    scheduled_date: '',
+  });
+  const [isBookingMeeting, setIsBookingMeeting] = useState(false);
+
+  // Meeting detail modal
+  const [selectedMeeting, setSelectedMeeting] = useState<DbConsultantMeeting | null>(null);
+  const [isMeetingDetailModalOpen, setIsMeetingDetailModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -59,28 +236,114 @@ export function ConsultantsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const data = await consultantsService.getAll();
-      setConsultants(data);
+      const [consultantsData, meetingsData] = await Promise.all([
+        consultantsService.getAll(),
+        consultantMeetingsService.getAll(),
+      ]);
+      setConsultants(consultantsData);
+      setMeetings(meetingsData);
     } catch (error) {
-      console.error('Error loading consultants:', error);
+      console.error('Error loading data:', error);
       toast.error('Error', 'Failed to load consultants');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const weeks = useMemo(() => getWeeksInRange(timelineStart, numWeeks), [timelineStart, numWeeks]);
+
   // Filter consultants
-  const filteredConsultants = consultants.filter(consultant => {
-    const matchesSearch = searchQuery === '' || 
-      `${consultant.first_name} ${consultant.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      consultant.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      consultant.reference_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      consultant.job_title?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || consultant.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const filteredConsultants = useMemo(() => {
+    return consultants.filter(c => {
+      const matchesSearch = !searchQuery || 
+        `${c.first_name} ${c.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.reference_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.job_title?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [consultants, searchQuery, statusFilter]);
+
+  // Get meetings for a consultant
+  const getMeetingsForConsultant = (consultantId: string) => {
+    return meetings.filter(m => m.consultant_id === consultantId);
+  };
+
+  // Upcoming meetings
+  const upcomingMeetings = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return meetings
+      .filter(m => m.status === 'scheduled' && m.scheduled_date >= today)
+      .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+  }, [meetings]);
+
+  // Timeline navigation
+  const goToPreviousWeeks = () => {
+    setTimelineStart(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() - 7 * 4);
+      return newDate;
+    });
+  };
+
+  const goToNextWeeks = () => {
+    setTimelineStart(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() + 7 * 4);
+      return newDate;
+    });
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    today.setDate(today.getDate() - 14);
+    setTimelineStart(today);
+  };
+
+  // Book meeting
+  const handleBookMeeting = async () => {
+    if (!selectedConsultantForMeeting || !bookMeetingForm.scheduled_date) {
+      toast.error('Error', 'Please select a date');
+      return;
+    }
+
+    setIsBookingMeeting(true);
+    try {
+      await consultantMeetingsService.create({
+        consultant_id: selectedConsultantForMeeting.id,
+        meeting_type: bookMeetingForm.meeting_type,
+        scheduled_date: bookMeetingForm.scheduled_date,
+        created_by: user?.id,
+      });
+      toast.success('Meeting Scheduled', `${meetingTypeConfig[bookMeetingForm.meeting_type].label} scheduled`);
+      setIsBookMeetingModalOpen(false);
+      setSelectedConsultantForMeeting(null);
+      setBookMeetingForm({ meeting_type: 'quarterly_review', scheduled_date: '' });
+      loadData();
+    } catch (error) {
+      console.error('Error booking meeting:', error);
+      toast.error('Error', 'Failed to schedule meeting');
+    } finally {
+      setIsBookingMeeting(false);
+    }
+  };
+
+  // Open meeting detail
+  const openMeetingDetail = async (meetingId: string) => {
+    try {
+      const meeting = await consultantMeetingsService.getById(meetingId);
+      if (meeting) {
+        setSelectedMeeting(meeting);
+        setIsMeetingDetailModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error loading meeting:', error);
+      toast.error('Error', 'Failed to load meeting details');
+    }
+  };
 
   // Stats
   const stats = {
@@ -107,7 +370,7 @@ export function ConsultantsPage() {
     <div className="min-h-screen">
       <Header 
         title="Consultants" 
-        subtitle={`${stats.total} consultants in the company`}
+        subtitle={`${stats.total} consultants`}
       />
 
       <div className="p-6 space-y-6">
@@ -118,12 +381,12 @@ export function ConsultantsPage() {
             onClick={() => setStatusFilter('all')}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-brand-cyan/10 rounded-lg">
-                <Users className="h-5 w-5 text-brand-cyan" />
+              <div className="p-2 bg-brand-grey-100 rounded-lg">
+                <Users className="h-5 w-5 text-brand-slate-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-brand-slate-900">{stats.total}</p>
-                <p className="text-sm text-brand-grey-400">Total Consultants</p>
+                <p className="text-sm text-brand-grey-400">Total</p>
               </div>
             </div>
           </Card>
@@ -137,7 +400,7 @@ export function ConsultantsPage() {
                 <Clock className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{stats.bench}</p>
+                <p className="text-2xl font-bold text-amber-600">{stats.bench}</p>
                 <p className="text-sm text-brand-grey-400">On Bench</p>
               </div>
             </div>
@@ -152,7 +415,7 @@ export function ConsultantsPage() {
                 <Briefcase className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{stats.inMission}</p>
+                <p className="text-2xl font-bold text-green-600">{stats.inMission}</p>
                 <p className="text-sm text-brand-grey-400">In Mission</p>
               </div>
             </div>
@@ -167,107 +430,472 @@ export function ConsultantsPage() {
                 <Calendar className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{stats.onLeave}</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.onLeave}</p>
                 <p className="text-sm text-brand-grey-400">On Leave</p>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Search */}
-        <div className="flex gap-4">
-          <div className="flex-1 relative">
+        {/* Search and Tabs */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="relative w-full sm:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-grey-400" />
             <Input
-              placeholder="Search consultants by name, email, ID, or job title..."
+              placeholder="Search consultants..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
           </div>
+          
+          <div className="flex items-center gap-2 bg-brand-grey-100 rounded-lg p-1">
+            <button
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                activeTab === 'gantt' ? 'bg-white shadow text-brand-slate-900' : 'text-brand-grey-500 hover:text-brand-slate-700'
+              }`}
+              onClick={() => setActiveTab('gantt')}
+            >
+              <CalendarDays className="h-4 w-4" />
+              Timeline
+            </button>
+            <button
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                activeTab === 'cards' ? 'bg-white shadow text-brand-slate-900' : 'text-brand-grey-500 hover:text-brand-slate-700'
+              }`}
+              onClick={() => setActiveTab('cards')}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Cards
+            </button>
+            <button
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                activeTab === 'meetings' ? 'bg-white shadow text-brand-slate-900' : 'text-brand-grey-500 hover:text-brand-slate-700'
+              }`}
+              onClick={() => setActiveTab('meetings')}
+            >
+              <List className="h-4 w-4" />
+              Meetings
+              {upcomingMeetings.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-brand-cyan text-white text-xs rounded-full">
+                  {upcomingMeetings.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Consultants List */}
-        {filteredConsultants.length === 0 ? (
-          <EmptyState
-            icon={<Users className="h-12 w-12" />}
-            title="No consultants found"
-            description={searchQuery || statusFilter !== 'all' ? "Try adjusting your search or filters" : "Consultants will appear here once candidates are converted"}
-          />
-        ) : (
-          <div className="space-y-3">
-            {filteredConsultants.map(consultant => {
-              const status = statusConfig[consultant.status] || statusConfig.bench;
-              
-              return (
-                <Card 
-                  key={consultant.id}
-                  className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/consultants/${consultant.id}`)}
-                >
-                  <div className="flex items-center gap-4">
-                    <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="lg" />
+        {/* Tab Content */}
+        {activeTab === 'gantt' && (
+          <>
+            {/* Timeline Controls */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={goToPreviousWeeks}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="secondary" size="sm" onClick={goToToday}>
+                  Today
+                </Button>
+                <Button variant="secondary" size="sm" onClick={goToNextWeeks}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-sm text-brand-grey-500">
+                {formatWeekLabel(weeks[0])} - {formatWeekLabel(weeks[weeks.length - 1])}
+              </p>
+            </div>
+
+            {/* Gantt Chart */}
+            {filteredConsultants.length === 0 ? (
+              <EmptyState
+                icon={<Users className="h-12 w-12" />}
+                title="No consultants found"
+                description="No consultants match your search criteria"
+              />
+            ) : (
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  {/* Timeline Header */}
+                  <div className="flex border-b border-brand-grey-200 min-w-[900px]">
+                    <div className="w-56 flex-shrink-0 p-3 bg-brand-grey-50 font-medium text-brand-slate-700 border-r border-brand-grey-200">
+                      Consultant
+                    </div>
+                    <div className="flex-1 flex">
+                      {weeks.map((week, idx) => {
+                        const isCurrentWeek = new Date() >= week && new Date() < new Date(week.getTime() + 7 * 24 * 60 * 60 * 1000);
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`flex-1 p-2 text-center text-xs border-r border-brand-grey-100 ${
+                              isCurrentWeek ? 'bg-brand-cyan/10 font-medium' : 'bg-brand-grey-50'
+                            }`}
+                          >
+                            {formatWeekLabel(week)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Consultant Rows */}
+                  {filteredConsultants.map(consultant => {
+                    const consultantMeetings = getMeetingsForConsultant(consultant.id);
+                    const barStyle = getBarStyle(consultant.start_date, consultant.end_date, weeks);
+                    const statusInfo = statusConfig[consultant.status] || statusConfig.bench;
                     
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-brand-slate-900">
-                          {consultant.first_name} {consultant.last_name}
-                        </h3>
-                        <Badge variant={status.colour}>{status.label}</Badge>
-                        {consultant.reference_id && (
-                          <span className="text-xs text-brand-grey-400">{consultant.reference_id}</span>
-                        )}
+                    return (
+                      <div 
+                        key={consultant.id} 
+                        className="flex border-b border-brand-grey-100 hover:bg-brand-grey-50/50 transition-colors min-w-[900px]"
+                      >
+                        {/* Consultant Info */}
+                        <div 
+                          className="w-56 flex-shrink-0 p-3 border-r border-brand-grey-200 cursor-pointer hover:bg-brand-grey-50"
+                          onClick={() => navigate(`/consultants/${consultant.id}`)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="sm" />
+                            <div className="min-w-0">
+                              <p className="font-medium text-brand-slate-900 text-sm truncate">
+                                {consultant.first_name} {consultant.last_name}
+                              </p>
+                              <p className="text-xs text-brand-grey-400 truncate">
+                                {consultant.reference_id}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Timeline */}
+                        <div className="flex-1 relative py-2">
+                          {/* Employment bar - thin line */}
+                          {barStyle && (
+                            <div
+                              className={`absolute top-1/2 -translate-y-1/2 h-2 rounded-full ${
+                                consultant.status === 'in_mission' ? 'bg-green-300' :
+                                consultant.status === 'on_leave' ? 'bg-blue-300' :
+                                consultant.status === 'terminated' ? 'bg-red-300' :
+                                'bg-amber-300'
+                              }`}
+                              style={{ left: barStyle.left, width: barStyle.width, minWidth: '4px' }}
+                            />
+                          )}
+                          
+                          {/* Meeting markers */}
+                          {consultantMeetings.map(meeting => {
+                            const position = getMeetingPosition(meeting.scheduled_date, weeks);
+                            if (!position) return null;
+                            
+                            const typeConfig = meetingTypeConfig[meeting.meeting_type];
+                            const isCompleted = meeting.status === 'completed';
+                            
+                            return (
+                              <div
+                                key={meeting.id}
+                                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold cursor-pointer hover:scale-125 transition-transform ${
+                                  isCompleted ? typeConfig.colour : 'bg-brand-grey-300 border-2 border-dashed'
+                                } ${!isCompleted ? 'border-' + typeConfig.colour.replace('bg-', '') : ''}`}
+                                style={{ left: position }}
+                                title={`${typeConfig.label} - ${formatDate(meeting.scheduled_date)} ${isCompleted ? '(Completed)' : '(Scheduled)'}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openMeetingDetail(meeting.id);
+                                }}
+                              >
+                                {typeConfig.shortLabel.charAt(0)}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      
-                      <p className="text-sm text-brand-grey-500 mb-2">{consultant.job_title || 'Consultant'}</p>
-                      
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-brand-grey-400">
-                        {consultant.location && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {consultant.location}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5" />
-                          Started {formatDate(consultant.start_date)}
-                        </span>
-                        {consultant.salary_amount && (
-                          <span className="flex items-center gap-1">
-                            <PoundSterling className="h-3.5 w-3.5" />
-                            £{consultant.salary_amount.toLocaleString()}/year
-                          </span>
-                        )}
-                        {consultant.day_rate && (
-                          <span className="flex items-center gap-1">
-                            <PoundSterling className="h-3.5 w-3.5" />
-                            £{consultant.day_rate}/day
-                          </span>
-                        )}
-                        {consultant.nationalities && consultant.nationalities.length > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Flag className="h-3.5 w-3.5" />
-                            {consultant.nationalities.join(', ')}
-                          </span>
-                        )}
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {/* Legend */}
+            <div className="flex flex-wrap items-center gap-6 text-sm text-brand-grey-500">
+              <span className="font-medium">Legend:</span>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-2 rounded bg-green-300" />
+                <span>In Mission</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-2 rounded bg-amber-300" />
+                <span>On Bench</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-2 rounded bg-blue-300" />
+                <span>On Leave</span>
+              </div>
+              <span className="mx-2">|</span>
+              {Object.entries(meetingTypeConfig).map(([key, config]) => (
+                <div key={key} className="flex items-center gap-1">
+                  <div className={`w-4 h-4 rounded-full ${config.colour}`} />
+                  <span>{config.label}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-1">
+                <div className="w-4 h-4 rounded-full bg-brand-grey-300 border-2 border-dashed border-brand-grey-400" />
+                <span>Scheduled</span>
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'cards' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredConsultants.length === 0 ? (
+              <div className="col-span-full">
+                <EmptyState
+                  icon={<Users className="h-12 w-12" />}
+                  title="No consultants found"
+                  description="No consultants match your search criteria"
+                />
+              </div>
+            ) : (
+              filteredConsultants.map(consultant => {
+                const statusInfo = statusConfig[consultant.status] || statusConfig.bench;
+                const consultantMeetings = getMeetingsForConsultant(consultant.id);
+                const nextMeeting = consultantMeetings.find(m => m.status === 'scheduled');
+                
+                return (
+                  <Card 
+                    key={consultant.id} 
+                    className="hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => navigate(`/consultants/${consultant.id}`)}
+                  >
+                    <div className="flex items-start gap-4">
+                      <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="lg" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-brand-slate-900 truncate">
+                            {consultant.first_name} {consultant.last_name}
+                          </h3>
+                          <Badge variant={statusInfo.colour}>{statusInfo.label}</Badge>
+                        </div>
+                        <p className="text-sm text-brand-grey-500 truncate">{consultant.job_title || 'Consultant'}</p>
+                        <p className="text-xs text-brand-grey-400">{consultant.reference_id}</p>
+                        
+                        <div className="mt-3 pt-3 border-t border-brand-grey-100 space-y-1 text-sm">
+                          {consultant.location && (
+                            <div className="flex items-center gap-2 text-brand-grey-500">
+                              <MapPin className="h-3 w-3" />
+                              <span className="truncate">{consultant.location}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 text-brand-grey-500">
+                            <Calendar className="h-3 w-3" />
+                            <span>Started {formatDate(consultant.start_date)}</span>
+                          </div>
+                          {consultant.day_rate && (
+                            <div className="flex items-center gap-2 text-brand-grey-500">
+                              <PoundSterling className="h-3 w-3" />
+                              <span>£{consultant.day_rate}/day</span>
+                            </div>
+                          )}
+                          {nextMeeting && (
+                            <div className="flex items-center gap-2 text-brand-cyan">
+                              <ClipboardList className="h-3 w-3" />
+                              <span>Next: {meetingTypeConfig[nextMeeting.meeting_type].label} on {formatDate(nextMeeting.scheduled_date)}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    
-                    <Button variant="secondary" size="sm">
-                      View Profile
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {activeTab === 'meetings' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-brand-slate-900">Upcoming Meetings</h2>
+            </div>
+            
+            {upcomingMeetings.length === 0 ? (
+              <EmptyState
+                icon={<ClipboardList className="h-12 w-12" />}
+                title="No upcoming meetings"
+                description="Schedule meetings with consultants to see them here"
+              />
+            ) : (
+              <div className="space-y-3">
+                {upcomingMeetings.map(meeting => {
+                  const consultant = consultants.find(c => c.id === meeting.consultant_id);
+                  const typeConfig = meetingTypeConfig[meeting.meeting_type];
+                  
+                  return (
+                    <Card 
+                      key={meeting.id} 
+                      className="hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => openMeetingDetail(meeting.id)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-lg ${typeConfig.colour.replace('bg-', 'bg-').replace('-500', '-100')}`}>
+                          <ClipboardList className={`h-5 w-5 ${typeConfig.colour.replace('bg-', 'text-')}`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-brand-slate-900">{typeConfig.label}</span>
+                            <Badge variant="grey">{meeting.status}</Badge>
+                          </div>
+                          <p className="text-sm text-brand-grey-500">
+                            with {consultant?.first_name} {consultant?.last_name} ({consultant?.reference_id})
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-brand-slate-900">{formatDate(meeting.scheduled_date)}</p>
+                          {meeting.scheduled_time && (
+                            <p className="text-sm text-brand-grey-500">{meeting.scheduled_time}</p>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Book Meeting Modal */}
+      <Modal
+        isOpen={isBookMeetingModalOpen}
+        onClose={() => {
+          setIsBookMeetingModalOpen(false);
+          setSelectedConsultantForMeeting(null);
+        }}
+        title="Schedule Meeting"
+        size="sm"
+      >
+        <div className="space-y-4">
+          {selectedConsultantForMeeting && (
+            <div className="p-3 bg-brand-grey-50 rounded-lg flex items-center gap-3">
+              <Avatar name={`${selectedConsultantForMeeting.first_name} ${selectedConsultantForMeeting.last_name}`} size="sm" />
+              <div>
+                <p className="font-medium text-brand-slate-900">
+                  {selectedConsultantForMeeting.first_name} {selectedConsultantForMeeting.last_name}
+                </p>
+                <p className="text-sm text-brand-grey-500">{selectedConsultantForMeeting.reference_id}</p>
+              </div>
+            </div>
+          )}
+          
+          <Select
+            label="Meeting Type"
+            options={[
+              { value: 'induction', label: 'Induction Meeting' },
+              { value: 'quarterly_review', label: 'Quarterly Review' },
+              { value: 'annual_appraisal', label: 'Annual Appraisal' },
+            ]}
+            value={bookMeetingForm.meeting_type}
+            onChange={(e) => setBookMeetingForm(prev => ({ 
+              ...prev, 
+              meeting_type: e.target.value as 'induction' | 'quarterly_review' | 'annual_appraisal' 
+            }))}
+          />
+          
+          <Input
+            label="Scheduled Date"
+            type="date"
+            value={bookMeetingForm.scheduled_date}
+            onChange={(e) => setBookMeetingForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+          />
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" onClick={() => setIsBookMeetingModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={handleBookMeeting}
+              isLoading={isBookingMeeting}
+            >
+              Schedule Meeting
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Meeting Detail Modal - will be expanded in ConsultantProfilePage */}
+      <Modal
+        isOpen={isMeetingDetailModalOpen}
+        onClose={() => {
+          setIsMeetingDetailModalOpen(false);
+          setSelectedMeeting(null);
+        }}
+        title={selectedMeeting ? meetingTypeConfig[selectedMeeting.meeting_type]?.label : 'Meeting Details'}
+        size="lg"
+      >
+        {selectedMeeting && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
+              <div>
+                <p className="text-xs text-brand-grey-400">Consultant</p>
+                <p className="font-medium text-brand-slate-900">
+                  {selectedMeeting.consultant?.first_name} {selectedMeeting.consultant?.last_name}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-brand-grey-400">Date</p>
+                <p className="font-medium text-brand-slate-900">{formatDate(selectedMeeting.scheduled_date)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-brand-grey-400">Status</p>
+                <Badge variant={selectedMeeting.status === 'completed' ? 'green' : 'amber'}>
+                  {selectedMeeting.status}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-brand-grey-400">Type</p>
+                <p className="font-medium text-brand-slate-900">
+                  {meetingTypeConfig[selectedMeeting.meeting_type]?.label}
+                </p>
+              </div>
+            </div>
+
+            {selectedMeeting.general_comments && (
+              <div>
+                <p className="text-sm font-medium text-brand-slate-700 mb-1">General Comments</p>
+                <p className="text-sm text-brand-grey-500">{selectedMeeting.general_comments}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsMeetingDetailModalOpen(false)}
+              >
+                Close
+              </Button>
+              <Button 
+                variant="primary"
+                onClick={() => {
+                  setIsMeetingDetailModalOpen(false);
+                  navigate(`/consultants/${selectedMeeting.consultant_id}`);
+                }}
+              >
+                View Full Details
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
 
-// Consultant Profile Page
+// ============================================
+// CONSULTANT PROFILE PAGE
+// ============================================
+
 export function ConsultantProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -276,9 +904,65 @@ export function ConsultantProfilePage() {
   const permissions = usePermissions();
   
   const [consultant, setConsultant] = useState<DbConsultant | null>(null);
+  const [meetings, setMeetings] = useState<DbConsultantMeeting[]>([]);
+  const [missions, setMissions] = useState<DbMission[]>([]);
+  const [salaryHistory, setSalaryHistory] = useState<DbSalaryHistory[]>([]);
+  const [bonusPayments, setBonusPayments] = useState<DbBonusPayment[]>([]);
+  const [approvalRequests, setApprovalRequests] = useState<DbApprovalRequest[]>([]);
+  const [exitRecord, setExitRecord] = useState<DbConsultantExit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Book meeting modal
+  const [isBookMeetingModalOpen, setIsBookMeetingModalOpen] = useState(false);
+  const [bookMeetingForm, setBookMeetingForm] = useState({
+    meeting_type: 'quarterly_review' as 'induction' | 'quarterly_review' | 'annual_appraisal',
+    scheduled_date: '',
+  });
+  const [isBookingMeeting, setIsBookingMeeting] = useState(false);
+
+  // Complete meeting modal
+  const [selectedMeetingToComplete, setSelectedMeetingToComplete] = useState<DbConsultantMeeting | null>(null);
+  const [isCompleteMeetingModalOpen, setIsCompleteMeetingModalOpen] = useState(false);
+  const [completeMeetingForm, setCompleteMeetingForm] = useState({
+    general_comments: '',
+    risks_identified: '',
+    consultant_requests: '',
+    induction_checklist: { ...defaultInductionChecklist },
+    quarterly_feedback: { ...defaultQuarterlyFeedback },
+    appraisal_data: { ...defaultAppraisalData },
+  });
+  const [isCompletingMeeting, setIsCompletingMeeting] = useState(false);
+
+  // HR Process modals
+  const [isProcessMenuOpen, setIsProcessMenuOpen] = useState(false);
+  const [isSalaryIncreaseModalOpen, setIsSalaryIncreaseModalOpen] = useState(false);
+  const [isBonusModalOpen, setIsBonusModalOpen] = useState(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+
+  const [salaryIncreaseForm, setSalaryIncreaseForm] = useState({
+    new_salary: '',
+    salary_type: 'annual_salary' as 'annual_salary' | 'day_rate',
+    reason: '',
+    effective_month: new Date().getMonth() + 1,
+    effective_year: new Date().getFullYear(),
+  });
+
+  const [bonusForm, setBonusForm] = useState({
+    amount: '',
+    bonus_type: 'performance' as 'performance' | 'retention' | 'project' | 'referral' | 'other',
+    reason: '',
+    payment_month: new Date().getMonth() + 1,
+    payment_year: new Date().getFullYear(),
+  });
+
+  const [exitForm, setExitForm] = useState({
+    exit_reason: 'resignation' as 'resignation' | 'redundancy' | 'end_of_contract' | 'dismissal' | 'mutual_agreement' | 'retirement',
+    exit_details: '',
+    last_working_day: '',
+  });
 
   useEffect(() => {
     if (id) {
@@ -289,8 +973,22 @@ export function ConsultantProfilePage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const data = await consultantsService.getById(id!);
-      setConsultant(data);
+      const [consultantData, meetingsData, missionsData, salaryData, bonusData, approvalsData, exitData] = await Promise.all([
+        consultantsService.getById(id!),
+        consultantMeetingsService.getByConsultant(id!),
+        missionsService.getByConsultant(id!),
+        salaryHistoryService.getByConsultant(id!),
+        bonusPaymentsService.getByConsultant(id!),
+        approvalRequestsService.getByConsultant(id!),
+        consultantExitsService.getByConsultant(id!),
+      ]);
+      setConsultant(consultantData);
+      setMeetings(meetingsData);
+      setMissions(missionsData);
+      setSalaryHistory(salaryData);
+      setBonusPayments(bonusData);
+      setApprovalRequests(approvalsData);
+      setExitRecord(exitData);
     } catch (error) {
       console.error('Error loading consultant:', error);
       toast.error('Error', 'Failed to load consultant');
@@ -312,6 +1010,211 @@ export function ConsultantProfilePage() {
       setIsDeleting(false);
     }
   };
+
+  const handleBookMeeting = async () => {
+    if (!bookMeetingForm.scheduled_date) {
+      toast.error('Error', 'Please select a date');
+      return;
+    }
+
+    setIsBookingMeeting(true);
+    try {
+      await consultantMeetingsService.create({
+        consultant_id: id!,
+        meeting_type: bookMeetingForm.meeting_type,
+        scheduled_date: bookMeetingForm.scheduled_date,
+        created_by: user?.id,
+      });
+      toast.success('Meeting Scheduled', `${meetingTypeConfig[bookMeetingForm.meeting_type].label} scheduled`);
+      setIsBookMeetingModalOpen(false);
+      setBookMeetingForm({ meeting_type: 'quarterly_review', scheduled_date: '' });
+      loadData();
+    } catch (error) {
+      console.error('Error booking meeting:', error);
+      toast.error('Error', 'Failed to schedule meeting');
+    } finally {
+      setIsBookingMeeting(false);
+    }
+  };
+
+  const openCompleteMeetingModal = (meeting: DbConsultantMeeting) => {
+    setSelectedMeetingToComplete(meeting);
+    // Pre-populate form with existing data if available
+    setCompleteMeetingForm({
+      general_comments: meeting.general_comments || '',
+      risks_identified: meeting.risks_identified || '',
+      consultant_requests: meeting.consultant_requests || '',
+      induction_checklist: meeting.induction_checklist || { ...defaultInductionChecklist },
+      quarterly_feedback: meeting.quarterly_feedback || { ...defaultQuarterlyFeedback },
+      appraisal_data: meeting.appraisal_data || { ...defaultAppraisalData },
+    });
+    setIsCompleteMeetingModalOpen(true);
+  };
+
+  const handleCompleteMeeting = async () => {
+    if (!selectedMeetingToComplete) return;
+
+    setIsCompletingMeeting(true);
+    try {
+      const updateData: any = {
+        general_comments: completeMeetingForm.general_comments,
+        risks_identified: completeMeetingForm.risks_identified,
+        consultant_requests: completeMeetingForm.consultant_requests,
+        conducted_by: user?.id,
+      };
+
+      if (selectedMeetingToComplete.meeting_type === 'induction') {
+        updateData.induction_checklist = completeMeetingForm.induction_checklist;
+      } else if (selectedMeetingToComplete.meeting_type === 'quarterly_review') {
+        updateData.quarterly_feedback = completeMeetingForm.quarterly_feedback;
+      } else if (selectedMeetingToComplete.meeting_type === 'annual_appraisal') {
+        updateData.appraisal_data = completeMeetingForm.appraisal_data;
+      }
+
+      await consultantMeetingsService.complete(selectedMeetingToComplete.id, updateData);
+      toast.success('Meeting Completed', 'Meeting notes have been saved');
+      setIsCompleteMeetingModalOpen(false);
+      setSelectedMeetingToComplete(null);
+      loadData();
+    } catch (error) {
+      console.error('Error completing meeting:', error);
+      toast.error('Error', 'Failed to save meeting');
+    } finally {
+      setIsCompletingMeeting(false);
+    }
+  };
+
+  // HR Process handlers
+  const handleSubmitSalaryIncrease = async () => {
+    if (!salaryIncreaseForm.new_salary || !salaryIncreaseForm.reason) {
+      toast.error('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setIsSubmittingRequest(true);
+    try {
+      const currentSalary = salaryIncreaseForm.salary_type === 'annual_salary' 
+        ? consultant?.salary_amount || 0 
+        : consultant?.day_rate || 0;
+
+      await approvalRequestsService.create({
+        request_type: 'salary_increase',
+        consultant_id: id!,
+        request_data: {
+          current_salary: currentSalary,
+          new_salary: parseFloat(salaryIncreaseForm.new_salary),
+          salary_type: salaryIncreaseForm.salary_type,
+          reason: salaryIncreaseForm.reason,
+        } as SalaryIncreaseData,
+        effective_month: salaryIncreaseForm.effective_month,
+        effective_year: salaryIncreaseForm.effective_year,
+        requested_by: user!.id,
+        hr_required: false,
+      });
+
+      toast.success('Request Submitted', 'Salary increase request sent for director approval');
+      setIsSalaryIncreaseModalOpen(false);
+      setSalaryIncreaseForm({
+        new_salary: '',
+        salary_type: 'annual_salary',
+        reason: '',
+        effective_month: new Date().getMonth() + 1,
+        effective_year: new Date().getFullYear(),
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      toast.error('Error', 'Failed to submit request');
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
+
+  const handleSubmitBonus = async () => {
+    if (!bonusForm.amount || !bonusForm.reason) {
+      toast.error('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setIsSubmittingRequest(true);
+    try {
+      await approvalRequestsService.create({
+        request_type: 'bonus_payment',
+        consultant_id: id!,
+        request_data: {
+          amount: parseFloat(bonusForm.amount),
+          bonus_type: bonusForm.bonus_type,
+          reason: bonusForm.reason,
+        } as BonusPaymentData,
+        effective_month: bonusForm.payment_month,
+        effective_year: bonusForm.payment_year,
+        requested_by: user!.id,
+        hr_required: false,
+      });
+
+      toast.success('Request Submitted', 'Bonus payment request sent for director approval');
+      setIsBonusModalOpen(false);
+      setBonusForm({
+        amount: '',
+        bonus_type: 'performance',
+        reason: '',
+        payment_month: new Date().getMonth() + 1,
+        payment_year: new Date().getFullYear(),
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      toast.error('Error', 'Failed to submit request');
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
+
+  const handleSubmitExit = async () => {
+    if (!exitForm.last_working_day || !exitForm.exit_details) {
+      toast.error('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    const exitDate = new Date(exitForm.last_working_day);
+
+    setIsSubmittingRequest(true);
+    try {
+      await approvalRequestsService.create({
+        request_type: 'employee_exit',
+        consultant_id: id!,
+        request_data: {
+          exit_reason: exitForm.exit_reason,
+          exit_details: exitForm.exit_details,
+          last_working_day: exitForm.last_working_day,
+        } as EmployeeExitData,
+        effective_month: exitDate.getMonth() + 1,
+        effective_year: exitDate.getFullYear(),
+        requested_by: user!.id,
+        hr_required: true, // Exit requires both Director and HR approval
+      });
+
+      toast.success('Request Submitted', 'Exit request sent for director and HR approval');
+      setIsExitModalOpen(false);
+      setExitForm({
+        exit_reason: 'resignation',
+        exit_details: '',
+        last_working_day: '',
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      toast.error('Error', 'Failed to submit request');
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
+
+  // Get pending approval requests
+  const pendingApprovals = approvalRequests.filter(r => r.status === 'pending' || r.status === 'pending_hr');
+
+  // Month names for display
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   if (isLoading) {
     return (
@@ -343,6 +1246,8 @@ export function ConsultantProfilePage() {
   }
 
   const status = statusConfig[consultant.status] || statusConfig.bench;
+  const scheduledMeetings = meetings.filter(m => m.status === 'scheduled');
+  const completedMeetings = meetings.filter(m => m.status === 'completed');
 
   return (
     <div className="min-h-screen">
@@ -412,135 +1317,330 @@ export function ConsultantProfilePage() {
                 <div className="flex items-center gap-2 text-sm">
                   <Linkedin className="h-4 w-4 text-brand-grey-400" />
                   <a href={consultant.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-brand-cyan hover:underline">
-                    LinkedIn Profile
+                    LinkedIn
                   </a>
                 </div>
               )}
             </div>
           </div>
-
-          {/* Skills */}
-          {consultant.skills && consultant.skills.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-brand-grey-200">
-              <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Skills</h3>
-              <div className="flex flex-wrap gap-2">
-                {consultant.skills.map((skill, idx) => (
-                  <Badge key={idx} variant="grey">{skill}</Badge>
-                ))}
-              </div>
-            </div>
-          )}
         </Card>
 
+        {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
+          {/* Left Column - Career Management */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Career Management Section */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Employee Career Management</CardTitle>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Plus className="h-4 w-4" />}
+                    onClick={() => setIsBookMeetingModalOpen(true)}
+                  >
+                    Schedule Meeting
+                  </Button>
+                </div>
+              </CardHeader>
+
+              {/* Scheduled Meetings */}
+              {scheduledMeetings.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Scheduled Meetings</h4>
+                  <div className="space-y-2">
+                    {scheduledMeetings.map(meeting => {
+                      const typeConfig = meetingTypeConfig[meeting.meeting_type];
+                      return (
+                        <div 
+                          key={meeting.id} 
+                          className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${typeConfig.colour}`} />
+                            <div>
+                              <p className="font-medium text-brand-slate-900">{typeConfig.label}</p>
+                              <p className="text-sm text-brand-grey-500">{formatDate(meeting.scheduled_date)}</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            leftIcon={<CheckCircle className="h-4 w-4" />}
+                            onClick={() => openCompleteMeetingModal(meeting)}
+                          >
+                            Complete
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Completed Meetings */}
+              {completedMeetings.length > 0 ? (
+                <div>
+                  <h4 className="text-sm font-medium text-brand-slate-700 mb-3">Meeting History</h4>
+                  <div className="space-y-2">
+                    {completedMeetings.map(meeting => {
+                      const typeConfig = meetingTypeConfig[meeting.meeting_type];
+                      return (
+                        <div 
+                          key={meeting.id} 
+                          className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg cursor-pointer hover:bg-brand-grey-100 transition-colors"
+                          onClick={() => openCompleteMeetingModal(meeting)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${typeConfig.colour}`} />
+                            <div>
+                              <p className="font-medium text-brand-slate-900">{typeConfig.label}</p>
+                              <p className="text-sm text-brand-grey-500">
+                                {formatDate(meeting.scheduled_date)} - Completed {meeting.completed_at ? formatDate(meeting.completed_at) : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="green">Completed</Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : scheduledMeetings.length === 0 && (
+                <p className="text-center text-brand-grey-400 py-4">No meetings recorded yet</p>
+              )}
+            </Card>
+
+            {/* Skills */}
+            {consultant.skills && consultant.skills.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Skills</CardTitle>
+                </CardHeader>
+                <div className="flex flex-wrap gap-2">
+                  {consultant.skills.map((skill, idx) => (
+                    <Badge key={idx} variant="grey">{skill}</Badge>
+                  ))}
+                </div>
+              </Card>
+            )}
+
             {/* Mission History */}
             <Card>
               <CardHeader>
                 <CardTitle>Mission History</CardTitle>
               </CardHeader>
-              <div className="text-center py-8 text-brand-grey-400">
-                <Briefcase className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No missions yet</p>
-                <p className="text-sm">Mission history will appear here once the consultant is assigned to projects.</p>
+              {missions.length > 0 ? (
+                <div className="space-y-3">
+                  {missions.map(mission => (
+                    <div key={mission.id} className="p-3 border border-brand-grey-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-brand-slate-900">{mission.name}</h4>
+                        <Badge variant={mission.status === 'active' ? 'green' : 'grey'}>{mission.status}</Badge>
+                      </div>
+                      <p className="text-sm text-brand-grey-500">
+                        {formatDate(mission.start_date)} - {mission.end_date ? formatDate(mission.end_date) : 'Ongoing'}
+                      </p>
+                      <p className="text-sm text-brand-grey-500">£{mission.sold_daily_rate}/day</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-brand-grey-400 py-4">No missions yet</p>
+              )}
+            </Card>
+
+            {/* Financial History */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Financial History</CardTitle>
+                  {consultant.status !== 'terminated' && (
+                    <div className="relative">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        leftIcon={<Plus className="h-4 w-4" />}
+                        onClick={() => setIsProcessMenuOpen(!isProcessMenuOpen)}
+                      >
+                        Initiate Process
+                      </Button>
+                      {isProcessMenuOpen && (
+                        <div className="absolute right-0 top-full mt-1 bg-white border border-brand-grey-200 rounded-lg shadow-lg z-10 min-w-[200px]">
+                          <button
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-2"
+                            onClick={() => { setIsProcessMenuOpen(false); setIsSalaryIncreaseModalOpen(true); }}
+                          >
+                            <TrendingUp className="h-4 w-4 text-green-600" />
+                            Request Salary Increase
+                          </button>
+                          <button
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-2"
+                            onClick={() => { setIsProcessMenuOpen(false); setIsBonusModalOpen(true); }}
+                          >
+                            <Gift className="h-4 w-4 text-purple-600" />
+                            Request Bonus Payment
+                          </button>
+                          <button
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-brand-grey-50 flex items-center gap-2 text-red-600"
+                            onClick={() => { setIsProcessMenuOpen(false); setIsExitModalOpen(true); }}
+                          >
+                            <LogOut className="h-4 w-4" />
+                            Exit Employee
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+
+              {pendingApprovals.length > 0 && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-amber-800 mb-2 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Pending Approvals
+                  </h4>
+                  {pendingApprovals.map(req => (
+                    <div key={req.id} className="text-sm text-amber-700 flex items-center justify-between py-1">
+                      <span>
+                        {req.request_type === 'salary_increase' && `Salary increase to £${(req.request_data as SalaryIncreaseData).new_salary.toLocaleString()}`}
+                        {req.request_type === 'bonus_payment' && `Bonus £${(req.request_data as BonusPaymentData).amount.toLocaleString()}`}
+                        {req.request_type === 'employee_exit' && `Exit: ${(req.request_data as EmployeeExitData).exit_reason}`}
+                      </span>
+                      <Badge variant="amber">{req.status === 'pending' ? 'Awaiting Director' : 'Awaiting HR'}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-brand-slate-700 mb-2">Salary History</h4>
+                {salaryHistory.length > 0 ? (
+                  <div className="space-y-2">
+                    {salaryHistory.map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between p-2 bg-brand-grey-50 rounded">
+                        <div>
+                          <p className="text-sm font-medium text-brand-slate-900">
+                            £{entry.amount.toLocaleString()}
+                            <span className="text-brand-grey-400 text-xs ml-1">({entry.salary_type === 'annual_salary' ? 'Annual' : 'Day Rate'})</span>
+                          </p>
+                          {entry.change_reason && <p className="text-xs text-brand-grey-500">{entry.change_reason}</p>}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-brand-grey-500">{monthNames[entry.effective_month - 1]} {entry.effective_year}</p>
+                          <Badge variant={entry.change_type === 'initial' ? 'grey' : 'green'} className="text-xs">{entry.change_type}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-brand-grey-400">No salary history recorded</p>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-medium text-brand-slate-700 mb-2">Bonus Payments</h4>
+                {bonusPayments.length > 0 ? (
+                  <div className="space-y-2">
+                    {bonusPayments.map(bonus => (
+                      <div key={bonus.id} className="flex items-center justify-between p-2 bg-purple-50 rounded">
+                        <div>
+                          <p className="text-sm font-medium text-brand-slate-900">£{bonus.amount.toLocaleString()}</p>
+                          <p className="text-xs text-brand-grey-500">{bonus.reason}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-brand-grey-500">{monthNames[bonus.payment_month - 1]} {bonus.payment_year}</p>
+                          <Badge variant="cyan" className="text-xs capitalize">{bonus.bonus_type}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-brand-grey-400">No bonus payments recorded</p>
+                )}
               </div>
             </Card>
+
+            {exitRecord && (
+              <Card className="border-red-200 bg-red-50">
+                <CardHeader>
+                  <CardTitle className="text-red-700">Exit Record</CardTitle>
+                </CardHeader>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-red-600">Exit Reason</span>
+                    <span className="text-red-700 capitalize">{exitRecord.exit_reason.replace('_', ' ')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-red-600">Last Working Day</span>
+                    <span className="text-red-700">{formatDate(exitRecord.last_working_day)}</span>
+                  </div>
+                  {exitRecord.exit_details && (
+                    <div className="pt-2 border-t border-red-200">
+                      <p className="text-red-600 text-xs mb-1">Details</p>
+                      <p className="text-red-700">{exitRecord.exit_details}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
           </div>
 
-          {/* Sidebar */}
+          {/* Right Column - Details */}
           <div className="space-y-6">
             {/* Contract Details */}
             <Card>
               <CardHeader>
                 <CardTitle>Contract Details</CardTitle>
               </CardHeader>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <Briefcase className="h-4 w-4 text-brand-grey-400 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-brand-grey-400">Contract Type</p>
-                    <p className="text-sm font-medium text-brand-slate-900 capitalize">
-                      {consultant.contract_type?.replace(/_/g, ' ') || 'Not specified'}
-                    </p>
-                  </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-brand-grey-400">Contract Type</span>
+                  <span className="text-brand-slate-700 capitalize">{consultant.contract_type || 'N/A'}</span>
                 </div>
-                
                 {consultant.salary_amount && (
-                  <div className="flex items-start gap-3">
-                    <PoundSterling className="h-4 w-4 text-brand-grey-400 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Annual Salary</p>
-                      <p className="text-sm font-medium text-brand-slate-900">
-                        £{consultant.salary_amount.toLocaleString()}
-                      </p>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-brand-grey-400">Annual Salary</span>
+                    <span className="text-brand-slate-700">£{consultant.salary_amount.toLocaleString()}</span>
                   </div>
                 )}
-                
                 {consultant.day_rate && (
-                  <div className="flex items-start gap-3">
-                    <PoundSterling className="h-4 w-4 text-brand-grey-400 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Day Rate</p>
-                      <p className="text-sm font-medium text-brand-slate-900">
-                        £{consultant.day_rate}/day
-                      </p>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-brand-grey-400">Day Rate</span>
+                    <span className="text-brand-slate-700">£{consultant.day_rate}</span>
                   </div>
                 )}
-                
-                <div className="flex items-start gap-3">
-                  <Calendar className="h-4 w-4 text-brand-grey-400 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-brand-grey-400">Start Date</p>
-                    <p className="text-sm font-medium text-brand-slate-900">
-                      {formatDate(consultant.start_date)}
-                    </p>
-                  </div>
+                <div className="flex justify-between">
+                  <span className="text-brand-grey-400">Start Date</span>
+                  <span className="text-brand-slate-700">{formatDate(consultant.start_date)}</span>
                 </div>
-                
                 {consultant.end_date && (
-                  <div className="flex items-start gap-3">
-                    <Calendar className="h-4 w-4 text-brand-grey-400 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">End Date</p>
-                      <p className="text-sm font-medium text-brand-slate-900">
-                        {formatDate(consultant.end_date)}
-                      </p>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-brand-grey-400">End Date</span>
+                    <span className="text-brand-slate-700">{formatDate(consultant.end_date)}</span>
                   </div>
                 )}
               </div>
             </Card>
 
-            {/* Additional Details */}
+            {/* Details */}
             <Card>
               <CardHeader>
                 <CardTitle>Details</CardTitle>
               </CardHeader>
-              <div className="space-y-4">
+              <div className="space-y-3 text-sm">
                 {consultant.security_vetting && (
-                  <div className="flex items-start gap-3">
-                    <Shield className="h-4 w-4 text-brand-grey-400 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Security Clearance</p>
-                      <p className="text-sm font-medium text-brand-slate-900 uppercase">
-                        {consultant.security_vetting}
-                      </p>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-brand-grey-400">Security Clearance</span>
+                    <span className="text-brand-slate-700 uppercase">{consultant.security_vetting}</span>
                   </div>
                 )}
-                
                 {consultant.nationalities && consultant.nationalities.length > 0 && (
-                  <div className="flex items-start gap-3">
-                    <Flag className="h-4 w-4 text-brand-grey-400 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Nationality</p>
-                      <p className="text-sm font-medium text-brand-slate-900">
-                        {consultant.nationalities.join(', ')}
-                      </p>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-brand-grey-400">Nationalities</span>
+                    <span className="text-brand-slate-700">{consultant.nationalities.join(', ')}</span>
                   </div>
                 )}
               </div>
@@ -574,6 +1674,311 @@ export function ConsultantProfilePage() {
         </div>
       </div>
 
+      {/* Book Meeting Modal */}
+      <Modal
+        isOpen={isBookMeetingModalOpen}
+        onClose={() => setIsBookMeetingModalOpen(false)}
+        title="Schedule Meeting"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <Select
+            label="Meeting Type"
+            options={[
+              { value: 'induction', label: 'Induction Meeting' },
+              { value: 'quarterly_review', label: 'Quarterly Review' },
+              { value: 'annual_appraisal', label: 'Annual Appraisal' },
+            ]}
+            value={bookMeetingForm.meeting_type}
+            onChange={(e) => setBookMeetingForm(prev => ({ 
+              ...prev, 
+              meeting_type: e.target.value as 'induction' | 'quarterly_review' | 'annual_appraisal' 
+            }))}
+          />
+          
+          <Input
+            label="Scheduled Date"
+            type="date"
+            value={bookMeetingForm.scheduled_date}
+            onChange={(e) => setBookMeetingForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+          />
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" onClick={() => setIsBookMeetingModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={handleBookMeeting}
+              isLoading={isBookingMeeting}
+            >
+              Schedule Meeting
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Complete Meeting Modal */}
+      <Modal
+        isOpen={isCompleteMeetingModalOpen}
+        onClose={() => {
+          setIsCompleteMeetingModalOpen(false);
+          setSelectedMeetingToComplete(null);
+        }}
+        title={selectedMeetingToComplete ? `${meetingTypeConfig[selectedMeetingToComplete.meeting_type]?.label} - ${selectedMeetingToComplete.status === 'completed' ? 'View' : 'Complete'}` : 'Meeting'}
+        size="xl"
+      >
+        {selectedMeetingToComplete && (
+          <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+            {/* Meeting Info */}
+            <div className="p-4 bg-brand-grey-50 rounded-lg">
+              <p className="text-sm text-brand-grey-500">
+                Scheduled: {formatDate(selectedMeetingToComplete.scheduled_date)}
+                {selectedMeetingToComplete.completed_at && ` | Completed: ${formatDate(selectedMeetingToComplete.completed_at)}`}
+              </p>
+            </div>
+
+            {/* Induction Checklist */}
+            {selectedMeetingToComplete.meeting_type === 'induction' && (
+              <div className="space-y-4">
+                <h4 className="font-medium text-brand-slate-900">Induction Checklist</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { key: 'induction_pack_presented', label: 'Induction pack presented' },
+                    { key: 'risk_assessment_presented', label: 'Risk assessment presented' },
+                    { key: 'health_safety_briefing', label: 'Health & safety briefing' },
+                    { key: 'it_systems_access', label: 'IT systems access set up' },
+                    { key: 'company_policies_reviewed', label: 'Company policies reviewed' },
+                    { key: 'emergency_procedures', label: 'Emergency procedures explained' },
+                    { key: 'team_introductions', label: 'Team introductions done' },
+                    { key: 'mission_briefing', label: 'Mission briefing completed' },
+                  ].map(item => (
+                    <label key={item.key} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(completeMeetingForm.induction_checklist as any)[item.key]}
+                        onChange={(e) => setCompleteMeetingForm(prev => ({
+                          ...prev,
+                          induction_checklist: {
+                            ...prev.induction_checklist,
+                            [item.key]: e.target.checked,
+                          },
+                        }))}
+                        className="rounded border-brand-grey-300 text-brand-cyan focus:ring-brand-cyan"
+                        disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                      />
+                      <span className="text-sm text-brand-slate-700">{item.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Quarterly Review Feedback */}
+            {selectedMeetingToComplete.meeting_type === 'quarterly_review' && (
+              <div className="space-y-4">
+                <h4 className="font-medium text-brand-slate-900">Satisfaction Survey (1-5)</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[
+                    { key: 'customer_satisfaction', label: 'Customer Satisfaction' },
+                    { key: 'mission_satisfaction', label: 'Mission Satisfaction' },
+                    { key: 'company_satisfaction', label: 'Company Satisfaction' },
+                    { key: 'work_life_balance', label: 'Work-Life Balance' },
+                    { key: 'career_development', label: 'Career Development' },
+                    { key: 'communication_rating', label: 'Communication' },
+                  ].map(item => (
+                    <div key={item.key}>
+                      <label className="block text-sm text-brand-slate-700 mb-1">{item.label}</label>
+                      <select
+                        value={(completeMeetingForm.quarterly_feedback as any)[item.key]}
+                        onChange={(e) => setCompleteMeetingForm(prev => ({
+                          ...prev,
+                          quarterly_feedback: {
+                            ...prev.quarterly_feedback,
+                            [item.key]: parseInt(e.target.value),
+                          },
+                        }))}
+                        className="w-full rounded-md border border-brand-grey-300 px-3 py-2 text-sm"
+                        disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                      >
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Annual Appraisal */}
+            {selectedMeetingToComplete.meeting_type === 'annual_appraisal' && (
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="font-medium text-brand-slate-900">Performance Ratings (1-5)</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {[
+                      { key: 'overall_performance', label: 'Overall' },
+                      { key: 'technical_skills', label: 'Technical' },
+                      { key: 'communication_skills', label: 'Communication' },
+                      { key: 'teamwork', label: 'Teamwork' },
+                      { key: 'initiative', label: 'Initiative' },
+                      { key: 'reliability', label: 'Reliability' },
+                    ].map(item => (
+                      <div key={item.key}>
+                        <label className="block text-sm text-brand-slate-700 mb-1">{item.label}</label>
+                        <select
+                          value={(completeMeetingForm.appraisal_data as any)[item.key]}
+                          onChange={(e) => setCompleteMeetingForm(prev => ({
+                            ...prev,
+                            appraisal_data: {
+                              ...prev.appraisal_data,
+                              [item.key]: parseInt(e.target.value),
+                            },
+                          }))}
+                          className="w-full rounded-md border border-brand-grey-300 px-3 py-2 text-sm"
+                          disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                        >
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Textarea
+                    label="Goals Achieved"
+                    value={completeMeetingForm.appraisal_data.goals_achieved}
+                    onChange={(e) => setCompleteMeetingForm(prev => ({
+                      ...prev,
+                      appraisal_data: { ...prev.appraisal_data, goals_achieved: e.target.value },
+                    }))}
+                    rows={3}
+                    disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                  />
+                  <Textarea
+                    label="Areas of Strength"
+                    value={completeMeetingForm.appraisal_data.areas_of_strength}
+                    onChange={(e) => setCompleteMeetingForm(prev => ({
+                      ...prev,
+                      appraisal_data: { ...prev.appraisal_data, areas_of_strength: e.target.value },
+                    }))}
+                    rows={3}
+                    disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                  />
+                  <Textarea
+                    label="Development Areas"
+                    value={completeMeetingForm.appraisal_data.development_areas}
+                    onChange={(e) => setCompleteMeetingForm(prev => ({
+                      ...prev,
+                      appraisal_data: { ...prev.appraisal_data, development_areas: e.target.value },
+                    }))}
+                    rows={3}
+                    disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                  />
+                  <Textarea
+                    label="Training Needs"
+                    value={completeMeetingForm.appraisal_data.training_needs}
+                    onChange={(e) => setCompleteMeetingForm(prev => ({
+                      ...prev,
+                      appraisal_data: { ...prev.appraisal_data, training_needs: e.target.value },
+                    }))}
+                    rows={3}
+                    disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                  />
+                  <Textarea
+                    label="Career Aspirations"
+                    value={completeMeetingForm.appraisal_data.career_aspirations}
+                    onChange={(e) => setCompleteMeetingForm(prev => ({
+                      ...prev,
+                      appraisal_data: { ...prev.appraisal_data, career_aspirations: e.target.value },
+                    }))}
+                    rows={3}
+                    disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                  />
+                  <Textarea
+                    label="Salary Discussion Notes"
+                    value={completeMeetingForm.appraisal_data.salary_discussion_notes}
+                    onChange={(e) => setCompleteMeetingForm(prev => ({
+                      ...prev,
+                      appraisal_data: { ...prev.appraisal_data, salary_discussion_notes: e.target.value },
+                    }))}
+                    rows={3}
+                    disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                  />
+                </div>
+
+                <Textarea
+                  label="Next Year Objectives"
+                  value={completeMeetingForm.appraisal_data.next_year_objectives}
+                  onChange={(e) => setCompleteMeetingForm(prev => ({
+                    ...prev,
+                    appraisal_data: { ...prev.appraisal_data, next_year_objectives: e.target.value },
+                  }))}
+                  rows={3}
+                  disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+                />
+              </div>
+            )}
+
+            {/* Common Fields */}
+            <div className="space-y-4 pt-4 border-t border-brand-grey-200">
+              <Textarea
+                label="Risks Identified"
+                value={completeMeetingForm.risks_identified}
+                onChange={(e) => setCompleteMeetingForm(prev => ({ ...prev, risks_identified: e.target.value }))}
+                placeholder="Have you identified any risks with this consultant regarding satisfaction, performance, or retention?"
+                rows={2}
+                disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+              />
+              
+              <Textarea
+                label="Consultant Requests"
+                value={completeMeetingForm.consultant_requests}
+                onChange={(e) => setCompleteMeetingForm(prev => ({ ...prev, consultant_requests: e.target.value }))}
+                placeholder="Any requests or feedback from the consultant..."
+                rows={2}
+                disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+              />
+              
+              <Textarea
+                label="General Comments"
+                value={completeMeetingForm.general_comments}
+                onChange={(e) => setCompleteMeetingForm(prev => ({ ...prev, general_comments: e.target.value }))}
+                placeholder="Overall notes from the meeting..."
+                rows={3}
+                disabled={selectedMeetingToComplete.status === 'completed' && !permissions.isAdmin}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setIsCompleteMeetingModalOpen(false);
+                  setSelectedMeetingToComplete(null);
+                }}
+              >
+                {selectedMeetingToComplete.status === 'completed' ? 'Close' : 'Cancel'}
+              </Button>
+              {(selectedMeetingToComplete.status !== 'completed' || permissions.isAdmin) && (
+                <Button 
+                  variant="primary" 
+                  onClick={handleCompleteMeeting}
+                  isLoading={isCompletingMeeting}
+                >
+                  {selectedMeetingToComplete.status === 'completed' ? 'Update' : 'Complete Meeting'}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
@@ -586,6 +1991,193 @@ export function ConsultantProfilePage() {
         variant="danger"
         isLoading={isDeleting}
       />
+
+      {/* Salary Increase Modal */}
+      <Modal
+        isOpen={isSalaryIncreaseModalOpen}
+        onClose={() => setIsSalaryIncreaseModalOpen(false)}
+        title="Request Salary Increase"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-brand-grey-50 rounded-lg">
+            <p className="text-sm text-brand-grey-500">Current Salary</p>
+            <p className="font-medium text-brand-slate-900">
+              {consultant.salary_amount 
+                ? `£${consultant.salary_amount.toLocaleString()} (Annual)`
+                : consultant.day_rate 
+                  ? `£${consultant.day_rate} (Day Rate)`
+                  : 'Not set'}
+            </p>
+          </div>
+
+          <Select
+            label="Salary Type"
+            options={[
+              { value: 'annual_salary', label: 'Annual Salary' },
+              { value: 'day_rate', label: 'Day Rate' },
+            ]}
+            value={salaryIncreaseForm.salary_type}
+            onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, salary_type: e.target.value as any }))}
+          />
+
+          <Input
+            label="New Salary Amount (£)"
+            type="number"
+            value={salaryIncreaseForm.new_salary}
+            onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, new_salary: e.target.value }))}
+            placeholder={salaryIncreaseForm.salary_type === 'annual_salary' ? 'e.g. 55000' : 'e.g. 450'}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Effective Month"
+              options={monthNames.map((m, i) => ({ value: String(i + 1), label: m }))}
+              value={String(salaryIncreaseForm.effective_month)}
+              onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, effective_month: parseInt(e.target.value) }))}
+            />
+            <Input
+              label="Effective Year"
+              type="number"
+              value={salaryIncreaseForm.effective_year}
+              onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, effective_year: parseInt(e.target.value) }))}
+            />
+          </div>
+
+          <Textarea
+            label="Reason for Increase"
+            value={salaryIncreaseForm.reason}
+            onChange={(e) => setSalaryIncreaseForm(prev => ({ ...prev, reason: e.target.value }))}
+            placeholder="Explain the justification for this salary increase..."
+            rows={3}
+          />
+
+          <p className="text-sm text-brand-grey-500">This request will be sent to the Director for approval.</p>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="secondary" onClick={() => setIsSalaryIncreaseModalOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmitSalaryIncrease} isLoading={isSubmittingRequest}>
+              Submit Request
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bonus Payment Modal */}
+      <Modal
+        isOpen={isBonusModalOpen}
+        onClose={() => setIsBonusModalOpen(false)}
+        title="Request Bonus Payment"
+        size="md"
+      >
+        <div className="space-y-4">
+          <Select
+            label="Bonus Type"
+            options={[
+              { value: 'performance', label: 'Performance Bonus' },
+              { value: 'retention', label: 'Retention Bonus' },
+              { value: 'project', label: 'Project Bonus' },
+              { value: 'referral', label: 'Referral Bonus' },
+              { value: 'other', label: 'Other' },
+            ]}
+            value={bonusForm.bonus_type}
+            onChange={(e) => setBonusForm(prev => ({ ...prev, bonus_type: e.target.value as any }))}
+          />
+
+          <Input
+            label="Bonus Amount (£)"
+            type="number"
+            value={bonusForm.amount}
+            onChange={(e) => setBonusForm(prev => ({ ...prev, amount: e.target.value }))}
+            placeholder="e.g. 2000"
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Payment Month"
+              options={monthNames.map((m, i) => ({ value: String(i + 1), label: m }))}
+              value={String(bonusForm.payment_month)}
+              onChange={(e) => setBonusForm(prev => ({ ...prev, payment_month: parseInt(e.target.value) }))}
+            />
+            <Input
+              label="Payment Year"
+              type="number"
+              value={bonusForm.payment_year}
+              onChange={(e) => setBonusForm(prev => ({ ...prev, payment_year: parseInt(e.target.value) }))}
+            />
+          </div>
+
+          <Textarea
+            label="Reason for Bonus"
+            value={bonusForm.reason}
+            onChange={(e) => setBonusForm(prev => ({ ...prev, reason: e.target.value }))}
+            placeholder="Explain why this bonus is being requested..."
+            rows={3}
+          />
+
+          <p className="text-sm text-brand-grey-500">This request will be sent to the Director for approval.</p>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="secondary" onClick={() => setIsBonusModalOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmitBonus} isLoading={isSubmittingRequest}>
+              Submit Request
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Exit Employee Modal */}
+      <Modal
+        isOpen={isExitModalOpen}
+        onClose={() => setIsExitModalOpen(false)}
+        title="Exit Employee"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700">
+              This will initiate the exit process for {consultant.first_name} {consultant.last_name}. 
+              Both Director and HR approval will be required.
+            </p>
+          </div>
+
+          <Select
+            label="Exit Reason"
+            options={[
+              { value: 'resignation', label: 'Resignation' },
+              { value: 'redundancy', label: 'Redundancy' },
+              { value: 'end_of_contract', label: 'End of Contract' },
+              { value: 'dismissal', label: 'Dismissal' },
+              { value: 'mutual_agreement', label: 'Mutual Agreement' },
+              { value: 'retirement', label: 'Retirement' },
+            ]}
+            value={exitForm.exit_reason}
+            onChange={(e) => setExitForm(prev => ({ ...prev, exit_reason: e.target.value as any }))}
+          />
+
+          <Input
+            label="Last Working Day"
+            type="date"
+            value={exitForm.last_working_day}
+            onChange={(e) => setExitForm(prev => ({ ...prev, last_working_day: e.target.value }))}
+          />
+
+          <Textarea
+            label="Exit Details"
+            value={exitForm.exit_details}
+            onChange={(e) => setExitForm(prev => ({ ...prev, exit_details: e.target.value }))}
+            placeholder="Provide details about the exit (notice period, handover, etc.)..."
+            rows={4}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="secondary" onClick={() => setIsExitModalOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleSubmitExit} isLoading={isSubmittingRequest}>
+              Submit Exit Request
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   XCircle,
   Clock,
   MapPin,
+  Rocket,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -24,7 +25,8 @@ import {
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useToast } from '@/lib/stores/ui-store';
-import { customerAssessmentsService, type DbCustomerAssessment } from '@/lib/services';
+import { customerAssessmentsService, requirementsService, missionsService, type DbCustomerAssessment } from '@/lib/services';
+import { CreateMissionModal } from '@/components/CreateMissionModal';
 
 const outcomeConfig = {
   pending: { label: 'Pending', colour: 'orange', icon: Clock },
@@ -46,6 +48,16 @@ export function CustomerAssessmentsPage() {
   const [isOutcomeModalOpen, setIsOutcomeModalOpen] = useState(false);
   const [outcomeNotes, setOutcomeNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Create Mission prompt and modal
+  const [showCreateMissionPrompt, setShowCreateMissionPrompt] = useState(false);
+  const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
+  const [missionContext, setMissionContext] = useState<{
+    requirement: any;
+    customer: any;
+    contact: any;
+    winningCandidateId: string;
+  } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -74,6 +86,40 @@ export function CustomerAssessmentsPage() {
         outcome, 
         outcomeNotes || undefined
       );
+      
+      // If GO, also mark the requirement as won and set winning candidate
+      if (outcome === 'go' && selectedAssessment.requirement_id && selectedAssessment.candidate_id) {
+        await requirementsService.update(selectedAssessment.requirement_id, {
+          status: 'filled',
+          winning_candidate_id: selectedAssessment.candidate_id,
+        });
+        
+        // Fetch requirement details for mission creation
+        const requirement = await requirementsService.getById(selectedAssessment.requirement_id);
+        
+        // Check if mission already exists for this requirement
+        const existingMission = await missionsService.getByRequirement(selectedAssessment.requirement_id);
+        
+        if (!existingMission && requirement) {
+          // Set up context for mission creation and show prompt
+          setMissionContext({
+            requirement,
+            customer: requirement.customer,
+            contact: selectedAssessment.contact,
+            winningCandidateId: selectedAssessment.candidate_id,
+          });
+          
+          toast.success('Marked as GO!', 'Requirement marked as Won');
+          setIsOutcomeModalOpen(false);
+          setSelectedAssessment(null);
+          setOutcomeNotes('');
+          loadData();
+          
+          // Show create mission prompt
+          setShowCreateMissionPrompt(true);
+          return;
+        }
+      }
       
       toast.success(
         outcome === 'go' ? 'Marked as GO!' : 'Marked as NO GO',
@@ -221,8 +267,8 @@ export function CustomerAssessmentsPage() {
                     </div>
 
                     {/* Actions */}
-                    {(!assessment.outcome || assessment.outcome === 'pending') && (
-                      <div className="flex gap-2">
+                    <div className="flex gap-2">
+                      {(!assessment.outcome || assessment.outcome === 'pending') && (
                         <Button
                           variant="success"
                           size="sm"
@@ -234,8 +280,45 @@ export function CustomerAssessmentsPage() {
                         >
                           Record Outcome
                         </Button>
-                      </div>
-                    )}
+                      )}
+                      
+                      {assessment.outcome === 'go' && requirement?.status === 'filled' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          leftIcon={<Rocket className="h-4 w-4" />}
+                          onClick={async () => {
+                            // Check if mission already exists
+                            const existingMission = assessment.requirement_id 
+                              ? await missionsService.getByRequirement(assessment.requirement_id)
+                              : null;
+                            
+                            if (existingMission) {
+                              toast.info('Mission Exists', 'A mission has already been created for this requirement');
+                              navigate('/missions');
+                              return;
+                            }
+                            
+                            // Set up context and open modal
+                            const fullRequirement = assessment.requirement_id
+                              ? await requirementsService.getById(assessment.requirement_id)
+                              : null;
+                            
+                            if (fullRequirement && assessment.candidate_id) {
+                              setMissionContext({
+                                requirement: fullRequirement,
+                                customer: fullRequirement.customer,
+                                contact: assessment.contact,
+                                winningCandidateId: assessment.candidate_id,
+                              });
+                              setIsCreateMissionModalOpen(true);
+                            }
+                          }}
+                        >
+                          Create Mission
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </Card>
               );
@@ -290,6 +373,59 @@ export function CustomerAssessmentsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Create Mission Prompt */}
+      <Modal
+        isOpen={showCreateMissionPrompt}
+        onClose={() => setShowCreateMissionPrompt(false)}
+        title="Create Mission?"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-brand-grey-500">
+            The requirement has been marked as Won. Would you like to create the mission now?
+          </p>
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setShowCreateMissionPrompt(false)}
+            >
+              Later
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1"
+              leftIcon={<Rocket className="h-4 w-4" />}
+              onClick={() => {
+                setShowCreateMissionPrompt(false);
+                setIsCreateMissionModalOpen(true);
+              }}
+            >
+              Create Mission
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Create Mission Modal */}
+      {missionContext && (
+        <CreateMissionModal
+          isOpen={isCreateMissionModalOpen}
+          onClose={() => {
+            setIsCreateMissionModalOpen(false);
+            setMissionContext(null);
+          }}
+          onSuccess={() => {
+            loadData();
+            navigate('/missions');
+          }}
+          requirement={missionContext.requirement}
+          customer={missionContext.customer}
+          contact={missionContext.contact}
+          winningCandidateId={missionContext.winningCandidateId}
+        />
+      )}
     </div>
   );
 }

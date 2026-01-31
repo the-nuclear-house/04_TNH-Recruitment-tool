@@ -36,6 +36,7 @@ interface Permissions {
   isDirector: boolean;
   isManager: boolean;
   isRecruiter: boolean;
+  isHR: boolean;
 }
 
 const rolePermissions: Record<UserRole, Permissions> = {
@@ -68,6 +69,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isDirector: false,
     isManager: false,
     isRecruiter: false,
+    isHR: false,
   },
   
   director: {
@@ -99,6 +101,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isDirector: true,
     isManager: false,
     isRecruiter: false,
+    isHR: false,
   },
   
   manager: {
@@ -130,6 +133,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isDirector: false,
     isManager: true,
     isRecruiter: false,
+    isHR: false,
   },
   
   recruiter: {
@@ -161,6 +165,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isDirector: false,
     isManager: false,
     isRecruiter: true,
+    isHR: false,
   },
   
   hr: {
@@ -192,6 +197,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isDirector: false,
     isManager: false,
     isRecruiter: false,
+    isHR: true,
   },
 };
 
@@ -225,6 +231,7 @@ const defaultPermissions: Permissions = {
   isDirector: false,
   isManager: false,
   isRecruiter: false,
+  isHR: false,
 };
 
 // Merge permissions from multiple roles (user gets highest permission from any role)
@@ -252,6 +259,7 @@ function mergePermissions(roles: UserRole[]): Permissions {
   merged.isDirector = roles.includes('director');
   merged.isManager = roles.includes('manager');
   merged.isRecruiter = roles.includes('recruiter');
+  merged.isHR = roles.includes('hr');
   
   return merged;
 }
