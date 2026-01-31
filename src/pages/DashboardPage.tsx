@@ -150,11 +150,21 @@ function InterviewFunnel({ data }: {
     }
   } 
 }) {
+  // Calculate dynamic widths based on actual numbers
+  const maxValue = Math.max(data.phone, data.technical, data.director, data.signed, 1);
+  
+  // Calculate width as percentage of max, with minimum 25% for visibility
+  const getWidth = (value: number) => {
+    if (maxValue === 0) return 25;
+    const percentage = (value / maxValue) * 100;
+    return Math.max(percentage, 25); // Minimum 25% width for visibility
+  };
+  
   const stages = [
-    { label: 'Phone', value: data.phone, colour: '#06b6d4', width: 100 },
-    { label: 'Technical', value: data.technical, colour: '#0891b2', width: 80 },
-    { label: 'Director', value: data.director, colour: '#0e7490', width: 60 },
-    { label: 'Signed', value: data.signed, colour: '#134e4a', width: 40 },
+    { label: 'Phone', value: data.phone, colour: '#06b6d4', width: getWidth(data.phone) },
+    { label: 'Technical', value: data.technical, colour: '#0891b2', width: getWidth(data.technical) },
+    { label: 'Director', value: data.director, colour: '#0e7490', width: getWidth(data.director) },
+    { label: 'Signed', value: data.signed, colour: '#134e4a', width: getWidth(data.signed) },
   ];
   
   const conversions = [

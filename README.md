@@ -1,4 +1,6 @@
-# RecruitHub
+# Cockpit
+
+The Nuclear House Recruitment Management System
 
 Engineering Recruitment Management System built with React, TypeScript, and Supabase.
 

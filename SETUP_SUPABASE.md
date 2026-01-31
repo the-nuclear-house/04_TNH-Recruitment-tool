@@ -1,4 +1,4 @@
-# RecruitHub - Supabase Setup Guide
+# Cockpit - Supabase Setup Guide
 
 ## Step 1: Create Supabase Project
 

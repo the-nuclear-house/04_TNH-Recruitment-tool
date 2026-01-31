@@ -26,8 +26,8 @@ export function Sidebar() {
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const permissions = usePermissions();
 
-  // Customer assessments and Customers only visible to Manager, Director, Admin
-  const canViewCustomers = user?.roles?.some(r => ['admin', 'director', 'manager'].includes(r)) ?? false;
+  // Customer assessments and Customers only visible to Manager, Director, Admin, Superadmin
+  const canViewCustomers = user?.roles?.some(r => ['superadmin', 'admin', 'director', 'manager'].includes(r)) ?? false;
 
   // Build navigation based on permissions
   const navigation = [
@@ -60,7 +60,7 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <div className="flex items-center gap-3">
             <img src="/logo.svg" alt="TNH" className="h-8 w-8" />
-            <span className="text-white font-semibold">RecruitHub</span>
+            <span className="text-white font-semibold">Cockpit</span>
           </div>
         )}
         {sidebarCollapsed && (

@@ -1,7 +1,7 @@
-# RecruitHub - Project Context
+# Cockpit - Project Context
 
 ## Overview
-RecruitHub is a recruitment and CRM platform for a nuclear engineering consultancy. It manages the full lifecycle from customer acquisition through candidate placement.
+Cockpit is a recruitment and CRM platform for The Nuclear House, a nuclear engineering consultancy. It manages the full lifecycle from customer acquisition through candidate placement.
 
 ## Tech Stack
 - **Frontend:** React 18 + TypeScript + Vite
