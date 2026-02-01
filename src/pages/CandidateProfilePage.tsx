@@ -704,6 +704,7 @@ export function CandidateProfilePage() {
         enthusiasm_score: parseInt(phoneForm.enthusiasm_score),
         cultural_fit_score: parseInt(phoneForm.cultural_fit_score),
         general_comments: phoneForm.general_comments,
+        warnings: phoneForm.warnings || null,
       });
       
       toast.success('Phone Interview Completed', 'Feedback and candidate info have been saved');
@@ -756,6 +757,7 @@ export function CandidateProfilePage() {
         technical_depth_score: parseInt(techForm.technical_depth_score),
         problem_solving_score: parseInt(techForm.problem_solving_score),
         general_comments: techForm.general_comments,
+        warnings: techForm.warnings || null,
       });
       
       toast.success('Technical Interview Completed', 'Feedback has been saved');
@@ -797,6 +799,8 @@ export function CandidateProfilePage() {
         enthusiasm_score: parseInt(directorForm.enthusiasm_score),
         cultural_fit_score: parseInt(directorForm.cultural_fit_score),
         general_comments: directorForm.general_comments,
+        warnings: directorForm.warnings || null,
+        salary_proposed: directorForm.salary_proposed ? parseFloat(directorForm.salary_proposed) : null,
       });
       
       toast.success('Director Interview Completed', 'Feedback has been saved');

@@ -812,6 +812,10 @@ export interface UpdateInterviewInput {
   general_comments?: string;
   recommendation?: string;
   skills_confirmed?: string[];
+  warnings?: string | null;
+  contract_preference?: string | null;
+  salary_proposed?: number | null;
+  interviewer_id?: string;
 }
 
 export const interviewsService = {
