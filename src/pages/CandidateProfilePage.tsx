@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -259,6 +259,10 @@ export function CandidateProfilePage() {
   const [offerValidationErrors, setOfferValidationErrors] = useState<string[]>([]);
   const [isOfferShaking, setIsOfferShaking] = useState(false);
   
+  // CV Upload state
+  const [isUploadingCV, setIsUploadingCV] = useState(false);
+  const cvInputRef = useRef<HTMLInputElement>(null);
+  
   // Document drag state for offer form
   const [isDraggingId, setIsDraggingId] = useState(false);
   const [isDraggingRtw, setIsDraggingRtw] = useState(false);
@@ -464,6 +468,29 @@ export function CandidateProfilePage() {
       setComments(data);
     } catch (error) {
       console.error('Error loading comments:', error);
+    }
+  };
+
+  const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+    
+    setIsUploadingCV(true);
+    try {
+      const cvPath = await cvUploadService.uploadCV(file, id);
+      await candidatesService.update(id, { cv_url: cvPath });
+      // Reload candidate to get updated cv_url
+      const updatedCandidate = await candidatesService.getById(id);
+      setCandidate(updatedCandidate);
+      toast.success('CV Uploaded', 'The CV has been uploaded successfully.');
+    } catch (error) {
+      console.error('Error uploading CV:', error);
+      toast.error('Upload Failed', 'Failed to upload CV. Please try again.');
+    } finally {
+      setIsUploadingCV(false);
+      if (cvInputRef.current) {
+        cvInputRef.current.value = '';
+      }
     }
   };
 
@@ -1674,33 +1701,66 @@ export function CandidateProfilePage() {
               </div>
             </Card>
 
-            {/* CV Download */}
-            {candidate.cv_url && (
-              <Card>
-                <CardHeader className="mb-2">
-                  <CardTitle>CV / Resume</CardTitle>
-                </CardHeader>
+            {/* CV / Resume */}
+            <Card>
+              <CardHeader className="mb-2">
+                <CardTitle>CV / Resume</CardTitle>
+              </CardHeader>
+              
+              {/* Hidden file input */}
+              <input
+                ref={cvInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={handleCVUpload}
+                className="hidden"
+              />
+              
+              {candidate.cv_url ? (
+                <div className="space-y-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const signedUrl = await cvUploadService.getSignedUrl(candidate.cv_url);
+                        window.open(signedUrl, '_blank');
+                      } catch (error) {
+                        console.error('Error getting CV:', error);
+                        toast.error('Error', 'Failed to download CV');
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors text-left"
+                  >
+                    <FileText className="h-8 w-8 text-brand-cyan" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-brand-slate-900">Download CV</p>
+                      <p className="text-xs text-brand-grey-400">Click to view or download</p>
+                    </div>
+                    <Download className="h-4 w-4 text-brand-grey-400" />
+                  </button>
+                  <button
+                    onClick={() => cvInputRef.current?.click()}
+                    disabled={isUploadingCV}
+                    className="w-full text-sm text-brand-grey-500 hover:text-brand-cyan"
+                  >
+                    {isUploadingCV ? 'Uploading...' : 'Replace CV'}
+                  </button>
+                </div>
+              ) : (
                 <button
-                  onClick={async () => {
-                    try {
-                      const signedUrl = await cvUploadService.getSignedUrl(candidate.cv_url);
-                      window.open(signedUrl, '_blank');
-                    } catch (error) {
-                      console.error('Error getting CV:', error);
-                      toast.error('Error', 'Failed to download CV');
-                    }
-                  }}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors text-left"
+                  onClick={() => cvInputRef.current?.click()}
+                  disabled={isUploadingCV}
+                  className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors"
                 >
-                  <FileText className="h-8 w-8 text-brand-cyan" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-brand-slate-900">Download CV</p>
-                    <p className="text-xs text-brand-grey-400">Click to view or download</p>
+                  <Upload className="h-8 w-8 text-brand-grey-400" />
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-medium text-brand-slate-700">
+                      {isUploadingCV ? 'Uploading...' : 'Upload CV'}
+                    </p>
+                    <p className="text-xs text-brand-grey-400">PDF, DOC, or DOCX</p>
                   </div>
-                  <Download className="h-4 w-4 text-brand-grey-400" />
                 </button>
-              </Card>
-            )}
+              )}
+            </Card>
 
             {/* Assigned Recruiter */}
             <Card>
