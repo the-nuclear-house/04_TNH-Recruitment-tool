@@ -17,7 +17,7 @@ import { formatDate, computeCandidatePipelineStatus } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { candidatesService, usersService, interviewsService, type DbCandidate } from '@/lib/services';
+import { candidatesService, usersService, interviewsService, cvUploadService, type DbCandidate } from '@/lib/services';
 import { parseCV, extractTextFromFile, type ParsedCV } from '@/lib/cv-parser';
 
 export function CandidatesPage() {
@@ -241,7 +241,13 @@ export function CandidatesPage() {
     setIsSubmitting(true);
     
     try {
-      await candidatesService.create({
+      // Auto-assign the current user as recruiter if they are a recruiter and no recruiter selected
+      let assignedRecruiterId = formData.assigned_recruiter_id || undefined;
+      if (!assignedRecruiterId && (permissions.isRecruiter || permissions.isRecruiterManager)) {
+        assignedRecruiterId = user?.id;
+      }
+      
+      const newCandidate = await candidatesService.create({
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email,
@@ -251,8 +257,20 @@ export function CandidatesPage() {
         summary: formData.summary || undefined,
         skills: skills.length > 0 ? skills : undefined,
         previous_companies: previousCompanies.length > 0 ? previousCompanies : undefined,
-        assigned_recruiter_id: formData.assigned_recruiter_id || undefined,
+        assigned_recruiter_id: assignedRecruiterId,
+        created_by: user?.id,
       });
+      
+      // Upload CV if one was selected
+      if (cvFile && newCandidate.id) {
+        try {
+          const cvUrl = await cvUploadService.uploadCV(cvFile, newCandidate.id);
+          await candidatesService.update(newCandidate.id, { cv_url: cvUrl });
+        } catch (uploadError) {
+          console.error('Error uploading CV:', uploadError);
+          toast.warning('CV Upload Failed', 'Candidate was saved but CV upload failed. You can upload it again from their profile.');
+        }
+      }
       
       toast.success('Candidate Added', `${formData.first_name} ${formData.last_name} has been added to the database`);
       setIsModalOpen(false);
