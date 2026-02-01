@@ -26,7 +26,6 @@ export function Modal({
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [mouseDownOnOverlay, setMouseDownOnOverlay] = useState(false);
 
   // Close on escape key
   useEffect(() => {
@@ -45,19 +44,6 @@ export function Modal({
     };
   }, [isOpen, onClose]);
 
-  // Track where mouse down started
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setMouseDownOnOverlay(e.target === overlayRef.current);
-  };
-
-  // Only close if both mousedown and mouseup were on overlay
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (mouseDownOnOverlay && e.target === overlayRef.current) {
-      onClose();
-    }
-    setMouseDownOnOverlay(false);
-  };
-
   if (!isOpen) return null;
 
   const sizes = {
@@ -71,8 +57,6 @@ export function Modal({
   return (
     <div
       ref={overlayRef}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-slate-900/50 backdrop-blur-sm animate-fade-in"
     >
       <div
