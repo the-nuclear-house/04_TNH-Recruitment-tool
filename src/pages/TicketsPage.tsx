@@ -223,22 +223,6 @@ export function TicketsPage() {
     }
   };
 
-  const handleStartWork = async (ticket: UITicket) => {
-    if (ticket.source !== 'hr_ticket') return;
-    
-    setIsProcessing(true);
-    try {
-      await hrTicketsService.startWork(ticket.id);
-      toast.success('Started', 'Ticket marked as in progress');
-      loadTickets();
-    } catch (error) {
-      console.error('Error starting work:', error);
-      toast.error('Error', 'Failed to update ticket');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   // Contract workflow handlers - these show confirmation first
   const openConfirmDialog = (action: 'contract_sent' | 'contract_signed' | 'convert', ticket: UITicket) => {
     setConfirmAction(action);
@@ -492,18 +476,9 @@ export function TicketsPage() {
                       )}
                       
                       {/* Generic workflow for other ticket types */}
+                      {/* Generic workflow for other ticket types (salary, bonus, exit) */}
                       {ticket.ticket_type !== 'contract_send' && (
                         <>
-                          {ticket.status === 'pending' && ticket.source === 'hr_ticket' && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleStartWork(ticket)}
-                              disabled={isProcessing}
-                            >
-                              Start Work
-                            </Button>
-                          )}
                           {(ticket.status === 'pending' || ticket.status === 'in_progress') && (
                             <Button
                               variant="success"

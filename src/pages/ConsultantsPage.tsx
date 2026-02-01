@@ -211,7 +211,7 @@ export function ConsultantsPage() {
   const [meetings, setMeetings] = useState<DbConsultantMeeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('active');
   const [activeTab, setActiveTab] = useState<'gantt' | 'cards' | 'meetings'>('gantt');
   
   // Timeline state
@@ -267,7 +267,9 @@ export function ConsultantsPage() {
         c.reference_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.job_title?.toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' || 
+        statusFilter === 'active' ? c.status !== 'terminated' :
+        c.status === statusFilter;
       
       return matchesSearch && matchesStatus;
     });
@@ -354,9 +356,11 @@ export function ConsultantsPage() {
   // Stats
   const stats = {
     total: consultants.length,
+    active: consultants.filter(c => c.status !== 'terminated').length,
     bench: consultants.filter(c => c.status === 'bench').length,
     inMission: consultants.filter(c => c.status === 'in_mission').length,
     onLeave: consultants.filter(c => c.status === 'on_leave').length,
+    terminated: consultants.filter(c => c.status === 'terminated').length,
   };
 
   if (isLoading) {
@@ -381,18 +385,18 @@ export function ConsultantsPage() {
 
       <div className="p-6 space-y-6">
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card 
-            className={`cursor-pointer transition-all ${statusFilter === 'all' ? 'ring-2 ring-brand-cyan' : ''}`}
-            onClick={() => setStatusFilter('all')}
+            className={`cursor-pointer transition-all ${statusFilter === 'active' ? 'ring-2 ring-brand-cyan' : ''}`}
+            onClick={() => setStatusFilter('active')}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-brand-grey-100 rounded-lg">
-                <Users className="h-5 w-5 text-brand-slate-600" />
+              <div className="p-2 bg-brand-cyan-100 rounded-lg">
+                <Users className="h-5 w-5 text-brand-cyan" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{stats.total}</p>
-                <p className="text-sm text-brand-grey-400">Total</p>
+                <p className="text-2xl font-bold text-brand-cyan">{stats.active}</p>
+                <p className="text-sm text-brand-grey-400">Active</p>
               </div>
             </div>
           </Card>
@@ -438,6 +442,36 @@ export function ConsultantsPage() {
               <div>
                 <p className="text-2xl font-bold text-blue-600">{stats.onLeave}</p>
                 <p className="text-sm text-brand-grey-400">On Leave</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card 
+            className={`cursor-pointer transition-all ${statusFilter === 'terminated' ? 'ring-2 ring-red-500' : ''}`}
+            onClick={() => setStatusFilter('terminated')}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <XCircle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-600">{stats.terminated}</p>
+                <p className="text-sm text-brand-grey-400">Exited</p>
+              </div>
+            </div>
+          </Card>
+          
+          <Card 
+            className={`cursor-pointer transition-all ${statusFilter === 'all' ? 'ring-2 ring-brand-slate-500' : ''}`}
+            onClick={() => setStatusFilter('all')}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-brand-grey-100 rounded-lg">
+                <Users className="h-5 w-5 text-brand-slate-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-brand-slate-900">{stats.total}</p>
+                <p className="text-sm text-brand-grey-400">All</p>
               </div>
             </div>
           </Card>
@@ -547,13 +581,19 @@ export function ConsultantsPage() {
                   {/* Consultant Rows */}
                   {filteredConsultants.map(consultant => {
                     const consultantMeetings = getMeetingsForConsultant(consultant.id);
-                    const barStyle = getBarStyle(consultant.start_date, consultant.end_date, weeks);
+                    const barStyle = getBarStyle(consultant.start_date, consultant.terminated_at || consultant.end_date, weeks);
                     const statusInfo = statusConfig[consultant.status] || statusConfig.bench;
+                    const isTerminated = consultant.status === 'terminated';
+                    
+                    // Get termination marker position
+                    const terminationPosition = consultant.terminated_at 
+                      ? getMeetingPosition(consultant.terminated_at, weeks) 
+                      : null;
                     
                     return (
                       <div 
                         key={consultant.id} 
-                        className="flex border-b border-brand-grey-100 hover:bg-brand-grey-50/50 transition-colors min-w-[900px]"
+                        className={`flex border-b border-brand-grey-100 hover:bg-brand-grey-50/50 transition-colors min-w-[900px] ${isTerminated ? 'opacity-60' : ''}`}
                       >
                         {/* Consultant Info */}
                         <div 
@@ -563,11 +603,14 @@ export function ConsultantsPage() {
                           <div className="flex items-center gap-2">
                             <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="sm" />
                             <div className="min-w-0">
-                              <p className="font-medium text-brand-slate-900 text-sm truncate">
+                              <p className={`font-medium text-sm truncate ${isTerminated ? 'line-through text-brand-grey-400' : 'text-brand-slate-900'}`}>
                                 {consultant.first_name} {consultant.last_name}
                               </p>
-                              <p className="text-xs text-brand-grey-400 truncate">
+                              <p className="text-xs text-brand-grey-400 truncate flex items-center gap-1">
                                 {consultant.reference_id}
+                                {isTerminated && (
+                                  <Badge variant="red" className="text-[10px] px-1 py-0">Exited</Badge>
+                                )}
                               </p>
                             </div>
                           </div>
@@ -579,13 +622,24 @@ export function ConsultantsPage() {
                           {barStyle && (
                             <div
                               className={`absolute top-1/2 -translate-y-1/2 h-2 rounded-full ${
+                                isTerminated ? 'bg-red-200' :
                                 consultant.status === 'in_mission' ? 'bg-green-300' :
                                 consultant.status === 'on_leave' ? 'bg-blue-300' :
-                                consultant.status === 'terminated' ? 'bg-red-300' :
                                 'bg-amber-300'
                               }`}
                               style={{ left: barStyle.left, width: barStyle.width, minWidth: '4px' }}
                             />
+                          )}
+                          
+                          {/* Termination marker */}
+                          {isTerminated && terminationPosition && (
+                            <div
+                              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white shadow-md border-2 border-white"
+                              style={{ left: terminationPosition }}
+                              title={`Exit date: ${formatDate(consultant.terminated_at!)}`}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </div>
                           )}
                           
                           {/* Meeting markers */}

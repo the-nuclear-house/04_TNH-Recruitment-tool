@@ -18,7 +18,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
-import { Card, CardHeader, CardTitle, Button, Badge, Avatar } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Button, Badge, Avatar, Modal } from '@/components/ui';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
@@ -321,6 +321,11 @@ export function DashboardPage() {
   const [pendingApprovals, setPendingApprovals] = useState<DbApprovalRequest[]>([]);
   const [pendingOffers, setPendingOffers] = useState<DbOffer[]>([]);
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
+  
+  // Approval detail modal
+  const [selectedApprovalRequest, setSelectedApprovalRequest] = useState<DbApprovalRequest | null>(null);
+  const [selectedOfferForApproval, setSelectedOfferForApproval] = useState<DbOffer | null>(null);
+  const [isApprovalDetailOpen, setIsApprovalDetailOpen] = useState(false);
 
   // Determine if recruiter view (recruiter or recruiter_manager, not business/admin roles)
   const isRecruiterView = (permissions.isRecruiter || permissions.isRecruiterManager) && 
@@ -1102,7 +1107,14 @@ export function DashboardPage() {
                 </CardHeader>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {pendingApprovals.map(request => (
-                    <div key={request.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                    <div 
+                      key={request.id} 
+                      className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors"
+                      onClick={() => {
+                        setSelectedApprovalRequest(request);
+                        setIsApprovalDetailOpen(true);
+                      }}
+                    >
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg ${
                           request.request_type === 'salary_increase' ? 'bg-green-100' :
@@ -1121,14 +1133,20 @@ export function DashboardPage() {
                           <p className="text-xs text-brand-grey-500">{request.consultant?.first_name} {request.consultant?.last_name}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="success" size="sm" onClick={() => handleApproveRequest(request.id)} isLoading={processingApproval === request.id}>Approve</Button>
-                        <Button variant="danger" size="sm" onClick={() => handleRejectRequest(request.id)} isLoading={processingApproval === request.id}>Reject</Button>
-                      </div>
+                      <Button variant="secondary" size="sm">
+                        View Details
+                      </Button>
                     </div>
                   ))}
                   {pendingOffers.map(offer => (
-                    <div key={offer.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                    <div 
+                      key={offer.id} 
+                      className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors"
+                      onClick={() => {
+                        setSelectedOfferForApproval(offer);
+                        setIsApprovalDetailOpen(true);
+                      }}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-cyan-100">
                           <FileText className="h-4 w-4 text-cyan-600" />
@@ -1138,10 +1156,9 @@ export function DashboardPage() {
                           <p className="text-xs text-brand-grey-500">{offer.candidate?.first_name} {offer.candidate?.last_name}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="success" size="sm" onClick={() => handleApproveOffer(offer.id)} isLoading={processingApproval === offer.id}>Approve</Button>
-                        <Button variant="danger" size="sm" onClick={() => handleRejectOffer(offer.id)} isLoading={processingApproval === offer.id}>Reject</Button>
-                      </div>
+                      <Button variant="secondary" size="sm">
+                        View Details
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1311,6 +1328,251 @@ export function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Approval Detail Modal */}
+      <Modal
+        isOpen={isApprovalDetailOpen}
+        onClose={() => {
+          setIsApprovalDetailOpen(false);
+          setSelectedApprovalRequest(null);
+          setSelectedOfferForApproval(null);
+        }}
+        title={
+          selectedApprovalRequest 
+            ? selectedApprovalRequest.request_type === 'salary_increase' ? 'Salary Increase Request'
+              : selectedApprovalRequest.request_type === 'bonus_payment' ? 'Bonus Payment Request'
+              : 'Employee Exit Request'
+            : selectedOfferForApproval ? 'Contract Approval Request' : 'Approval Request'
+        }
+        size="lg"
+      >
+        {selectedApprovalRequest && (
+          <div className="space-y-4">
+            {/* Consultant Info */}
+            <div className="p-4 bg-brand-grey-50 rounded-lg">
+              <h4 className="font-medium text-brand-slate-900 mb-2">Consultant</h4>
+              <p className="text-brand-slate-700">
+                {selectedApprovalRequest.consultant?.first_name} {selectedApprovalRequest.consultant?.last_name}
+              </p>
+              {selectedApprovalRequest.consultant?.job_title && (
+                <p className="text-sm text-brand-grey-500">{selectedApprovalRequest.consultant.job_title}</p>
+              )}
+            </div>
+
+            {/* Request Details */}
+            {selectedApprovalRequest.request_type === 'salary_increase' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-red-50 rounded-lg">
+                    <p className="text-xs text-red-600">Current Salary</p>
+                    <p className="text-lg font-semibold text-red-700">
+                      £{(selectedApprovalRequest.request_data as SalaryIncreaseData).current_salary?.toLocaleString() || 'N/A'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg">
+                    <p className="text-xs text-green-600">New Salary</p>
+                    <p className="text-lg font-semibold text-green-700">
+                      £{(selectedApprovalRequest.request_data as SalaryIncreaseData).new_salary.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                {(selectedApprovalRequest.request_data as any).effective_date && (
+                  <div className="p-3 bg-brand-grey-50 rounded-lg">
+                    <p className="text-xs text-brand-grey-500">Effective Date</p>
+                    <p className="font-medium">{formatDate((selectedApprovalRequest.request_data as any).effective_date)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedApprovalRequest.request_type === 'bonus_payment' && (
+              <div className="space-y-3">
+                <div className="p-3 bg-purple-50 rounded-lg">
+                  <p className="text-xs text-purple-600">Bonus Amount</p>
+                  <p className="text-lg font-semibold text-purple-700">
+                    £{(selectedApprovalRequest.request_data as BonusPaymentData).amount.toLocaleString()}
+                  </p>
+                </div>
+                {(selectedApprovalRequest.request_data as any).payment_date && (
+                  <div className="p-3 bg-brand-grey-50 rounded-lg">
+                    <p className="text-xs text-brand-grey-500">Payment Date</p>
+                    <p className="font-medium">{formatDate((selectedApprovalRequest.request_data as any).payment_date)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedApprovalRequest.request_type === 'employee_exit' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-red-50 rounded-lg">
+                    <p className="text-xs text-red-600">Exit Reason</p>
+                    <p className="font-medium text-red-700 capitalize">
+                      {(selectedApprovalRequest.request_data as EmployeeExitData).exit_reason.replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-brand-grey-50 rounded-lg">
+                    <p className="text-xs text-brand-grey-500">Last Working Day</p>
+                    <p className="font-medium">{formatDate((selectedApprovalRequest.request_data as EmployeeExitData).last_working_day)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Justification */}
+            <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+              <h4 className="font-medium text-amber-800 mb-2">Justification</h4>
+              <p className="text-brand-slate-700 whitespace-pre-wrap">
+                {(selectedApprovalRequest.request_data as any).justification || 'No justification provided'}
+              </p>
+            </div>
+
+            {/* Requested By & Date */}
+            <div className="flex items-center justify-between text-sm text-brand-grey-500">
+              <span>Requested by: {selectedApprovalRequest.requester?.full_name || 'Unknown'}</span>
+              <span>Date: {formatDate(selectedApprovalRequest.created_at)}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setIsApprovalDetailOpen(false);
+                  setSelectedApprovalRequest(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="danger" 
+                onClick={() => {
+                  handleRejectRequest(selectedApprovalRequest.id);
+                  setIsApprovalDetailOpen(false);
+                  setSelectedApprovalRequest(null);
+                }}
+                isLoading={processingApproval === selectedApprovalRequest.id}
+              >
+                Reject
+              </Button>
+              <Button 
+                variant="success" 
+                onClick={() => {
+                  handleApproveRequest(selectedApprovalRequest.id);
+                  setIsApprovalDetailOpen(false);
+                  setSelectedApprovalRequest(null);
+                }}
+                isLoading={processingApproval === selectedApprovalRequest.id}
+              >
+                Approve
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {selectedOfferForApproval && (
+          <div className="space-y-4">
+            {/* Candidate Info */}
+            <div className="p-4 bg-brand-grey-50 rounded-lg">
+              <h4 className="font-medium text-brand-slate-900 mb-2">Candidate</h4>
+              <p className="text-brand-slate-700">
+                {selectedOfferForApproval.candidate?.first_name} {selectedOfferForApproval.candidate?.last_name}
+              </p>
+              <p className="text-sm text-brand-grey-500">{selectedOfferForApproval.candidate?.email}</p>
+            </div>
+
+            {/* Offer Details */}
+            <div className="space-y-3">
+              <div className="p-3 bg-cyan-50 rounded-lg">
+                <p className="text-xs text-cyan-600">Job Title</p>
+                <p className="font-medium text-cyan-700">{selectedOfferForApproval.job_title}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-brand-grey-50 rounded-lg">
+                  <p className="text-xs text-brand-grey-500">Contract Type</p>
+                  <p className="font-medium capitalize">{selectedOfferForApproval.contract_type?.replace(/_/g, ' ') || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-brand-grey-50 rounded-lg">
+                  <p className="text-xs text-brand-grey-500">Start Date</p>
+                  <p className="font-medium">{selectedOfferForApproval.start_date ? formatDate(selectedOfferForApproval.start_date) : 'TBD'}</p>
+                </div>
+              </div>
+
+              {selectedOfferForApproval.salary_amount && (
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <p className="text-xs text-green-600">Salary</p>
+                  <p className="text-lg font-semibold text-green-700">£{selectedOfferForApproval.salary_amount.toLocaleString()}</p>
+                </div>
+              )}
+
+              {selectedOfferForApproval.day_rate && (
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <p className="text-xs text-green-600">Day Rate</p>
+                  <p className="text-lg font-semibold text-green-700">£{selectedOfferForApproval.day_rate.toLocaleString()}/day</p>
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            {selectedOfferForApproval.notes && (
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <h4 className="font-medium text-amber-800 mb-2">Notes</h4>
+                <p className="text-brand-slate-700 whitespace-pre-wrap">{selectedOfferForApproval.notes}</p>
+              </div>
+            )}
+
+            {/* Requirement Link */}
+            {selectedOfferForApproval.requirement && (
+              <div className="p-3 bg-brand-grey-50 rounded-lg">
+                <p className="text-xs text-brand-grey-500">For Requirement</p>
+                <p className="font-medium">{selectedOfferForApproval.requirement.title}</p>
+              </div>
+            )}
+
+            {/* Requested By & Date */}
+            <div className="flex items-center justify-between text-sm text-brand-grey-500">
+              <span>Requested by: {selectedOfferForApproval.requester?.full_name || 'Unknown'}</span>
+              <span>Date: {formatDate(selectedOfferForApproval.created_at)}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setIsApprovalDetailOpen(false);
+                  setSelectedOfferForApproval(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="danger" 
+                onClick={() => {
+                  handleRejectOffer(selectedOfferForApproval.id);
+                  setIsApprovalDetailOpen(false);
+                  setSelectedOfferForApproval(null);
+                }}
+                isLoading={processingApproval === selectedOfferForApproval.id}
+              >
+                Reject
+              </Button>
+              <Button 
+                variant="success" 
+                onClick={() => {
+                  handleApproveOffer(selectedOfferForApproval.id);
+                  setIsApprovalDetailOpen(false);
+                  setSelectedOfferForApproval(null);
+                }}
+                isLoading={processingApproval === selectedOfferForApproval.id}
+              >
+                Approve
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

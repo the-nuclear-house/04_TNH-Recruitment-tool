@@ -3450,9 +3450,12 @@ export const hrTicketsService = {
     } else if (ticket.ticket_type === 'bonus_payment' && ticket.approval_request_id) {
       // Bonus already processed when approved
     } else if (ticket.ticket_type === 'employee_exit' && ticket.consultant_id) {
-      // Mark exit as fully processed
+      // Mark exit as fully processed with termination date
+      const exitData = ticket.ticket_data as { exit_reason?: string; last_working_day?: string; exit_details?: string } | null;
       await consultantsService.update(ticket.consultant_id, {
         status: 'terminated',
+        terminated_at: exitData?.last_working_day || new Date().toISOString().split('T')[0],
+        termination_reason: exitData?.exit_reason || 'Employee exit',
       });
     } else if (ticket.ticket_type === 'contract_send' && ticket.offer_id) {
       // Update offer status to contract_sent
