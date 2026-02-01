@@ -167,37 +167,30 @@ export function OrganisationPage() {
         if (error) throw error;
         toast.success('User Updated', `${formData.full_name}'s profile has been updated`);
       } else {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            data: { full_name: formData.full_name }
-          }
+        // Use edge function to create user (works even with signups disabled)
+        const { data: sessionData } = await supabase.auth.getSession();
+        
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            full_name: formData.full_name,
+            roles: formData.roles,
+          }),
         });
         
-        if (authError) {
-          if (authError.message.includes('already registered')) {
-            toast.error('Email In Use', 'This email is already registered');
-          } else {
-            throw authError;
-          }
-          return;
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to create user');
         }
         
-        if (authData.user) {
-          const { error: userError } = await supabase
-            .from('users')
-            .insert({
-              id: authData.user.id,
-              email: formData.email,
-              full_name: formData.full_name,
-              roles: formData.roles,
-            });
-          
-          if (userError) throw userError;
-        }
-        
-        toast.success('User Created', `${formData.full_name} has been added to the team`);
+        toast.success('User Created', `${formData.full_name} has been added and can log in immediately.`);
       }
       
       setIsModalOpen(false);

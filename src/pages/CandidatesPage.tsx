@@ -611,59 +611,14 @@ export function CandidatesPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Add New Candidate"
-        description="Enter the candidate's information"
+        description="Upload a CV to auto-fill, or enter details manually"
         size="lg"
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="First Name *"
-              value={formData.first_name}
-              onChange={(e) => handleFormChange('first_name', e.target.value)}
-              placeholder="John"
-            />
-            <Input
-              label="Last Name *"
-              value={formData.last_name}
-              onChange={(e) => handleFormChange('last_name', e.target.value)}
-              placeholder="Smith"
-            />
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Email *"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleFormChange('email', e.target.value)}
-              placeholder="john.smith@email.com"
-            />
-            <Input
-              label="Phone"
-              value={formData.phone}
-              onChange={(e) => handleFormChange('phone', e.target.value)}
-              placeholder="+44 7700 900000"
-            />
-          </div>
-
-          <Input
-            label="Location"
-            value={formData.location}
-            onChange={(e) => handleFormChange('location', e.target.value)}
-            placeholder="London"
-          />
-
-          <Input
-            label="LinkedIn URL"
-            value={formData.linkedin_url}
-            onChange={(e) => handleFormChange('linkedin_url', e.target.value)}
-            placeholder="https://linkedin.com/in/..."
-          />
-
-          {/* CV Upload */}
+          {/* CV Upload - AT THE TOP */}
           <div>
             <label className="block text-sm font-medium text-brand-slate-700 mb-1">
-              CV / Resume <span className="text-brand-cyan font-normal">(auto-fills form)</span>
+              CV / Resume <span className="text-brand-cyan font-normal">(auto-fills form below)</span>
             </label>
             <div 
               className={`
@@ -720,15 +675,70 @@ export function CandidatesPage() {
                   <div className={`${isDragging ? 'text-brand-cyan' : 'text-brand-grey-400'}`}>
                     <Upload className={`h-10 w-10 mx-auto mb-2 ${isDragging ? 'text-brand-cyan' : 'text-brand-grey-300'}`} />
                     <p className="font-medium">
-                      {isDragging ? 'Drop your CV here' : 'Drag & drop your CV here'}
+                      {isDragging ? 'Drop your CV here' : 'Drag & drop CV to auto-fill form'}
                     </p>
                     <p className="text-sm mt-1">or click to browse</p>
-                    <p className="text-xs mt-2 text-brand-grey-300">PDF, DOC, DOCX (max 10MB) - Will auto-fill form</p>
+                    <p className="text-xs mt-2 text-brand-grey-300">PDF, DOC, DOCX (max 10MB)</p>
                   </div>
                 )}
               </label>
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-brand-grey-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-brand-grey-400">or enter manually</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="First Name *"
+              value={formData.first_name}
+              onChange={(e) => handleFormChange('first_name', e.target.value)}
+              placeholder="John"
+            />
+            <Input
+              label="Last Name *"
+              value={formData.last_name}
+              onChange={(e) => handleFormChange('last_name', e.target.value)}
+              placeholder="Smith"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Email *"
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleFormChange('email', e.target.value)}
+              placeholder="john.smith@email.com"
+            />
+            <Input
+              label="Phone"
+              value={formData.phone}
+              onChange={(e) => handleFormChange('phone', e.target.value)}
+              placeholder="+44 7700 900000"
+            />
+          </div>
+
+          <Input
+            label="Location"
+            value={formData.location}
+            onChange={(e) => handleFormChange('location', e.target.value)}
+            placeholder="London"
+          />
+
+          <Input
+            label="LinkedIn URL"
+            value={formData.linkedin_url}
+            onChange={(e) => handleFormChange('linkedin_url', e.target.value)}
+            placeholder="https://linkedin.com/in/..."
+          />
 
           {/* Previous Companies */}
           <div>
