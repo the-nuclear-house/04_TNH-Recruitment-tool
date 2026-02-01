@@ -40,6 +40,7 @@ interface Permissions {
   isManager: boolean;
   isRecruiter: boolean;
   isHR: boolean;
+  isTechnical: boolean;
 }
 
 const rolePermissions: Record<UserRole, Permissions> = {
@@ -76,6 +77,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isManager: false,
     isRecruiter: false,
     isHR: false,
+    isTechnical: false,
   },
 
   admin: {
@@ -111,6 +113,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isManager: false,
     isRecruiter: false,
     isHR: false,
+    isTechnical: false,
   },
   
   director: {
@@ -146,6 +149,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isManager: false,
     isRecruiter: false,
     isHR: false,
+    isTechnical: false,
   },
   
   manager: {
@@ -181,6 +185,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isManager: true,
     isRecruiter: false,
     isHR: false,
+    isTechnical: false,
   },
   
   recruiter: {
@@ -216,6 +221,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isManager: false,
     isRecruiter: true,
     isHR: false,
+    isTechnical: false,
   },
   
   hr: {
@@ -251,6 +257,43 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isManager: false,
     isRecruiter: false,
     isHR: true,
+    isTechnical: false,
+  },
+  
+  technical: {
+    canViewCandidates: true,    // Read-only view
+    canAddCandidates: false,
+    canEditCandidates: false,
+    canDeleteCandidates: false,
+    
+    canViewRequirements: true,  // Read-only view
+    canCreateRequirements: false,
+    canEditRequirements: false,
+    canDeleteRequirements: false,
+    
+    canViewInterviews: true,    // Can view and conduct their interviews
+    canScheduleInterviews: false,
+    canConductInterviews: true, // Can add feedback to their interviews
+    canViewAllInterviewFeedback: false,
+    
+    canViewContracts: false,
+    canCreateContracts: false,
+    canApproveContracts: false,
+    
+    canViewOrganisation: false,
+    canManageUsers: false,
+    canManageBusinessUnits: false,
+    canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
+    
+    isSuperAdmin: false,
+    isAdmin: false,
+    isDirector: false,
+    isManager: false,
+    isRecruiter: false,
+    isHR: false,
+    isTechnical: true,
   },
 };
 
@@ -288,6 +331,7 @@ const defaultPermissions: Permissions = {
   isManager: false,
   isRecruiter: false,
   isHR: false,
+  isTechnical: false,
 };
 
 // Merge permissions from multiple roles (user gets highest permission from any role)
@@ -317,6 +361,7 @@ function mergePermissions(roles: UserRole[]): Permissions {
   merged.isManager = roles.includes('manager');
   merged.isRecruiter = roles.includes('recruiter');
   merged.isHR = roles.includes('hr');
+  merged.isTechnical = roles.includes('technical');
   
   return merged;
 }

@@ -24,6 +24,7 @@ const baseRoles = [
   { value: 'manager', label: 'Business Manager', description: 'Manage requirements and team', colour: 'green' },
   { value: 'director', label: 'Director', description: 'Oversee managers and approve contracts', colour: 'gold' },
   { value: 'hr', label: 'HR', description: 'Handle employee matters and approvals', colour: 'purple' },
+  { value: 'technical', label: 'Technical', description: 'Conduct technical interviews (read-only)', colour: 'blue' },
 ];
 
 // Add-on roles - can be combined with base role
@@ -31,13 +32,14 @@ const addonRoles = [
   { value: 'admin', label: 'Admin', description: 'Full system access and user management' },
 ];
 
-const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple' | 'red'> = {
+const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple' | 'red' | 'blue'> = {
   recruiter: 'cyan',
   manager: 'green',
   director: 'gold',
   hr: 'purple',
   admin: 'orange',
   superadmin: 'red',
+  technical: 'blue',
 };
 
 const roleLabels: Record<string, string> = {
@@ -47,6 +49,7 @@ const roleLabels: Record<string, string> = {
   hr: 'HR',
   admin: 'Admin',
   superadmin: 'Super Admin',
+  technical: 'Technical',
 };
 
 export function OrganisationPage() {
@@ -384,13 +387,21 @@ export function OrganisationPage() {
             </CardTitle>
           </CardHeader>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="p-4 bg-cyan-50 rounded-lg">
               <h4 className="font-medium text-cyan-800 mb-2">Recruiter</h4>
               <ul className="text-sm text-cyan-700 space-y-1">
                 <li>• View and add candidates</li>
                 <li>• Conduct phone interviews</li>
                 <li>• View requirements (read-only)</li>
+              </ul>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <h4 className="font-medium text-blue-800 mb-2">Technical</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• View candidates (read-only)</li>
+                <li>• View requirements (read-only)</li>
+                <li>• Conduct technical interviews</li>
               </ul>
             </div>
             <div className="p-4 bg-green-50 rounded-lg">
@@ -407,7 +418,7 @@ export function OrganisationPage() {
               <ul className="text-sm text-amber-700 space-y-1">
                 <li>• All Manager permissions</li>
                 <li>• Conduct final interviews</li>
-                <li>• Schedule client assessments</li>
+                <li>• Approve contracts</li>
               </ul>
             </div>
             <div className="p-4 bg-orange-50 rounded-lg">
@@ -415,13 +426,21 @@ export function OrganisationPage() {
               <ul className="text-sm text-orange-700 space-y-1">
                 <li>• Full system access</li>
                 <li>• Manage team members</li>
-                <li>• Delete any record</li>
+                <li>• Soft delete records</li>
+              </ul>
+            </div>
+            <div className="p-4 bg-red-50 rounded-lg">
+              <h4 className="font-medium text-red-800 mb-2">Super Admin</h4>
+              <ul className="text-sm text-red-700 space-y-1">
+                <li>• All Admin permissions</li>
+                <li>• Create other Admins</li>
+                <li>• Hard delete records permanently</li>
               </ul>
             </div>
           </div>
           
           <p className="mt-4 text-sm text-brand-grey-400">
-            Users can have multiple roles. Permissions are combined from all assigned roles.
+            Each user has one primary role. Admins can also grant Admin Access for user management.
           </p>
         </Card>
       </div>
