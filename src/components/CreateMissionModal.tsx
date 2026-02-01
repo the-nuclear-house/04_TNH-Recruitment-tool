@@ -20,7 +20,7 @@ interface CreateMissionModalProps {
   onSuccess?: () => void;
   // Pre-populated data from requirement
   requirement?: DbRequirement;
-  customer?: DbCompany; // Actually company, kept as customer for prop compatibility
+  company?: DbCompany;
   contact?: DbContact;
   candidate?: DbCandidate;
   winningCandidateId?: string;
@@ -31,7 +31,7 @@ export function CreateMissionModal({
   onClose,
   onSuccess,
   requirement: propRequirement,
-  customer: propCompany,
+  company: propCompany,
   contact,
   candidate,
   winningCandidateId,
@@ -46,7 +46,7 @@ export function CreateMissionModal({
   
   // Resolved data (fetched if needed)
   const [requirement, setRequirement] = useState<DbRequirement | undefined>(propRequirement);
-  const [customer, setCustomer] = useState<DbCompany | undefined>(propCompany);
+  const [company, setCompany] = useState<DbCompany | undefined>(propCompany);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -74,7 +74,7 @@ export function CreateMissionModal({
             setRequirement(fullReq);
             // If requirement has company, use it
             if (fullReq.company && !propCompany?.id) {
-              setCustomer(fullReq.company);
+              setCompany(fullReq.company);
             }
           }
         } catch (error) {
@@ -86,13 +86,13 @@ export function CreateMissionModal({
       
       // Use prop company if provided
       if (propCompany?.id) {
-        setCustomer(propCompany);
+        setCompany(propCompany);
       } else if (resolvedRequirement?.company_id && !propCompany?.id) {
         // Fetch company if we have company_id but no company data
         try {
           const company = await companiesService.getById(resolvedRequirement.company_id);
           if (company) {
-            setCustomer(company);
+            setCompany(company);
           }
         } catch (error) {
           console.error('Error fetching company:', error);
@@ -125,11 +125,11 @@ export function CreateMissionModal({
           setConsultant(foundConsultant);
           // Generate mission name
           const skillsPart = requirement?.skills?.slice(0, 3).join(', ') || requirement?.title || 'Mission';
-          const missionName = `${customer?.name || 'Customer'} - ${skillsPart} - ${foundConsultant.first_name} ${foundConsultant.last_name}`;
+          const missionName = `${company?.name || 'Company'} - ${skillsPart} - ${foundConsultant.first_name} ${foundConsultant.last_name}`;
           setFormData(prev => ({
             ...prev,
             name: missionName,
-            location: customer?.city || customer?.address_line_1 || '',
+            location: company?.city || company?.address_line_1 || '',
           }));
         } else {
           setConsultantError('You cannot create a mission with a candidate. Transform your candidate to a consultant first.');
@@ -143,7 +143,7 @@ export function CreateMissionModal({
     };
     
     checkConsultant();
-  }, [isOpen, winningCandidateId, candidate?.id, requirement, customer]);
+  }, [isOpen, winningCandidateId, candidate?.id, requirement, company]);
 
   const handleSubmit = async () => {
     if (!consultant) {
@@ -151,8 +151,8 @@ export function CreateMissionModal({
       return;
     }
     
-    if (!customer?.id) {
-      toast.error('Error', 'No customer associated with this requirement. Please ensure a customer exists in the Customers page with the same name.');
+    if (!company?.id) {
+      toast.error('Error', 'No company associated with this requirement. Please ensure the company exists with the same name.');
       return;
     }
     
@@ -173,8 +173,8 @@ export function CreateMissionModal({
     
     // Debug: log what we're sending
     console.log('Creating mission with:', {
-      company_id: customer.id,
-      company_name: customer.name,
+      company_id: company?.id,
+      company_name: company?.name,
       consultant_id: consultant.id,
       requirement_id: requirement?.id,
     });
@@ -185,7 +185,7 @@ export function CreateMissionModal({
         name: formData.name,
         requirement_id: requirement?.id,
         consultant_id: consultant.id,
-        company_id: customer.id,
+        company_id: company?.id,
         contact_id: contact?.id,
         start_date: formData.start_date,
         end_date: formData.end_date,
@@ -241,7 +241,7 @@ export function CreateMissionModal({
             <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
               <div>
                 <p className="text-xs text-brand-grey-400 mb-1">Customer</p>
-                <p className="text-sm font-medium text-brand-slate-900">{customer?.name || 'N/A'}</p>
+                <p className="text-sm font-medium text-brand-slate-900">{company?.name || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-brand-grey-400 mb-1">Contact</p>

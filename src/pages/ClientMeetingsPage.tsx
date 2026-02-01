@@ -43,7 +43,6 @@ import {
   contactsService,
   candidatesService,
   companiesService,
-  customersService,
   requirementsService,
   applicationsService,
   usersService,
@@ -53,7 +52,6 @@ import {
   type DbContact,
   type DbCandidate,
   type DbCompany,
-  type DbCustomer,
   type DbRequirement,
   type DbUser,
   type DbConsultant,
@@ -92,7 +90,6 @@ export function ClientMeetingsPage() {
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [candidates, setCandidates] = useState<DbCandidate[]>([]);
   const [companies, setCompanies] = useState<DbCompany[]>([]);
-  const [customers, setCustomers] = useState<DbCustomer[]>([]);
   const [users, setUsers] = useState<DbUser[]>([]);
   const [consultants, setConsultants] = useState<DbConsultant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -162,13 +159,12 @@ export function ClientMeetingsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [meetings, assmnts, conts, cands, comps, custs, usrs, consults] = await Promise.all([
+      const [meetings, assmnts, conts, cands, comps, usrs, consults] = await Promise.all([
         customerMeetingsService.getAll(),
         customerAssessmentsService.getAll(),
         contactsService.getAll(),
         candidatesService.getAll(),
         companiesService.getAll(),
-        customersService.getAll(),
         usersService.getAll(),
         consultantsService.getAll(),
       ]);
@@ -177,7 +173,6 @@ export function ClientMeetingsPage() {
       setContacts(conts);
       setCandidates(cands);
       setCompanies(comps);
-      setCustomers(custs);
       setUsers(usrs);
       setConsultants(consults);
     } catch (error) {
@@ -1444,7 +1439,7 @@ export function ClientMeetingsPage() {
           }}
           requirement={assessmentForMission.requirement_id ? { id: assessmentForMission.requirement_id } as any : undefined}
           candidate={candidates.find(c => c.id === assessmentForMission.candidate_id)}
-          customer={(() => {
+          company={(() => {
             const contact = contacts.find(c => c.id === assessmentForMission.contact_id);
             return contact ? companies.find(co => co.id === contact.company_id) : undefined;
           })()}

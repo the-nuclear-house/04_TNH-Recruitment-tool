@@ -20,7 +20,7 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { missionsService, customersService, consultantsService, type DbMission, type DbCustomer } from '@/lib/services';
+import { missionsService, companiesService, consultantsService, type DbMission, type DbCompany } from '@/lib/services';
 
 const workModeLabels: Record<string, string> = {
   full_onsite: 'On-site',
@@ -88,7 +88,7 @@ export function MissionsPage() {
   const permissions = usePermissions();
   
   const [missions, setMissions] = useState<DbMission[]>([]);
-  const [customers, setCustomers] = useState<DbCustomer[]>([]);
+  const [companies, setCompanies] = useState<DbCompany[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
   
@@ -122,12 +122,12 @@ export function MissionsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [missionsData, customersData] = await Promise.all([
+      const [missionsData, companiesData] = await Promise.all([
         missionsService.getAll(),
-        customersService.getAll(),
+        companiesService.getAll(),
       ]);
       setMissions(missionsData);
-      setCustomers(customersData);
+      setCompanies(companiesData);
       
       const customerIds = new Set(missionsData.map(m => m.company_id));
       setExpandedCustomers(customerIds);
@@ -152,9 +152,9 @@ export function MissionsPage() {
     return grouped;
   }, [missions]);
 
-  const customersWithMissions = useMemo(() => {
-    return customers.filter(c => missionsByCustomer[c.id]?.length > 0);
-  }, [customers, missionsByCustomer]);
+  const companiesWithMissions = useMemo(() => {
+    return companies.filter(c => missionsByCustomer[c.id]?.length > 0);
+  }, [companies, missionsByCustomer]);
 
   const goToPreviousWeeks = () => {
     setTimelineStart(prev => {
@@ -274,7 +274,7 @@ export function MissionsPage() {
     active: missions.filter(m => m.status === 'active').length,
     total: missions.length,
     consultants: new Set(missions.filter(m => m.status === 'active').map(m => m.consultant_id)).size,
-    customers: customersWithMissions.length,
+    companies: companiesWithMissions.length,
   };
 
   if (isLoading) {
@@ -294,7 +294,7 @@ export function MissionsPage() {
     <div className="min-h-screen">
       <Header 
         title="Missions" 
-        subtitle={`${stats.active} active missions across ${stats.customers} customers`}
+        subtitle={`${stats.active} active missions across ${stats.companies} customers`}
       />
 
       <div className="p-6 space-y-6">
@@ -342,7 +342,7 @@ export function MissionsPage() {
                 <Building2 className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{stats.customers}</p>
+                <p className="text-2xl font-bold text-brand-slate-900">{stats.companies}</p>
                 <p className="text-sm text-brand-grey-400">Active Customers</p>
               </div>
             </div>
@@ -400,7 +400,7 @@ export function MissionsPage() {
               </div>
 
               {/* Timeline Body */}
-              {customersWithMissions.map(customer => {
+              {companiesWithMissions.map(customer => {
                 const customerMissions = missionsByCustomer[customer.id] || [];
                 const isExpanded = expandedCustomers.has(customer.id);
                 

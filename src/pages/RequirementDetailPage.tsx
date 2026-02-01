@@ -42,7 +42,7 @@ import { formatDate, computeCandidatePipelineStatus, timeOptions } from '@/lib/u
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, customersService, missionsService, consultantsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbCustomer, type DbConsultant } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, consultantsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbConsultant } from '@/lib/services';
 import { CreateMissionModal } from '@/components/CreateMissionModal';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
@@ -136,7 +136,6 @@ export function RequirementDetailPage() {
   // Contacts and companies for assessment modal
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [companies, setCompanies] = useState<DbCompany[]>([]);
-  const [customers, setCustomers] = useState<DbCustomer[]>([]);
   
   // Add candidate modal
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
@@ -185,13 +184,12 @@ export function RequirementDetailPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [reqData, usersData, appsData, contactsData, companiesData, customersData, allInterviews, allConsultants] = await Promise.all([
+      const [reqData, usersData, appsData, contactsData, companiesData, allInterviews, allConsultants] = await Promise.all([
         requirementsService.getById(id!),
         usersService.getAll(),
         applicationsService.getByRequirement(id!),
         contactsService.getAll(),
         companiesService.getAll(),
-        customersService.getAll(),
         interviewsService.getAll(),
         consultantsService.getAll(),
       ]);
@@ -201,7 +199,6 @@ export function RequirementDetailPage() {
       setAllUsers(usersData);
       setContacts(contactsData);
       setCompanies(companiesData);
-      setCustomers(customersData);
       setConsultants(allConsultants);
       
       // Group interviews by candidate for pipeline status
@@ -1412,7 +1409,7 @@ export function RequirementDetailPage() {
           navigate('/missions');
         }}
         requirement={requirement}
-        customer={requirement?.company}
+        company={requirement?.company}
         contact={contacts.find(c => c.id === requirement?.contact_id)}
         winningCandidateId={requirement?.winning_candidate_id}
       />

@@ -144,7 +144,7 @@ export interface DbMission {
   name: string;
   requirement_id: string | null;
   consultant_id: string;
-  company_id: string;
+  company_id: string;  // This matches the actual DB column
   contact_id: string | null;
   start_date: string;
   end_date: string;
@@ -169,7 +169,7 @@ export interface CreateMissionInput {
   name: string;
   requirement_id?: string;
   consultant_id: string;
-  company_id: string;
+  company_id: string;  // This matches the actual DB column
   contact_id?: string;
   start_date: string;
   end_date: string;

@@ -1,17 +1,28 @@
--- Fix missions table to reference companies instead of customers
--- The app uses "companies" table for customer data, but missions was referencing "customers" table
+-- Missions table already has company_id column pointing to companies table
+-- Just ensure the FK and policies are correct
 
--- Drop the existing foreign key constraint
-ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_customer_id_fkey;
-
--- Rename customer_id to company_id for clarity
-ALTER TABLE missions RENAME COLUMN customer_id TO company_id;
-
--- Add the new foreign key constraint referencing companies
+-- Ensure FK to companies exists
+ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_company_id_fkey;
 ALTER TABLE missions ADD CONSTRAINT missions_company_id_fkey 
   FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
 
--- Update the contact_id FK to use contacts instead of customer_contacts if needed
+-- Ensure FK to contacts exists  
 ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_contact_id_fkey;
 ALTER TABLE missions ADD CONSTRAINT missions_contact_id_fkey 
   FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL;
+
+-- Enable RLS
+ALTER TABLE missions ENABLE ROW LEVEL SECURITY;
+
+-- Create policies if they don't exist
+DROP POLICY IF EXISTS "Users can view missions" ON missions;
+CREATE POLICY "Users can view missions" ON missions FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Managers can insert missions" ON missions;
+CREATE POLICY "Managers can insert missions" ON missions FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Managers can update missions" ON missions;
+CREATE POLICY "Managers can update missions" ON missions FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Admins can delete missions" ON missions;
+CREATE POLICY "Admins can delete missions" ON missions FOR DELETE USING (true);

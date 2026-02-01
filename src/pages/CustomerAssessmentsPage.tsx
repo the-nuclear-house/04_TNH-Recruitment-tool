@@ -421,7 +421,7 @@ export function CustomerAssessmentsPage() {
             navigate('/missions');
           }}
           requirement={missionContext.requirement}
-          customer={missionContext.customer}
+          company={missionContext.customer}
           contact={missionContext.contact}
           winningCandidateId={missionContext.winningCandidateId}
         />

@@ -752,7 +752,7 @@ export function RequirementsPage() {
             navigate('/missions');
           }}
           requirement={missionRequirement}
-          customer={missionRequirement.company as any}
+          company={missionRequirement.company as any}
           contact={missionRequirement.contact}
           winningCandidateId={missionRequirement.winning_candidate_id || undefined}
         />
