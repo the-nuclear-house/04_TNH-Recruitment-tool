@@ -26,8 +26,11 @@ export function Sidebar() {
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const permissions = usePermissions();
 
-  // Customer assessments and Customers only visible to Manager, Director, Admin, Superadmin
-  const canViewCustomers = user?.roles?.some(r => ['superadmin', 'admin', 'director', 'manager'].includes(r)) ?? false;
+  // Customer assessments and Customers only visible to Business roles, Admin, Superadmin
+  const canViewCustomers = user?.roles?.some(r => [
+    'superadmin', 'admin', 
+    'business_director', 'business_manager'
+  ].includes(r)) ?? false;
 
   // Build navigation based on permissions
   const navigation = [

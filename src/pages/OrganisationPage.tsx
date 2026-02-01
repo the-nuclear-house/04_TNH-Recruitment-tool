@@ -10,21 +10,30 @@ import {
   Modal,
   Input,
   ConfirmDialog,
+  Select,
 } from '@/components/ui';
 import { Plus, Users, Edit, Trash2, Mail, Shield } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions, roleHierarchy, requiresManager } from '@/hooks/usePermissions';
 import { usersService } from '@/lib/services';
 import { supabase } from '@/lib/supabase';
+import type { UserRole } from '@/types';
 
 // Base roles - mutually exclusive (pick one)
 const baseRoles = [
-  { value: 'recruiter', label: 'Recruiter', description: 'Source and manage candidates', colour: 'cyan' },
-  { value: 'manager', label: 'Business Manager', description: 'Manage requirements and team', colour: 'green' },
-  { value: 'director', label: 'Director', description: 'Oversee managers and approve contracts', colour: 'gold' },
-  { value: 'hr', label: 'HR', description: 'Handle employee matters and approvals', colour: 'purple' },
-  { value: 'technical', label: 'Technical', description: 'Conduct technical interviews (read-only)', colour: 'blue' },
+  // Recruitment Department
+  { value: 'recruiter', label: 'Recruiter', description: 'Source candidates and conduct phone interviews', colour: 'cyan', department: 'Recruitment' },
+  { value: 'recruiter_manager', label: 'Recruiter Manager', description: 'Manage recruitment team and approve requests', colour: 'cyan', department: 'Recruitment' },
+  // Technical Department
+  { value: 'technical', label: 'Technical', description: 'Conduct technical interviews (read-only access)', colour: 'blue', department: 'Technical' },
+  { value: 'technical_director', label: 'Technical Director', description: 'Oversee technical team and approve requests', colour: 'blue', department: 'Technical' },
+  // Business Department
+  { value: 'business_manager', label: 'Business Manager', description: 'Manage requirements and client relationships', colour: 'green', department: 'Business' },
+  { value: 'business_director', label: 'Business Director', description: 'Oversee business managers and approve contracts', colour: 'green', department: 'Business' },
+  // HR Department
+  { value: 'hr', label: 'HR', description: 'Handle employee matters and contracts', colour: 'purple', department: 'HR' },
+  { value: 'hr_manager', label: 'HR Manager', description: 'Manage HR team and approve HR requests', colour: 'purple', department: 'HR' },
 ];
 
 // Add-on roles - can be combined with base role
@@ -34,22 +43,28 @@ const addonRoles = [
 
 const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple' | 'red' | 'blue'> = {
   recruiter: 'cyan',
-  manager: 'green',
-  director: 'gold',
+  recruiter_manager: 'cyan',
+  technical: 'blue',
+  technical_director: 'blue',
+  business_manager: 'green',
+  business_director: 'green',
   hr: 'purple',
+  hr_manager: 'purple',
   admin: 'orange',
   superadmin: 'red',
-  technical: 'blue',
 };
 
 const roleLabels: Record<string, string> = {
   recruiter: 'Recruiter',
-  manager: 'Manager',
-  director: 'Director',
+  recruiter_manager: 'Recruiter Manager',
+  technical: 'Technical',
+  technical_director: 'Technical Director',
+  business_manager: 'Business Manager',
+  business_director: 'Business Director',
   hr: 'HR',
+  hr_manager: 'HR Manager',
   admin: 'Admin',
   superadmin: 'Super Admin',
-  technical: 'Technical',
 };
 
 export function OrganisationPage() {
@@ -70,12 +85,27 @@ export function OrganisationPage() {
     full_name: '',
     roles: [] as string[],
     password: '',
+    reports_to: '' as string,
   });
   
   // Delete confirmation
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Get potential managers based on selected role
+  const getPotentialManagers = () => {
+    const selectedRole = formData.roles[0] as UserRole;
+    if (!selectedRole || !requiresManager(selectedRole)) return [];
+    
+    const managerRole = roleHierarchy[selectedRole];
+    if (!managerRole) return [];
+    
+    return users.filter(u => 
+      u.roles?.includes(managerRole) && 
+      u.id !== editingUserId
+    );
+  };
 
   const loadUsers = async () => {
     try {
@@ -101,6 +131,7 @@ export function OrganisationPage() {
       full_name: '',
       roles: ['recruiter'],
       password: '',
+      reports_to: '',
     });
     setIsModalOpen(true);
   };
@@ -113,6 +144,7 @@ export function OrganisationPage() {
       full_name: user.full_name,
       roles: user.roles || [],
       password: '',
+      reports_to: user.reports_to || '',
     });
     setIsModalOpen(true);
   };
@@ -122,7 +154,8 @@ export function OrganisationPage() {
       // Remove any existing base roles and add the new one
       const baseRoleValues = baseRoles.map(r => r.value);
       const currentAddons = prev.roles.filter(r => !baseRoleValues.includes(r));
-      return { ...prev, roles: [role, ...currentAddons] };
+      // Reset reports_to when role changes
+      return { ...prev, roles: [role, ...currentAddons], reports_to: '' };
     });
   };
 
@@ -155,6 +188,13 @@ export function OrganisationPage() {
       return;
     }
 
+    // Validate reports_to if role requires a manager
+    const selectedRole = formData.roles[0] as UserRole;
+    if (requiresManager(selectedRole) && !formData.reports_to) {
+      toast.error('Validation Error', `Please select a manager for this ${roleLabels[selectedRole] || selectedRole}`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       if (isEditing && editingUserId) {
@@ -164,6 +204,7 @@ export function OrganisationPage() {
             email: formData.email,
             full_name: formData.full_name,
             roles: formData.roles,
+            reports_to: formData.reports_to || null,
           })
           .eq('id', editingUserId);
         
@@ -184,6 +225,7 @@ export function OrganisationPage() {
             password: formData.password,
             full_name: formData.full_name,
             roles: formData.roles,
+            reports_to: formData.reports_to || null,
           }),
         });
         
@@ -191,6 +233,14 @@ export function OrganisationPage() {
         
         if (!response.ok) {
           throw new Error(result.error || 'Failed to create user');
+        }
+        
+        // Update reports_to if set (edge function creates user, we update reports_to separately)
+        if (formData.reports_to && result.user?.id) {
+          await supabase
+            .from('users')
+            .update({ reports_to: formData.reports_to })
+            .eq('id', result.user.id);
         }
         
         toast.success('User Created', `${formData.full_name} has been added and can log in immediately.`);
@@ -394,64 +444,135 @@ export function OrganisationPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              Role Permissions
+              Role Permissions & Hierarchy
             </CardTitle>
           </CardHeader>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="p-4 bg-cyan-50 rounded-lg">
-              <h4 className="font-medium text-cyan-800 mb-2">Recruiter</h4>
-              <ul className="text-sm text-cyan-700 space-y-1">
-                <li>• View and add candidates</li>
-                <li>• Conduct phone interviews</li>
-                <li>• View requirements (read-only)</li>
-              </ul>
+          {/* Recruitment Department */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-brand-grey-500 mb-3 uppercase tracking-wider">Recruitment Department</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-cyan-50 rounded-lg">
+                <h4 className="font-medium text-cyan-800 mb-2">Recruiter</h4>
+                <ul className="text-sm text-cyan-700 space-y-1">
+                  <li>• View and add candidates</li>
+                  <li>• Conduct phone interviews</li>
+                  <li>• View requirements (read-only)</li>
+                </ul>
+                <p className="text-xs text-cyan-600 mt-2 italic">Reports to: Recruiter Manager</p>
+              </div>
+              <div className="p-4 bg-cyan-100 rounded-lg border-2 border-cyan-300">
+                <h4 className="font-medium text-cyan-800 mb-2">Recruiter Manager</h4>
+                <ul className="text-sm text-cyan-700 space-y-1">
+                  <li>• All Recruiter permissions</li>
+                  <li>• View team performance</li>
+                  <li>• Approve team requests</li>
+                </ul>
+                <p className="text-xs text-cyan-600 mt-2 italic">Department Head</p>
+              </div>
             </div>
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-medium text-blue-800 mb-2">Technical</h4>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• View candidates (read-only)</li>
-                <li>• View requirements (read-only)</li>
-                <li>• Conduct technical interviews</li>
-              </ul>
+          </div>
+
+          {/* Technical Department */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-brand-grey-500 mb-3 uppercase tracking-wider">Technical Department</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">Technical</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• View candidates (read-only)</li>
+                  <li>• View requirements (read-only)</li>
+                  <li>• Conduct technical interviews</li>
+                </ul>
+                <p className="text-xs text-blue-600 mt-2 italic">Reports to: Technical Director</p>
+              </div>
+              <div className="p-4 bg-blue-100 rounded-lg border-2 border-blue-300">
+                <h4 className="font-medium text-blue-800 mb-2">Technical Director</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• All Technical permissions</li>
+                  <li>• View team performance</li>
+                  <li>• Approve technical decisions</li>
+                </ul>
+                <p className="text-xs text-blue-600 mt-2 italic">Department Head</p>
+              </div>
             </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-2">Business Manager</h4>
-              <ul className="text-sm text-green-700 space-y-1">
-                <li>• All Recruiter permissions</li>
-                <li>• Create and manage requirements</li>
-                <li>• Conduct technical interviews</li>
-                <li>• Schedule client assessments</li>
-              </ul>
+          </div>
+
+          {/* Business Department */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-brand-grey-500 mb-3 uppercase tracking-wider">Business Department</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-green-50 rounded-lg">
+                <h4 className="font-medium text-green-800 mb-2">Business Manager</h4>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• Create and manage requirements</li>
+                  <li>• Manage client relationships</li>
+                  <li>• Schedule client assessments</li>
+                </ul>
+                <p className="text-xs text-green-600 mt-2 italic">Reports to: Business Director</p>
+              </div>
+              <div className="p-4 bg-green-100 rounded-lg border-2 border-green-300">
+                <h4 className="font-medium text-green-800 mb-2">Business Director</h4>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• All Manager permissions</li>
+                  <li>• Approve contracts</li>
+                  <li>• Approve salary requests</li>
+                </ul>
+                <p className="text-xs text-green-600 mt-2 italic">Department Head</p>
+              </div>
             </div>
-            <div className="p-4 bg-amber-50 rounded-lg">
-              <h4 className="font-medium text-amber-800 mb-2">Director</h4>
-              <ul className="text-sm text-amber-700 space-y-1">
-                <li>• All Manager permissions</li>
-                <li>• Conduct final interviews</li>
-                <li>• Approve contracts</li>
-              </ul>
+          </div>
+
+          {/* HR Department */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-brand-grey-500 mb-3 uppercase tracking-wider">HR Department</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-purple-50 rounded-lg">
+                <h4 className="font-medium text-purple-800 mb-2">HR</h4>
+                <ul className="text-sm text-purple-700 space-y-1">
+                  <li>• View contracts</li>
+                  <li>• Handle employee matters</li>
+                  <li>• Process documentation</li>
+                </ul>
+                <p className="text-xs text-purple-600 mt-2 italic">Reports to: HR Manager</p>
+              </div>
+              <div className="p-4 bg-purple-100 rounded-lg border-2 border-purple-300">
+                <h4 className="font-medium text-purple-800 mb-2">HR Manager</h4>
+                <ul className="text-sm text-purple-700 space-y-1">
+                  <li>• All HR permissions</li>
+                  <li>• Approve HR requests</li>
+                  <li>• View team performance</li>
+                </ul>
+                <p className="text-xs text-purple-600 mt-2 italic">Department Head</p>
+              </div>
             </div>
-            <div className="p-4 bg-orange-50 rounded-lg">
-              <h4 className="font-medium text-orange-800 mb-2">Admin</h4>
-              <ul className="text-sm text-orange-700 space-y-1">
-                <li>• Full system access</li>
-                <li>• Manage team members</li>
-                <li>• Soft delete records</li>
-              </ul>
-            </div>
-            <div className="p-4 bg-red-50 rounded-lg">
-              <h4 className="font-medium text-red-800 mb-2">Super Admin</h4>
-              <ul className="text-sm text-red-700 space-y-1">
-                <li>• All Admin permissions</li>
-                <li>• Create other Admins</li>
-                <li>• Hard delete records permanently</li>
-              </ul>
+          </div>
+
+          {/* Admin Roles */}
+          <div>
+            <h4 className="text-sm font-semibold text-brand-grey-500 mb-3 uppercase tracking-wider">System Administration</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-orange-50 rounded-lg">
+                <h4 className="font-medium text-orange-800 mb-2">Admin</h4>
+                <ul className="text-sm text-orange-700 space-y-1">
+                  <li>• Full system access</li>
+                  <li>• Manage team members</li>
+                  <li>• Soft delete records</li>
+                </ul>
+              </div>
+              <div className="p-4 bg-red-50 rounded-lg border-2 border-red-300">
+                <h4 className="font-medium text-red-800 mb-2">Super Admin</h4>
+                <ul className="text-sm text-red-700 space-y-1">
+                  <li>• All Admin permissions</li>
+                  <li>• Create other Admins</li>
+                  <li>• Hard delete records permanently</li>
+                </ul>
+              </div>
             </div>
           </div>
           
           <p className="mt-4 text-sm text-brand-grey-400">
-            Each user has one primary role. Admins can also grant Admin Access for user management.
+            Users with subordinate roles must be assigned to a manager. Department heads are independent.
           </p>
         </Card>
       </div>
@@ -462,7 +583,7 @@ export function OrganisationPage() {
         onClose={() => setIsModalOpen(false)}
         title={isEditing ? 'Edit Team Member' : 'Add Team Member'}
         description={isEditing ? 'Update details and roles' : 'Add a new member to your team'}
-        size="md"
+        size="lg"
       >
         <div className="space-y-4">
           <Input
@@ -543,6 +664,36 @@ export function OrganisationPage() {
               </div>
             )}
           </div>
+
+          {/* Reports To - only show if role requires a manager */}
+          {requiresManager(formData.roles[0] as UserRole) && (
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-2">
+                Reports To * <span className="text-brand-grey-400 font-normal">(select manager)</span>
+              </label>
+              {getPotentialManagers().length > 0 ? (
+                <select
+                  value={formData.reports_to}
+                  onChange={(e) => setFormData(prev => ({ ...prev, reports_to: e.target.value }))}
+                  className="w-full px-3 py-2 border border-brand-grey-300 rounded-lg focus:ring-2 focus:ring-brand-cyan focus:border-brand-cyan"
+                >
+                  <option value="">Select a manager...</option>
+                  {getPotentialManagers().map(manager => (
+                    <option key={manager.id} value={manager.id}>
+                      {manager.full_name} ({roleLabels[manager.roles?.[0]] || manager.roles?.[0]})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-700">
+                    No {roleLabels[roleHierarchy[formData.roles[0] as UserRole] || ''] || 'manager'} exists yet. 
+                    Create a {roleLabels[roleHierarchy[formData.roles[0] as UserRole] || ''] || 'manager'} first.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           
           {!isEditing && (
             <Input

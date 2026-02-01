@@ -347,7 +347,7 @@ export function DashboardPage() {
     try {
       setIsLoading(true);
       
-      const isDirectorView = permissions.isDirector || permissions.isAdmin;
+      const isDirectorView = permissions.isBusinessDirector || permissions.isAdmin;
       const targetManagerId = selectedManagerId || (isDirectorView ? null : user?.id);
       
       // Load requirements
@@ -573,7 +573,7 @@ export function DashboardPage() {
     }
   };
 
-  const isDirectorView = (permissions.isDirector || permissions.isAdmin) && !selectedManagerId;
+  const isDirectorView = (permissions.isBusinessDirector || permissions.isAdmin) && !selectedManagerId;
   const totalPendingApprovals = pendingApprovals.length + pendingOffers.length;
 
   const handlePrevSemester = () => {

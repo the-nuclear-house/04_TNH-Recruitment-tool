@@ -30,17 +30,24 @@ interface Permissions {
   canManageUsers: boolean;
   canManageBusinessUnits: boolean;
   canManageApprovalChains: boolean;
-  canCreateAdmins: boolean; // Only superadmin
-  canHardDelete: boolean;   // Only superadmin
+  canCreateAdmins: boolean;
+  canHardDelete: boolean;
+  
+  // Department management
+  canViewDepartmentStats: boolean;
+  canApproveRequests: boolean;
   
   // Role checks
   isSuperAdmin: boolean;
   isAdmin: boolean;
-  isDirector: boolean;
-  isManager: boolean;
-  isRecruiter: boolean;
-  isHR: boolean;
+  isBusinessDirector: boolean;
+  isBusinessManager: boolean;
+  isTechnicalDirector: boolean;
   isTechnical: boolean;
+  isRecruiterManager: boolean;
+  isRecruiter: boolean;
+  isHRManager: boolean;
+  isHR: boolean;
 }
 
 const rolePermissions: Record<UserRole, Permissions> = {
@@ -49,35 +56,35 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canAddCandidates: true,
     canEditCandidates: true,
     canDeleteCandidates: true,
-    
     canViewRequirements: true,
     canCreateRequirements: true,
     canEditRequirements: true,
     canDeleteRequirements: true,
-    
     canViewInterviews: true,
     canScheduleInterviews: true,
     canConductInterviews: true,
     canViewAllInterviewFeedback: true,
-    
     canViewContracts: true,
     canCreateContracts: true,
     canApproveContracts: true,
-    
     canViewOrganisation: true,
     canManageUsers: true,
     canManageBusinessUnits: true,
     canManageApprovalChains: true,
     canCreateAdmins: true,
     canHardDelete: true,
-    
+    canViewDepartmentStats: true,
+    canApproveRequests: true,
     isSuperAdmin: true,
     isAdmin: true,
-    isDirector: false,
-    isManager: false,
-    isRecruiter: false,
-    isHR: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
     isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
   },
 
   admin: {
@@ -85,107 +92,215 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canAddCandidates: true,
     canEditCandidates: true,
     canDeleteCandidates: true,
-    
     canViewRequirements: true,
     canCreateRequirements: true,
     canEditRequirements: true,
     canDeleteRequirements: true,
-    
     canViewInterviews: true,
     canScheduleInterviews: true,
     canConductInterviews: true,
     canViewAllInterviewFeedback: true,
-    
     canViewContracts: true,
     canCreateContracts: true,
     canApproveContracts: true,
-    
     canViewOrganisation: true,
     canManageUsers: true,
     canManageBusinessUnits: true,
     canManageApprovalChains: true,
-    canCreateAdmins: false, // Cannot create other admins
-    canHardDelete: false,   // Cannot hard delete
-    
+    canCreateAdmins: false,
+    canHardDelete: false,
+    canViewDepartmentStats: true,
+    canApproveRequests: true,
     isSuperAdmin: false,
     isAdmin: true,
-    isDirector: false,
-    isManager: false,
-    isRecruiter: false,
-    isHR: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
     isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
   },
   
-  director: {
+  business_director: {
     canViewCandidates: true,
     canAddCandidates: false,
     canEditCandidates: false,
     canDeleteCandidates: false,
-    
     canViewRequirements: true,
     canCreateRequirements: true,
     canEditRequirements: true,
     canDeleteRequirements: false,
-    
     canViewInterviews: true,
     canScheduleInterviews: true,
     canConductInterviews: true,
     canViewAllInterviewFeedback: true,
-    
     canViewContracts: true,
     canCreateContracts: true,
     canApproveContracts: true,
-    
     canViewOrganisation: true,
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
     canCreateAdmins: false,
     canHardDelete: false,
-    
+    canViewDepartmentStats: true,
+    canApproveRequests: true,
     isSuperAdmin: false,
     isAdmin: false,
-    isDirector: true,
-    isManager: false,
-    isRecruiter: false,
-    isHR: false,
+    isBusinessDirector: true,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
     isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
   },
   
-  manager: {
+  business_manager: {
     canViewCandidates: true,
     canAddCandidates: true,
     canEditCandidates: true,
     canDeleteCandidates: false,
-    
     canViewRequirements: true,
     canCreateRequirements: true,
     canEditRequirements: true,
     canDeleteRequirements: false,
-    
     canViewInterviews: true,
     canScheduleInterviews: true,
     canConductInterviews: true,
     canViewAllInterviewFeedback: true,
-    
     canViewContracts: true,
     canCreateContracts: true,
     canApproveContracts: false,
-    
     canViewOrganisation: true,
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
     canCreateAdmins: false,
     canHardDelete: false,
-    
+    canViewDepartmentStats: false,
+    canApproveRequests: false,
     isSuperAdmin: false,
     isAdmin: false,
-    isDirector: false,
-    isManager: true,
-    isRecruiter: false,
-    isHR: false,
+    isBusinessDirector: false,
+    isBusinessManager: true,
+    isTechnicalDirector: false,
     isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
+  },
+
+  technical_director: {
+    canViewCandidates: true,
+    canAddCandidates: false,
+    canEditCandidates: false,
+    canDeleteCandidates: false,
+    canViewRequirements: true,
+    canCreateRequirements: false,
+    canEditRequirements: false,
+    canDeleteRequirements: false,
+    canViewInterviews: true,
+    canScheduleInterviews: true,
+    canConductInterviews: true,
+    canViewAllInterviewFeedback: true,
+    canViewContracts: false,
+    canCreateContracts: false,
+    canApproveContracts: false,
+    canViewOrganisation: true,
+    canManageUsers: false,
+    canManageBusinessUnits: false,
+    canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
+    canViewDepartmentStats: true,
+    canApproveRequests: true,
+    isSuperAdmin: false,
+    isAdmin: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: true,
+    isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
+  },
+  
+  technical: {
+    canViewCandidates: true,
+    canAddCandidates: false,
+    canEditCandidates: false,
+    canDeleteCandidates: false,
+    canViewRequirements: true,
+    canCreateRequirements: false,
+    canEditRequirements: false,
+    canDeleteRequirements: false,
+    canViewInterviews: true,
+    canScheduleInterviews: false,
+    canConductInterviews: true,
+    canViewAllInterviewFeedback: false,
+    canViewContracts: false,
+    canCreateContracts: false,
+    canApproveContracts: false,
+    canViewOrganisation: false,
+    canManageUsers: false,
+    canManageBusinessUnits: false,
+    canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
+    canViewDepartmentStats: false,
+    canApproveRequests: false,
+    isSuperAdmin: false,
+    isAdmin: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
+    isTechnical: true,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
+  },
+
+  recruiter_manager: {
+    canViewCandidates: true,
+    canAddCandidates: true,
+    canEditCandidates: true,
+    canDeleteCandidates: false,
+    canViewRequirements: true,
+    canCreateRequirements: false,
+    canEditRequirements: false,
+    canDeleteRequirements: false,
+    canViewInterviews: true,
+    canScheduleInterviews: true,
+    canConductInterviews: true,
+    canViewAllInterviewFeedback: true,
+    canViewContracts: false,
+    canCreateContracts: false,
+    canApproveContracts: false,
+    canViewOrganisation: true,
+    canManageUsers: false,
+    canManageBusinessUnits: false,
+    canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
+    canViewDepartmentStats: true,
+    canApproveRequests: true,
+    isSuperAdmin: false,
+    isAdmin: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
+    isTechnical: false,
+    isRecruiterManager: true,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
   },
   
   recruiter: {
@@ -193,35 +308,71 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canAddCandidates: true,
     canEditCandidates: true,
     canDeleteCandidates: false,
-    
     canViewRequirements: true,
     canCreateRequirements: false,
     canEditRequirements: false,
     canDeleteRequirements: false,
-    
     canViewInterviews: true,
     canScheduleInterviews: true,
     canConductInterviews: true,
     canViewAllInterviewFeedback: false,
-    
     canViewContracts: false,
     canCreateContracts: false,
     canApproveContracts: false,
-    
     canViewOrganisation: false,
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
     canCreateAdmins: false,
     canHardDelete: false,
-    
+    canViewDepartmentStats: false,
+    canApproveRequests: false,
     isSuperAdmin: false,
     isAdmin: false,
-    isDirector: false,
-    isManager: false,
-    isRecruiter: true,
-    isHR: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
     isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: true,
+    isHRManager: false,
+    isHR: false,
+  },
+
+  hr_manager: {
+    canViewCandidates: false,
+    canAddCandidates: false,
+    canEditCandidates: false,
+    canDeleteCandidates: false,
+    canViewRequirements: false,
+    canCreateRequirements: false,
+    canEditRequirements: false,
+    canDeleteRequirements: false,
+    canViewInterviews: false,
+    canScheduleInterviews: false,
+    canConductInterviews: false,
+    canViewAllInterviewFeedback: false,
+    canViewContracts: true,
+    canCreateContracts: false,
+    canApproveContracts: false,
+    canViewOrganisation: true,
+    canManageUsers: false,
+    canManageBusinessUnits: false,
+    canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
+    canViewDepartmentStats: true,
+    canApproveRequests: true,
+    isSuperAdmin: false,
+    isAdmin: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
+    isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: true,
+    isHR: false,
   },
   
   hr: {
@@ -229,71 +380,35 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canAddCandidates: false,
     canEditCandidates: false,
     canDeleteCandidates: false,
-    
     canViewRequirements: false,
     canCreateRequirements: false,
     canEditRequirements: false,
     canDeleteRequirements: false,
-    
     canViewInterviews: false,
     canScheduleInterviews: false,
     canConductInterviews: false,
     canViewAllInterviewFeedback: false,
-    
     canViewContracts: true,
     canCreateContracts: false,
     canApproveContracts: false,
-    
     canViewOrganisation: true,
     canManageUsers: false,
     canManageBusinessUnits: false,
     canManageApprovalChains: false,
     canCreateAdmins: false,
     canHardDelete: false,
-    
+    canViewDepartmentStats: false,
+    canApproveRequests: false,
     isSuperAdmin: false,
     isAdmin: false,
-    isDirector: false,
-    isManager: false,
-    isRecruiter: false,
-    isHR: true,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
     isTechnical: false,
-  },
-  
-  technical: {
-    canViewCandidates: true,    // Read-only view
-    canAddCandidates: false,
-    canEditCandidates: false,
-    canDeleteCandidates: false,
-    
-    canViewRequirements: true,  // Read-only view
-    canCreateRequirements: false,
-    canEditRequirements: false,
-    canDeleteRequirements: false,
-    
-    canViewInterviews: true,    // Can view and conduct their interviews
-    canScheduleInterviews: false,
-    canConductInterviews: true, // Can add feedback to their interviews
-    canViewAllInterviewFeedback: false,
-    
-    canViewContracts: false,
-    canCreateContracts: false,
-    canApproveContracts: false,
-    
-    canViewOrganisation: false,
-    canManageUsers: false,
-    canManageBusinessUnits: false,
-    canManageApprovalChains: false,
-    canCreateAdmins: false,
-    canHardDelete: false,
-    
-    isSuperAdmin: false,
-    isAdmin: false,
-    isDirector: false,
-    isManager: false,
+    isRecruiterManager: false,
     isRecruiter: false,
-    isHR: false,
-    isTechnical: true,
+    isHRManager: false,
+    isHR: true,
   },
 };
 
@@ -303,35 +418,35 @@ const defaultPermissions: Permissions = {
   canAddCandidates: false,
   canEditCandidates: false,
   canDeleteCandidates: false,
-  
   canViewRequirements: false,
   canCreateRequirements: false,
   canEditRequirements: false,
   canDeleteRequirements: false,
-  
   canViewInterviews: false,
   canScheduleInterviews: false,
   canConductInterviews: false,
   canViewAllInterviewFeedback: false,
-  
   canViewContracts: false,
   canCreateContracts: false,
   canApproveContracts: false,
-  
   canViewOrganisation: false,
   canManageUsers: false,
   canManageBusinessUnits: false,
   canManageApprovalChains: false,
   canCreateAdmins: false,
   canHardDelete: false,
-  
+  canViewDepartmentStats: false,
+  canApproveRequests: false,
   isSuperAdmin: false,
   isAdmin: false,
-  isDirector: false,
-  isManager: false,
-  isRecruiter: false,
-  isHR: false,
+  isBusinessDirector: false,
+  isBusinessManager: false,
+  isTechnicalDirector: false,
   isTechnical: false,
+  isRecruiterManager: false,
+  isRecruiter: false,
+  isHRManager: false,
+  isHR: false,
 };
 
 // Merge permissions from multiple roles (user gets highest permission from any role)
@@ -357,11 +472,14 @@ function mergePermissions(roles: UserRole[]): Permissions {
   // Set role flags based on actual roles
   merged.isSuperAdmin = roles.includes('superadmin');
   merged.isAdmin = roles.includes('admin') || roles.includes('superadmin');
-  merged.isDirector = roles.includes('director');
-  merged.isManager = roles.includes('manager');
-  merged.isRecruiter = roles.includes('recruiter');
-  merged.isHR = roles.includes('hr');
+  merged.isBusinessDirector = roles.includes('business_director');
+  merged.isBusinessManager = roles.includes('business_manager');
+  merged.isTechnicalDirector = roles.includes('technical_director');
   merged.isTechnical = roles.includes('technical');
+  merged.isRecruiterManager = roles.includes('recruiter_manager');
+  merged.isRecruiter = roles.includes('recruiter');
+  merged.isHRManager = roles.includes('hr_manager');
+  merged.isHR = roles.includes('hr');
   
   return merged;
 }
@@ -386,4 +504,29 @@ export function useHasPermission(permission: keyof Permissions): boolean {
 export function useHasRole(role: UserRole): boolean {
   const { user } = useAuthStore();
   return user?.roles?.includes(role) ?? false;
+}
+
+// Role hierarchy - who reports to whom
+export const roleHierarchy: Record<UserRole, UserRole | null> = {
+  superadmin: null,
+  admin: null,
+  business_director: null,
+  business_manager: 'business_director',
+  technical_director: null,
+  technical: 'technical_director',
+  recruiter_manager: null,
+  recruiter: 'recruiter_manager',
+  hr_manager: null,
+  hr: 'hr_manager',
+};
+
+// Get roles that can be a manager for a given role
+export function getManagerRolesFor(role: UserRole): UserRole[] {
+  const managerRole = roleHierarchy[role];
+  return managerRole ? [managerRole] : [];
+}
+
+// Check if a role requires a reports_to relationship
+export function requiresManager(role: UserRole): boolean {
+  return roleHierarchy[role] !== null;
 }

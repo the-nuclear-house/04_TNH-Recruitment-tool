@@ -2,7 +2,17 @@
 // USER & ORGANISATION TYPES
 // ============================================
 
-export type UserRole = 'superadmin' | 'admin' | 'director' | 'manager' | 'recruiter' | 'hr' | 'technical';
+export type UserRole = 
+  | 'superadmin' 
+  | 'admin' 
+  | 'business_director' 
+  | 'business_manager' 
+  | 'technical_director'
+  | 'technical'
+  | 'recruiter_manager'
+  | 'recruiter' 
+  | 'hr_manager'
+  | 'hr';
 
 export interface User {
   id: string;
