@@ -350,35 +350,54 @@ export function ContractsPage() {
                             )}
                             <span className="flex items-center gap-1">
                               <User className="h-4 w-4" />
-                              Requested by {requester?.full_name || 'Unknown'}
+                              Manager: {requester?.full_name || 'Unknown'}
                             </span>
+                            {offer.candidate?.assigned_recruiter_id && (
+                              <span className="flex items-center gap-1">
+                                <User className="h-4 w-4" />
+                                Recruiter: {users.find(u => u.id === offer.candidate?.assigned_recruiter_id)?.full_name || 'Unknown'}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                       
                       {/* Visual Pipeline */}
-                      <div className="flex items-center gap-1 ml-4">
-                        {['pending_approval', 'approved', 'contract_sent', 'contract_signed'].map((status, idx) => {
-                          const statusOrder = ['pending_approval', 'approved', 'contract_sent', 'contract_signed'];
-                          const currentIdx = statusOrder.indexOf(offer.status);
-                          const isComplete = idx <= currentIdx;
-                          const isCurrent = offer.status === status;
-                          
-                          return (
-                            <div key={status} className="flex items-center">
-                              <div className={`
-                                w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium
-                                ${isComplete ? 'bg-green-100 text-green-700' : 'bg-brand-grey-100 text-brand-grey-400'}
-                                ${isCurrent ? 'ring-2 ring-offset-1 ring-green-500' : ''}
-                              `}>
-                                {isComplete ? <CheckCircle className="h-4 w-4" /> : idx + 1}
+                      <div className="flex flex-col items-end gap-2 ml-4">
+                        <div className="flex items-center gap-1">
+                          {['pending_approval', 'approved', 'contract_sent', 'contract_signed', 'converted'].map((status, idx) => {
+                            const statusOrder = ['pending_approval', 'approved', 'contract_sent', 'contract_signed', 'converted'];
+                            const currentIdx = offer.candidate?.status === 'converted_to_consultant' 
+                              ? 4 
+                              : statusOrder.indexOf(offer.status);
+                            const isComplete = idx <= currentIdx;
+                            const isCurrent = (status === 'converted' && offer.candidate?.status === 'converted_to_consultant') ||
+                              (status !== 'converted' && offer.status === status && offer.candidate?.status !== 'converted_to_consultant');
+                            
+                            return (
+                              <div key={status} className="flex items-center">
+                                <div className={`
+                                  w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium
+                                  ${isComplete ? 'bg-green-100 text-green-700' : 'bg-brand-grey-100 text-brand-grey-400'}
+                                  ${isCurrent ? 'ring-2 ring-offset-1 ring-green-500' : ''}
+                                `}>
+                                  {isComplete ? <CheckCircle className="h-4 w-4" /> : idx + 1}
+                                </div>
+                                {idx < 4 && (
+                                  <div className={`w-4 h-0.5 ${idx < currentIdx ? 'bg-green-300' : 'bg-brand-grey-200'}`} />
+                                )}
                               </div>
-                              {idx < 3 && (
-                                <div className={`w-4 h-0.5 ${idx < currentIdx ? 'bg-green-300' : 'bg-brand-grey-200'}`} />
-                              )}
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
+                        {/* Legend */}
+                        <div className="flex items-center gap-3 text-[10px] text-brand-grey-400">
+                          <span>1. Approval</span>
+                          <span>2. HR</span>
+                          <span>3. Sent</span>
+                          <span>4. Signed</span>
+                          <span>5. Converted</span>
+                        </div>
                       </div>
                     </div>
                     
@@ -437,20 +456,19 @@ export function ContractsPage() {
                         </Button>
                       )}
                       
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => navigate(`/candidates/${offer.candidate_id}`)}
-                      >
-                        View Candidate Profile
-                      </Button>
-                      
-                      {offer.candidate?.status === 'converted_to_consultant' && (
+                      {offer.candidate?.status !== 'converted_to_consultant' ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => navigate(`/candidates/${offer.candidate_id}`)}
+                        >
+                          View Candidate Profile
+                        </Button>
+                      ) : (
                         <Button
                           variant="secondary"
                           size="sm"
                           onClick={async () => {
-                            // Find the consultant by candidate_id
                             const consultant = await consultantsService.getByCandidateId(offer.candidate_id);
                             if (consultant) {
                               navigate(`/consultants/${consultant.id}`);
