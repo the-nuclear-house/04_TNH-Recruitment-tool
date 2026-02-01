@@ -55,7 +55,7 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { candidatesService, interviewsService, usersService, commentsService, applicationsService, offersService, consultantsService, type DbComment, type DbApplication, type DbOffer } from '@/lib/services';
+import { candidatesService, interviewsService, usersService, commentsService, applicationsService, offersService, consultantsService, cvUploadService, type DbComment, type DbApplication, type DbOffer } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
 
@@ -1007,9 +1007,20 @@ export function CandidateProfilePage() {
               {candidate.cv_url && (
                 <div className="flex items-center gap-2 text-sm">
                   <FileText className="h-4 w-4 text-brand-grey-400" />
-                  <a href={candidate.cv_url} target="_blank" rel="noopener noreferrer" className="text-brand-cyan hover:underline">
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const signedUrl = await cvUploadService.getSignedUrl(candidate.cv_url);
+                        window.open(signedUrl, '_blank');
+                      } catch (error) {
+                        console.error('Error getting CV:', error);
+                        toast.error('Error', 'Failed to open CV');
+                      }
+                    }}
+                    className="text-brand-cyan hover:underline"
+                  >
                     View CV
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
@@ -1528,16 +1539,16 @@ export function CandidateProfilePage() {
             {/* Career Journey - Current position, reason for leaving, aspirations */}
             {(candidate.current_title || candidate.current_company || candidate.reason_for_leaving || candidate.five_year_plan) && (
               <Card>
-                <CardHeader>
+                <CardHeader className="mb-2">
                   <CardTitle className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4" />
                     Career Journey
                   </CardTitle>
                 </CardHeader>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {(candidate.current_title || candidate.current_company) && (
                     <div className="p-3 bg-brand-grey-50 rounded-lg">
-                      <p className="text-xs text-brand-grey-400 mb-1">Current Position</p>
+                      <p className="text-xs text-brand-grey-400 mb-0.5">Current Position</p>
                       <p className="text-sm font-medium text-brand-slate-700">
                         {candidate.current_title && candidate.current_company 
                           ? `${candidate.current_title} at ${candidate.current_company}`
@@ -1547,13 +1558,13 @@ export function CandidateProfilePage() {
                   )}
                   {candidate.reason_for_leaving && (
                     <div>
-                      <p className="text-xs text-brand-grey-400 mb-1">Reason for Leaving</p>
+                      <p className="text-xs text-brand-grey-400 mb-0.5">Reason for Leaving</p>
                       <p className="text-sm text-brand-slate-600">{candidate.reason_for_leaving}</p>
                     </div>
                   )}
                   {candidate.five_year_plan && (
                     <div>
-                      <p className="text-xs text-brand-grey-400 mb-1">5-Year Plan</p>
+                      <p className="text-xs text-brand-grey-400 mb-0.5">5-Year Plan</p>
                       <p className="text-sm text-brand-slate-600">{candidate.five_year_plan}</p>
                     </div>
                   )}
@@ -1666,14 +1677,20 @@ export function CandidateProfilePage() {
             {/* CV Download */}
             {candidate.cv_url && (
               <Card>
-                <CardHeader>
+                <CardHeader className="mb-2">
                   <CardTitle>CV / Resume</CardTitle>
                 </CardHeader>
-                <a
-                  href={candidate.cv_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors"
+                <button
+                  onClick={async () => {
+                    try {
+                      const signedUrl = await cvUploadService.getSignedUrl(candidate.cv_url);
+                      window.open(signedUrl, '_blank');
+                    } catch (error) {
+                      console.error('Error getting CV:', error);
+                      toast.error('Error', 'Failed to download CV');
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors text-left"
                 >
                   <FileText className="h-8 w-8 text-brand-cyan" />
                   <div className="flex-1">
@@ -1681,7 +1698,7 @@ export function CandidateProfilePage() {
                     <p className="text-xs text-brand-grey-400">Click to view or download</p>
                   </div>
                   <Download className="h-4 w-4 text-brand-grey-400" />
-                </a>
+                </button>
               </Card>
             )}
 

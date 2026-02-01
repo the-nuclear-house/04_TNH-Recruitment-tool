@@ -14,7 +14,7 @@ import {
   Modal,
 } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
-import { candidatesService } from '@/lib/services';
+import { candidatesService, cvUploadService } from '@/lib/services';
 import { parseCV, extractTextFromFile, type ParsedCV } from '@/lib/cv-parser';
 
 const rightToWorkOptions = [
@@ -69,6 +69,7 @@ export function CandidateFormPage() {
   const [parsedCV, setParsedCV] = useState<ParsedCV | null>(null);
   const [showParsedPreview, setShowParsedPreview] = useState(false);
   const [cvFileName, setCvFileName] = useState<string>('');
+  const [cvFile, setCvFile] = useState<File | null>(null);
   
   const [formData, setFormData] = useState({
     first_name: '',
@@ -177,6 +178,7 @@ export function CandidateFormPage() {
     if (!file) return;
     
     setCvFileName(file.name);
+    setCvFile(file); // Store the file for upload on submit
     setIsParsing(true);
     
     try {
@@ -256,13 +258,27 @@ export function CandidateFormPage() {
         source: formData.source || undefined,
       };
 
+      let candidateId = id;
+      
       if (isEditing) {
         await candidatesService.update(id!, candidateData);
       } else {
-        await candidatesService.create({
+        const newCandidate = await candidatesService.create({
           ...candidateData,
           email: formData.email, // email is required for create
         });
+        candidateId = newCandidate.id;
+      }
+      
+      // Upload CV if one was selected
+      if (cvFile && candidateId) {
+        try {
+          const cvUrl = await cvUploadService.uploadCV(cvFile, candidateId);
+          await candidatesService.update(candidateId, { cv_url: cvUrl });
+        } catch (uploadError) {
+          console.error('Error uploading CV:', uploadError);
+          toast.warning('CV Upload Failed', 'Candidate was saved but CV upload failed. You can try uploading again later.');
+        }
       }
       
       toast.success(

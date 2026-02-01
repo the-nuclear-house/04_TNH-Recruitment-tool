@@ -3594,3 +3594,46 @@ function getWeeklyData(items: any[], dateField: string, weeks: number): { week: 
   
   return result;
 }
+
+// ============================================
+// CV UPLOAD SERVICE
+// ============================================
+
+export const cvUploadService = {
+  async uploadCV(file: File, candidateId: string): Promise<string> {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${candidateId}-${Date.now()}.${fileExt}`;
+    const filePath = `cvs/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('candidate-files')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Store the file path, not a public URL
+    // We'll generate signed URLs on demand when viewing
+    return filePath;
+  },
+
+  async getSignedUrl(filePath: string): Promise<string> {
+    // Generate a signed URL valid for 1 hour
+    const { data, error } = await supabase.storage
+      .from('candidate-files')
+      .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+    if (error) throw error;
+    return data.signedUrl;
+  },
+
+  async deleteCV(filePath: string): Promise<void> {
+    const { error } = await supabase.storage
+      .from('candidate-files')
+      .remove([filePath]);
+
+    if (error) throw error;
+  }
+};
