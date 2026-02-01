@@ -743,9 +743,10 @@ export function CandidateProfilePage() {
       toast.success('Phone Interview Completed', 'Feedback and candidate info have been saved');
       setIsCompleteModalOpen(false);
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating interview:', error);
-      toast.error('Error', 'Failed to save feedback');
+      console.error('Error details:', error?.message, error?.code, error?.details);
+      toast.error('Error', error?.message || 'Failed to save feedback');
     } finally {
       setIsSubmitting(false);
     }
@@ -796,9 +797,10 @@ export function CandidateProfilePage() {
       toast.success('Technical Interview Completed', 'Feedback has been saved');
       setIsCompleteModalOpen(false);
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating interview:', error);
-      toast.error('Error', 'Failed to save feedback');
+      console.error('Error details:', error?.message, error?.code, error?.details);
+      toast.error('Error', error?.message || 'Failed to save feedback');
     } finally {
       setIsSubmitting(false);
     }
@@ -839,9 +841,10 @@ export function CandidateProfilePage() {
       toast.success('Director Interview Completed', 'Feedback has been saved');
       setIsCompleteModalOpen(false);
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating interview:', error);
-      toast.error('Error', 'Failed to save feedback');
+      console.error('Error details:', error?.message, error?.code, error?.details);
+      toast.error('Error', error?.message || 'Failed to save feedback');
     } finally {
       setIsSubmitting(false);
     }

@@ -181,16 +181,20 @@ export function CandidateFormPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Create a copy of the file as a Blob to preserve it for upload
-    // This ensures the file remains valid even after parsing
-    const fileBlob = new Blob([await file.arrayBuffer()], { type: file.type });
-    const fileCopy = new File([fileBlob], file.name, { type: file.type });
-    
     setCvFileName(file.name);
-    setCvFile(fileCopy); // Store the copy for upload on submit
     setIsParsing(true);
     
     try {
+      // Create a copy of the file as a Blob to preserve it for upload
+      // This ensures the file remains valid even after parsing
+      const arrayBuffer = await file.arrayBuffer();
+      const fileBlob = new Blob([arrayBuffer], { type: file.type });
+      const fileCopy = new File([fileBlob], file.name, { type: file.type });
+      
+      setCvFile(fileCopy); // Store the copy for upload on submit
+      console.log('CV file stored for upload:', fileCopy.name, fileCopy.size);
+      
+      // Now parse the original file
       const text = await extractTextFromFile(file);
       const parsed = parseCV(text);
       setParsedCV(parsed);
@@ -199,6 +203,7 @@ export function CandidateFormPage() {
     } catch (error) {
       console.error('Error parsing CV:', error);
       toast.error('Error', error instanceof Error ? error.message : 'Failed to parse CV');
+      // Even if parsing fails, we still want to keep the file for upload
     } finally {
       setIsParsing(false);
     }
@@ -283,14 +288,20 @@ export function CandidateFormPage() {
       }
       
       // Upload CV if one was selected
+      console.log('CV file state before upload:', cvFile ? `${cvFile.name} (${cvFile.size} bytes)` : 'null');
       if (cvFile && candidateId) {
         try {
+          console.log('Uploading CV for candidate:', candidateId);
           const cvUrl = await cvUploadService.uploadCV(cvFile, candidateId);
+          console.log('CV uploaded, URL:', cvUrl);
           await candidatesService.update(candidateId, { cv_url: cvUrl });
+          console.log('Candidate updated with CV URL');
         } catch (uploadError) {
           console.error('Error uploading CV:', uploadError);
           toast.warning('CV Upload Failed', 'Candidate was saved but CV upload failed. You can try uploading again later.');
         }
+      } else {
+        console.log('No CV to upload - cvFile:', !!cvFile, 'candidateId:', candidateId);
       }
       
       toast.success(
