@@ -5,6 +5,8 @@ import { useAuthStore } from '@/lib/stores/auth-store';
 import { 
   missionsService, 
   consultantsService,
+  requirementsService,
+  companiesService,
   type DbRequirement, 
   type DbCustomer, 
   type DbContact,
@@ -28,8 +30,8 @@ export function CreateMissionModal({
   isOpen,
   onClose,
   onSuccess,
-  requirement,
-  customer,
+  requirement: propRequirement,
+  customer: propCustomer,
   contact,
   candidate,
   winningCandidateId,
@@ -42,6 +44,10 @@ export function CreateMissionModal({
   const [consultant, setConsultant] = useState<DbConsultant | null>(null);
   const [consultantError, setConsultantError] = useState<string | null>(null);
   
+  // Resolved data (fetched if needed)
+  const [requirement, setRequirement] = useState<DbRequirement | undefined>(propRequirement);
+  const [customer, setCustomer] = useState<DbCustomer | undefined>(propCustomer);
+  
   const [formData, setFormData] = useState({
     name: '',
     start_date: '',
@@ -51,6 +57,41 @@ export function CreateMissionModal({
     work_mode: 'hybrid' as 'full_onsite' | 'hybrid' | 'remote',
     notes: '',
   });
+
+  // Fetch full requirement and customer data if only IDs provided
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!isOpen) return;
+      
+      // Fetch full requirement if we only have an ID
+      if (propRequirement?.id && !propRequirement.title) {
+        try {
+          const fullReq = await requirementsService.getById(propRequirement.id);
+          if (fullReq) {
+            setRequirement(fullReq);
+            // If requirement has company_id, fetch the customer
+            if (fullReq.company_id && !propCustomer?.name) {
+              const fullCustomer = await companiesService.getById(fullReq.company_id);
+              if (fullCustomer) {
+                setCustomer(fullCustomer as any);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching requirement:', error);
+        }
+      } else {
+        setRequirement(propRequirement);
+      }
+      
+      // Use prop customer if provided with full data
+      if (propCustomer?.name) {
+        setCustomer(propCustomer);
+      }
+    };
+    
+    fetchData();
+  }, [isOpen, propRequirement, propCustomer]);
 
   // Check if candidate has been converted to consultant
   useEffect(() => {

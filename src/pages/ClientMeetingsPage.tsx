@@ -1418,7 +1418,7 @@ export function ClientMeetingsPage() {
           setIsCreateMissionModalOpen(true);
         }}
         title="Create Mission"
-        message="Would you like to create a mission for this candidate now?"
+        message="Would you like to create a mission for this consultant now?"
         confirmText="Yes, Create Mission"
         cancelText="No, Later"
         variant="primary"

@@ -285,6 +285,7 @@ export function RequirementDetailPage() {
         const filtered = allCandidates
           .filter(c => !linkedCandidateIds.includes(c.id))
           .filter(c => !selectedIds.includes(c.id)) // Exclude already selected
+          .filter(c => c.status !== 'converted_to_consultant') // Exclude converted candidates
           .filter(c => 
             `${c.first_name} ${c.last_name}`.toLowerCase().includes(candidateSearch.toLowerCase()) ||
             c.email.toLowerCase().includes(candidateSearch.toLowerCase()) ||
@@ -904,6 +905,11 @@ export function RequirementDetailPage() {
                       </span>
                     )}
                     
+                    {/* Converted to Consultant badge - only show if candidate was linked before being converted */}
+                    {isCandidateConsultant(app.candidate_id) && app.candidate?.status === 'converted_to_consultant' && (
+                      <Badge variant="purple">Converted to Consultant</Badge>
+                    )}
+                    
                     <span className="text-xs text-brand-grey-400">
                       Added {formatDate(app.created_at)}
                     </span>
@@ -1059,13 +1065,6 @@ export function RequirementDetailPage() {
               ))
             )}
           </div>
-
-          <Input
-            label="Notes (optional)"
-            placeholder="Why are these candidates a good fit?"
-            value={applicationNotes}
-            onChange={(e) => setApplicationNotes(e.target.value)}
-          />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button 
