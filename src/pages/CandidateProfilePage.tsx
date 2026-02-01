@@ -1821,12 +1821,12 @@ export function CandidateProfilePage() {
                 {candidate.assigned_recruiter_id ? (
                   <div className="flex items-center gap-3">
                     <Avatar 
-                      name={users.find(u => u.id === candidate.assigned_recruiter_id)?.name || 'Unknown'} 
+                      name={users.find(u => u.id === candidate.assigned_recruiter_id)?.full_name || 'Unknown'} 
                       size="sm" 
                     />
                     <div>
                       <p className="font-medium text-brand-slate-900">
-                        {users.find(u => u.id === candidate.assigned_recruiter_id)?.name || 'Unknown'}
+                        {users.find(u => u.id === candidate.assigned_recruiter_id)?.full_name || 'Unknown'}
                       </p>
                       <p className="text-xs text-brand-grey-400">
                         {users.find(u => u.id === candidate.assigned_recruiter_id)?.email}
