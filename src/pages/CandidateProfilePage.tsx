@@ -32,6 +32,7 @@ import {
   ArrowRight,
   UserPlus,
   Target,
+  AlertTriangle,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -425,16 +426,15 @@ export function CandidateProfilePage() {
 
   // Auto-open interview modal if coming from Interviews page
   useEffect(() => {
-    if (urlInterviewId && interviews.length > 0 && !isLoading) {
+    if (urlInterviewId && interviews.length > 0 && !isLoading && candidate) {
       const interview = interviews.find(i => i.id === urlInterviewId);
       if (interview) {
-        setSelectedInterview(interview);
-        setIsCompleteModalOpen(true);
+        handleOpenCompleteModal(interview);
         // Clear URL params after opening
         navigate(`/candidates/${id}`, { replace: true });
       }
     }
-  }, [urlInterviewId, interviews, isLoading]);
+  }, [urlInterviewId, interviews, isLoading, candidate]);
 
   const loadData = async () => {
     try {
@@ -629,11 +629,7 @@ export function CandidateProfilePage() {
         warnings: interview.warnings || '',
         general_comments: interview.general_comments || '',
       });
-      // Debug: log skills loading
-      console.log('Loading tech skills from candidate:', candidate?.skills);
-      const skillsToLoad = candidate?.skills || [];
-      console.log('Skills to load:', skillsToLoad);
-      setTechSkills(skillsToLoad);
+      setTechSkills(candidate?.skills || []);
     } else {
       setDirectorForm({
         outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
@@ -1163,16 +1159,33 @@ export function CandidateProfilePage() {
                         {/* Completed interview details */}
                         {isCompleted && interview && (
                           <div className="mt-3 pt-3 border-t border-green-200">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setExpandedInterview(isExpanded ? null : interview.id);
-                              }}
-                              className="flex items-center gap-1 text-sm text-brand-cyan hover:text-cyan-700"
-                            >
-                              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                              {isExpanded ? 'Hide Details' : 'View Details'}
-                            </button>
+                            <div className="flex items-center justify-between">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedInterview(isExpanded ? null : interview.id);
+                                }}
+                                className="flex items-center gap-1 text-sm text-brand-cyan hover:text-cyan-700"
+                              >
+                                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                {isExpanded ? 'Hide Details' : 'View Details'}
+                              </button>
+                              
+                              {/* Edit button - only visible to the interviewer who conducted it */}
+                              {interview.interviewer_id === user?.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  leftIcon={<Edit className="h-3 w-3" />}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenCompleteModal(interview);
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                            </div>
                             
                             {isExpanded && (
                               <div className="mt-3 space-y-3">
@@ -1453,6 +1466,31 @@ export function CandidateProfilePage() {
               </Card>
             )}
 
+            {/* Warnings - collected from all interviews */}
+            {interviews.some(i => i.warnings) && (
+              <Card className="border-amber-200 bg-amber-50/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-amber-700">
+                    <AlertTriangle className="h-4 w-4" />
+                    Warnings
+                  </CardTitle>
+                </CardHeader>
+                <div className="space-y-3">
+                  {interviews.filter(i => i.warnings).map((interview) => (
+                    <div key={interview.id} className="p-3 bg-white rounded-lg border border-amber-200">
+                      <p className="text-xs font-medium text-amber-600 mb-1">
+                        {interview.stage === 'phone_qualification' ? 'Phone Qualification' :
+                         interview.stage === 'technical_interview' ? 'Technical Interview' :
+                         interview.stage === 'director_interview' ? 'Director Interview' :
+                         interview.stage}
+                      </p>
+                      <p className="text-sm text-brand-slate-700">{interview.warnings}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
             {/* Linked Requirements */}
             {linkedRequirements.length > 0 && (
               <Card>
@@ -1500,12 +1538,9 @@ export function CandidateProfilePage() {
                   {(candidate.current_title || candidate.current_company) && (
                     <div className="p-3 bg-brand-grey-50 rounded-lg">
                       <p className="text-xs text-brand-grey-400 mb-1">Current Position</p>
-                      {candidate.current_title && (
-                        <p className="text-sm font-medium text-brand-slate-700">{candidate.current_title}</p>
-                      )}
-                      {candidate.current_company && (
-                        <p className="text-sm text-brand-slate-600">at {candidate.current_company}</p>
-                      )}
+                      <p className="text-sm font-medium text-brand-slate-700">
+                        {candidate.current_title}{candidate.current_title && candidate.current_company && ' at '}{candidate.current_company}
+                      </p>
                     </div>
                   )}
                   {candidate.reason_for_leaving && (
@@ -1902,7 +1937,7 @@ export function CandidateProfilePage() {
       <Modal
         isOpen={isCompleteModalOpen && selectedInterview?.stage === 'phone_qualification'}
         onClose={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}
-        title="Phone Qualification"
+        title={selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Edit Phone Qualification' : 'Phone Qualification'}
         description={`${candidate.first_name} ${candidate.last_name}`}
         size="xl"
         shake={isShaking}
@@ -2210,7 +2245,9 @@ export function CandidateProfilePage() {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}>Cancel</Button>
-            <Button variant="success" onClick={handleSubmitPhoneFeedback} isLoading={isSubmitting}>Save Feedback</Button>
+            <Button variant="success" onClick={handleSubmitPhoneFeedback} isLoading={isSubmitting}>
+              {selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Update Feedback' : 'Save Feedback'}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -2219,7 +2256,7 @@ export function CandidateProfilePage() {
       <Modal
         isOpen={isCompleteModalOpen && selectedInterview?.stage === 'technical_interview'}
         onClose={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}
-        title="Technical Interview"
+        title={selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Edit Technical Interview' : 'Technical Interview'}
         description={`${candidate.first_name} ${candidate.last_name}`}
         size="xl"
         shake={isShaking}
@@ -2339,7 +2376,9 @@ export function CandidateProfilePage() {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}>Cancel</Button>
-            <Button variant="success" onClick={handleSubmitTechFeedback} isLoading={isSubmitting}>Save Feedback</Button>
+            <Button variant="success" onClick={handleSubmitTechFeedback} isLoading={isSubmitting}>
+              {selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Update Feedback' : 'Save Feedback'}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -2348,7 +2387,7 @@ export function CandidateProfilePage() {
       <Modal
         isOpen={isCompleteModalOpen && selectedInterview?.stage === 'director_interview'}
         onClose={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}
-        title="Director Interview"
+        title={selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Edit Director Interview' : 'Director Interview'}
         description={`${candidate.first_name} ${candidate.last_name}`}
         size="lg"
         shake={isShaking}
@@ -2425,7 +2464,9 @@ export function CandidateProfilePage() {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
             <Button variant="secondary" onClick={() => { setIsCompleteModalOpen(false); setValidationErrors([]); }}>Cancel</Button>
-            <Button variant="success" onClick={handleSubmitDirectorFeedback} isLoading={isSubmitting}>Save Feedback</Button>
+            <Button variant="success" onClick={handleSubmitDirectorFeedback} isLoading={isSubmitting}>
+              {selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Update Feedback' : 'Save Feedback'}
+            </Button>
           </div>
         </div>
       </Modal>

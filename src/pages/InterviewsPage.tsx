@@ -13,6 +13,7 @@ import {
   Trash2,
   Star,
   MapPin,
+  Edit,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -509,6 +510,21 @@ export function InterviewsPage() {
                           Complete
                         </Button>
                       )}
+                      
+                      {/* Edit button - only visible to interviewer for completed interviews */}
+                      {interview.outcome !== 'pending' && isMyInterview && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Edit className="h-3 w-3" />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCompleteInterview(interview);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -522,7 +538,7 @@ export function InterviewsPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={`Complete ${selectedStageConfig?.label || ''} Interview`}
+        title={`${selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Edit' : 'Complete'} ${selectedStageConfig?.label || ''} Interview`}
         description={selectedCandidate ? `${selectedCandidate.first_name} ${selectedCandidate.last_name}` : ''}
         size="lg"
       >
@@ -619,7 +635,7 @@ export function InterviewsPage() {
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSubmitFeedback} isLoading={isSubmitting}>
-              Save Feedback
+              {selectedInterview?.outcome && selectedInterview.outcome !== 'pending' ? 'Update Feedback' : 'Save Feedback'}
             </Button>
           </div>
         </div>
