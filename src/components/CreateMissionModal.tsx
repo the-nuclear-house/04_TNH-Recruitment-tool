@@ -6,7 +6,7 @@ import {
   missionsService, 
   consultantsService,
   requirementsService,
-  companiesService,
+  customersService,
   type DbRequirement, 
   type DbCustomer, 
   type DbContact,
@@ -63,19 +63,15 @@ export function CreateMissionModal({
     const fetchData = async () => {
       if (!isOpen) return;
       
+      let resolvedRequirement = propRequirement;
+      
       // Fetch full requirement if we only have an ID
       if (propRequirement?.id && !propRequirement.title) {
         try {
           const fullReq = await requirementsService.getById(propRequirement.id);
           if (fullReq) {
+            resolvedRequirement = fullReq;
             setRequirement(fullReq);
-            // If requirement has company_id, fetch the customer
-            if (fullReq.company_id && !propCustomer?.name) {
-              const fullCustomer = await companiesService.getById(fullReq.company_id);
-              if (fullCustomer) {
-                setCustomer(fullCustomer as any);
-              }
-            }
           }
         } catch (error) {
           console.error('Error fetching requirement:', error);
@@ -84,8 +80,25 @@ export function CreateMissionModal({
         setRequirement(propRequirement);
       }
       
-      // Use prop customer if provided with full data
-      if (propCustomer?.name) {
+      // Find customer from customers table (not companies table)
+      // The customer name on the requirement should match a customer in the customers table
+      if (!propCustomer?.id || !propCustomer?.name) {
+        try {
+          const allCustomers = await customersService.getAll();
+          // Match by name from requirement
+          const customerName = resolvedRequirement?.customer || resolvedRequirement?.company?.name;
+          if (customerName) {
+            const matchingCustomer = allCustomers.find(c => 
+              c.name.toLowerCase() === customerName.toLowerCase()
+            );
+            if (matchingCustomer) {
+              setCustomer(matchingCustomer);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching customers:', error);
+        }
+      } else {
         setCustomer(propCustomer);
       }
     };
