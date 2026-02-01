@@ -205,7 +205,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canEditRequirements: false,
     canDeleteRequirements: false,
     canViewInterviews: true,
-    canScheduleInterviews: true,
+    canScheduleInterviews: false,
     canConductInterviews: true,
     canViewAllInterviewFeedback: true,
     canViewContracts: false,

@@ -1140,7 +1140,7 @@ export function CandidateProfilePage() {
                                 {canComplete ? 'Click to Complete' : 'Pending'}
                               </span>
                             )}
-                            {isNotStarted && canSchedule && (
+                            {isNotStarted && canSchedule && permissions.canScheduleInterviews && (
                               <Button
                                 variant="success"
                                 size="sm"
@@ -1526,7 +1526,7 @@ export function CandidateProfilePage() {
           {/* Right Column - Details */}
           <div className="space-y-6">
             {/* Career Journey - Current position, reason for leaving, aspirations */}
-            {(candidate.current_company || candidate.reason_for_leaving || candidate.five_year_plan) && (
+            {(candidate.current_title || candidate.current_company || candidate.reason_for_leaving || candidate.five_year_plan) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1539,7 +1539,9 @@ export function CandidateProfilePage() {
                     <div className="p-3 bg-brand-grey-50 rounded-lg">
                       <p className="text-xs text-brand-grey-400 mb-1">Current Position</p>
                       <p className="text-sm font-medium text-brand-slate-700">
-                        {candidate.current_title}{candidate.current_title && candidate.current_company && ' at '}{candidate.current_company}
+                        {candidate.current_title && candidate.current_company 
+                          ? `${candidate.current_title} at ${candidate.current_company}`
+                          : candidate.current_title || `at ${candidate.current_company}`}
                       </p>
                     </div>
                   )}
