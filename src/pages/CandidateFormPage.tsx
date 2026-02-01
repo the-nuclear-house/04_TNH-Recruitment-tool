@@ -14,6 +14,8 @@ import {
   Modal,
 } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
+import { useAuthStore } from '@/lib/stores/auth-store';
+import { usePermissions } from '@/hooks/usePermissions';
 import { candidatesService, cvUploadService } from '@/lib/services';
 import { parseCV, extractTextFromFile, type ParsedCV } from '@/lib/cv-parser';
 
@@ -52,6 +54,8 @@ export function CandidateFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const toast = useToast();
+  const { user } = useAuthStore();
+  const permissions = usePermissions();
   const isEditing = !!id;
   const cvInputRef = useRef<HTMLInputElement>(null);
 
@@ -264,9 +268,16 @@ export function CandidateFormPage() {
       if (isEditing) {
         await candidatesService.update(id!, candidateData);
       } else {
+        // Auto-assign the current user as recruiter if they are a recruiter
+        const assignedRecruiterId = (permissions.isRecruiter || permissions.isRecruiterManager) 
+          ? user?.id 
+          : undefined;
+        
         const newCandidate = await candidatesService.create({
           ...candidateData,
           email: formData.email, // email is required for create
+          assigned_recruiter_id: assignedRecruiterId,
+          created_by: user?.id,
         });
         candidateId = newCandidate.id;
       }

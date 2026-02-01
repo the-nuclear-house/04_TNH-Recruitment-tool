@@ -61,6 +61,7 @@ export interface CreateCandidateInput {
   source?: string;
   cv_url?: string;
   assigned_recruiter_id?: string;
+  created_by?: string;
 }
 
 export interface UpdateCandidateInput extends Partial<CreateCandidateInput> {

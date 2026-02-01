@@ -1814,8 +1814,12 @@ export function CandidateProfilePage() {
                   <p className="text-brand-grey-400 text-sm">No recruiter assigned</p>
                 )}
                 
-                {/* Change recruiter - only assigned recruiter or admin can change */}
-                {(permissions.isAdmin || candidate.assigned_recruiter_id === user?.id) && (
+                {/* Change recruiter - admin, assigned recruiter, or any recruiter if unassigned */}
+                {(permissions.isAdmin || 
+                  permissions.isSuperAdmin ||
+                  candidate.assigned_recruiter_id === user?.id || 
+                  (!candidate.assigned_recruiter_id && (permissions.isRecruiter || permissions.isRecruiterManager))
+                ) && (
                   <div className="pt-3 border-t border-brand-grey-100">
                     <label className="block text-xs text-brand-grey-400 mb-1">
                       {candidate.assigned_recruiter_id ? 'Reassign to' : 'Assign to'}
