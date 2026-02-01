@@ -2215,19 +2215,26 @@ export const offersService = {
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 3); // Due in 3 days
 
-    await supabase
+    const { error: ticketError } = await supabase
       .from('hr_tickets')
       .insert({
         ticket_type: 'contract_send',
-        title: `Prepare contract for ${candidateName}`,
-        description: `Offer approved. Please prepare and send contract to ${candidateName}.${notes ? `\n\nApproval notes: ${notes}` : ''}`,
         priority: 'high',
         status: 'pending',
         candidate_id: offerData?.candidate_id,
         offer_id: id,
         due_date: dueDate.toISOString().split('T')[0],
         created_by: approverId,
+        notes: `Offer approved for ${candidateName}. Please prepare and send contract.${notes ? `\n\nApproval notes: ${notes}` : ''}`,
+        ticket_data: {
+          candidate_name: candidateName,
+          approval_notes: notes,
+        },
       });
+
+    if (ticketError) {
+      console.error('Error creating HR ticket:', ticketError);
+    }
 
     return data;
   },
