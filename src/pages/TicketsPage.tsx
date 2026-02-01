@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Calendar,
   Briefcase,
+  Download,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -34,6 +35,7 @@ import { useToast } from '@/lib/stores/ui-store';
 import {
   hrTicketsService,
   approvalRequestsService,
+  documentUploadService,
   type DbHrTicket,
   type HrTicketType,
   type DbApprovalRequest,
@@ -83,6 +85,8 @@ interface UITicket {
   due_date?: string | null;
   reference_id?: string | null;
   ticket_data?: Record<string, any>;
+  id_document_url?: string | null;
+  right_to_work_document_url?: string | null;
   original: DbHrTicket | DbApprovalRequest;
 }
 
@@ -146,6 +150,8 @@ export function TicketsPage() {
           due_date: ticket.due_date,
           reference_id: ticket.reference_id,
           ticket_data: ticket.ticket_data || undefined,
+          id_document_url: ticket.offer?.id_document_url,
+          right_to_work_document_url: ticket.offer?.right_to_work_document_url,
           original: ticket,
         });
       });
@@ -234,6 +240,24 @@ export function TicketsPage() {
     setTicketForConfirm(null);
   };
 
+  // Download document from storage
+  const handleDownloadDocument = async (filePath: string, fileName: string) => {
+    try {
+      const signedUrl = await documentUploadService.getSignedUrl(filePath);
+      // Open in new tab or trigger download
+      const link = document.createElement('a');
+      link.href = signedUrl;
+      link.download = fileName;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      toast.error('Download Failed', 'Could not download the document');
+    }
+  };
+
   const handleConfirmedAction = async () => {
     if (!ticketForConfirm || !confirmAction) return;
     
@@ -241,6 +265,23 @@ export function TicketsPage() {
     try {
       if (confirmAction === 'contract_sent') {
         await hrTicketsService.markContractSent(ticketForConfirm.id, user!.id);
+        
+        // Delete documents from storage after HR confirms contract sent
+        if (ticketForConfirm.id_document_url) {
+          try {
+            await documentUploadService.deleteDocument(ticketForConfirm.id_document_url);
+          } catch (e) {
+            console.warn('Could not delete ID document:', e);
+          }
+        }
+        if (ticketForConfirm.right_to_work_document_url) {
+          try {
+            await documentUploadService.deleteDocument(ticketForConfirm.right_to_work_document_url);
+          } catch (e) {
+            console.warn('Could not delete RTW document:', e);
+          }
+        }
+        
         toast.success('Contract Sent', 'Ticket updated - contract has been sent to candidate');
       } else if (confirmAction === 'contract_signed') {
         await hrTicketsService.markContractSigned(ticketForConfirm.id, user!.id);
@@ -390,6 +431,32 @@ export function TicketsPage() {
                               <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_signed' ? 'bg-brand-cyan' : 'bg-brand-grey-300'}`} />
                               3. Convert to Consultant
                             </div>
+                          </div>
+                        )}
+                        
+                        {/* Document downloads for contract tickets - only show when pending (before contract sent) */}
+                        {ticket.ticket_type === 'contract_send' && ticket.status === 'pending' && (ticket.id_document_url || ticket.right_to_work_document_url) && (
+                          <div className="flex items-center gap-3 mt-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                            <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                            <span className="text-xs text-blue-700 font-medium">Documents:</span>
+                            {ticket.id_document_url && (
+                              <button
+                                onClick={() => handleDownloadDocument(ticket.id_document_url!, `ID-${ticket.candidate_name || 'document'}.pdf`)}
+                                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                              >
+                                <Download className="h-3 w-3" />
+                                ID Document
+                              </button>
+                            )}
+                            {ticket.right_to_work_document_url && (
+                              <button
+                                onClick={() => handleDownloadDocument(ticket.right_to_work_document_url!, `RTW-${ticket.candidate_name || 'document'}.pdf`)}
+                                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                              >
+                                <Download className="h-3 w-3" />
+                                Right to Work
+                              </button>
+                            )}
                           </div>
                         )}
                         
