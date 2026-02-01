@@ -155,7 +155,7 @@ export function CreateMissionModal({
     }
     
     if (!customer?.id) {
-      toast.error('Error', 'No customer associated with this requirement');
+      toast.error('Error', 'No customer associated with this requirement. Please ensure a customer exists in the Customers page with the same name.');
       return;
     }
     
@@ -173,6 +173,14 @@ export function CreateMissionModal({
       toast.error('Error', 'Please enter the sold daily rate');
       return;
     }
+    
+    // Debug: log what we're sending
+    console.log('Creating mission with:', {
+      customer_id: customer.id,
+      customer_name: customer.name,
+      consultant_id: consultant.id,
+      requirement_id: requirement?.id,
+    });
     
     setIsLoading(true);
     try {
