@@ -437,26 +437,6 @@ export function ContractsPage() {
                         </Button>
                       )}
                       
-                      {offer.status === 'contract_signed' && offer.candidate?.status !== 'converted_to_consultant' && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          leftIcon={<UserPlus className="h-4 w-4" />}
-                          onClick={async () => {
-                            try {
-                              const consultant = await consultantsService.convertFromCandidate(offer.candidate_id, offer);
-                              toast.success('Converted to Consultant', `Now consultant ${consultant.reference_id}`);
-                              loadData();
-                            } catch (error: any) {
-                              console.error('Error converting:', error);
-                              toast.error('Error', error.message || 'Failed to convert to consultant');
-                            }
-                          }}
-                        >
-                          Convert to Consultant
-                        </Button>
-                      )}
-                      
                       <Button
                         variant="secondary"
                         size="sm"

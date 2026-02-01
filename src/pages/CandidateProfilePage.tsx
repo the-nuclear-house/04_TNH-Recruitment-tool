@@ -1465,29 +1465,10 @@ export function CandidateProfilePage() {
                       )}
                       
                       {activeOffer.status === 'contract_signed' && candidate?.status !== 'converted_to_consultant' && (
-                        <div className="space-y-3">
-                          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <p className="text-sm text-green-700">
-                              Contract signed on {formatDate(activeOffer.contract_signed_at || '')}. Ready to convert to consultant.
-                            </p>
-                          </div>
-                          <Button
-                            variant="primary"
-                            className="w-full"
-                            leftIcon={<UserPlus className="h-4 w-4" />}
-                            onClick={async () => {
-                              try {
-                                const consultant = await consultantsService.convertFromCandidate(id!, activeOffer);
-                                toast.success('Converted to Consultant', `${consultant.first_name} ${consultant.last_name} is now consultant ${consultant.reference_id}`);
-                                loadData();
-                              } catch (error: any) {
-                                console.error('Error converting:', error);
-                                toast.error('Error', error.message || 'Failed to convert to consultant');
-                              }
-                            }}
-                          >
-                            Convert to Consultant
-                          </Button>
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-sm text-green-700">
+                            Contract signed on {formatDate(activeOffer.contract_signed_at || '')}.
+                          </p>
                         </div>
                       )}
                       
