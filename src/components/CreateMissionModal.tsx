@@ -6,9 +6,9 @@ import {
   missionsService, 
   consultantsService,
   requirementsService,
-  customersService,
+  companiesService,
   type DbRequirement, 
-  type DbCustomer, 
+  type DbCompany, 
   type DbContact,
   type DbConsultant,
   type DbCandidate,
@@ -20,7 +20,7 @@ interface CreateMissionModalProps {
   onSuccess?: () => void;
   // Pre-populated data from requirement
   requirement?: DbRequirement;
-  customer?: DbCustomer;
+  customer?: DbCompany; // Actually company, kept as customer for prop compatibility
   contact?: DbContact;
   candidate?: DbCandidate;
   winningCandidateId?: string;
@@ -31,7 +31,7 @@ export function CreateMissionModal({
   onClose,
   onSuccess,
   requirement: propRequirement,
-  customer: propCustomer,
+  customer: propCompany,
   contact,
   candidate,
   winningCandidateId,
@@ -46,7 +46,7 @@ export function CreateMissionModal({
   
   // Resolved data (fetched if needed)
   const [requirement, setRequirement] = useState<DbRequirement | undefined>(propRequirement);
-  const [customer, setCustomer] = useState<DbCustomer | undefined>(propCustomer);
+  const [customer, setCustomer] = useState<DbCompany | undefined>(propCompany);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -58,7 +58,7 @@ export function CreateMissionModal({
     notes: '',
   });
 
-  // Fetch full requirement and customer data if only IDs provided
+  // Fetch full requirement and company data if only IDs provided
   useEffect(() => {
     const fetchData = async () => {
       if (!isOpen) return;
@@ -72,6 +72,10 @@ export function CreateMissionModal({
           if (fullReq) {
             resolvedRequirement = fullReq;
             setRequirement(fullReq);
+            // If requirement has company, use it
+            if (fullReq.company && !propCompany?.id) {
+              setCustomer(fullReq.company);
+            }
           }
         } catch (error) {
           console.error('Error fetching requirement:', error);
@@ -80,31 +84,24 @@ export function CreateMissionModal({
         setRequirement(propRequirement);
       }
       
-      // Find customer from customers table (not companies table)
-      // The customer name on the requirement should match a customer in the customers table
-      if (!propCustomer?.id || !propCustomer?.name) {
+      // Use prop company if provided
+      if (propCompany?.id) {
+        setCustomer(propCompany);
+      } else if (resolvedRequirement?.company_id && !propCompany?.id) {
+        // Fetch company if we have company_id but no company data
         try {
-          const allCustomers = await customersService.getAll();
-          // Match by name from requirement
-          const customerName = resolvedRequirement?.customer || resolvedRequirement?.company?.name;
-          if (customerName) {
-            const matchingCustomer = allCustomers.find(c => 
-              c.name.toLowerCase() === customerName.toLowerCase()
-            );
-            if (matchingCustomer) {
-              setCustomer(matchingCustomer);
-            }
+          const company = await companiesService.getById(resolvedRequirement.company_id);
+          if (company) {
+            setCustomer(company);
           }
         } catch (error) {
-          console.error('Error fetching customers:', error);
+          console.error('Error fetching company:', error);
         }
-      } else {
-        setCustomer(propCustomer);
       }
     };
     
     fetchData();
-  }, [isOpen, propRequirement, propCustomer]);
+  }, [isOpen, propRequirement, propCompany]);
 
   // Check if candidate has been converted to consultant
   useEffect(() => {
@@ -132,7 +129,7 @@ export function CreateMissionModal({
           setFormData(prev => ({
             ...prev,
             name: missionName,
-            location: customer?.city || customer?.address || '',
+            location: customer?.city || customer?.address_line_1 || '',
           }));
         } else {
           setConsultantError('You cannot create a mission with a candidate. Transform your candidate to a consultant first.');
@@ -176,8 +173,8 @@ export function CreateMissionModal({
     
     // Debug: log what we're sending
     console.log('Creating mission with:', {
-      customer_id: customer.id,
-      customer_name: customer.name,
+      company_id: customer.id,
+      company_name: customer.name,
       consultant_id: consultant.id,
       requirement_id: requirement?.id,
     });
@@ -188,7 +185,7 @@ export function CreateMissionModal({
         name: formData.name,
         requirement_id: requirement?.id,
         consultant_id: consultant.id,
-        customer_id: customer.id,
+        company_id: customer.id,
         contact_id: contact?.id,
         start_date: formData.start_date,
         end_date: formData.end_date,

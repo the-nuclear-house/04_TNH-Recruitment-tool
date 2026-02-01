@@ -144,7 +144,7 @@ export interface DbMission {
   name: string;
   requirement_id: string | null;
   consultant_id: string;
-  customer_id: string;
+  company_id: string;
   contact_id: string | null;
   start_date: string;
   end_date: string;
@@ -161,7 +161,7 @@ export interface DbMission {
   // Joined
   requirement?: DbRequirement;
   consultant?: DbConsultant;
-  customer?: DbCustomer;
+  company?: DbCompany;
   contact?: DbContact;
 }
 
@@ -169,7 +169,7 @@ export interface CreateMissionInput {
   name: string;
   requirement_id?: string;
   consultant_id: string;
-  customer_id: string;
+  company_id: string;
   contact_id?: string;
   start_date: string;
   end_date: string;
@@ -2496,8 +2496,8 @@ export const missionsService = {
         *,
         requirement:requirements(*),
         consultant:consultants(*),
-        customer:customers(*),
-        contact:customer_contacts(*)
+        company:company_id(*),
+        contact:contacts(*)
       `)
       .is('deleted_at', null)
       .order('start_date', { ascending: true });
@@ -2513,8 +2513,8 @@ export const missionsService = {
         *,
         requirement:requirements(*),
         consultant:consultants(*),
-        customer:customers(*),
-        contact:customer_contacts(*)
+        company:company_id(*),
+        contact:contacts(*)
       `)
       .eq('id', id)
       .is('deleted_at', null)
@@ -2530,8 +2530,8 @@ export const missionsService = {
       .select(`
         *,
         requirement:requirements(*),
-        customer:customers(*),
-        contact:customer_contacts(*)
+        company:company_id(*),
+        contact:contacts(*)
       `)
       .eq('consultant_id', consultantId)
       .is('deleted_at', null)
@@ -2541,16 +2541,16 @@ export const missionsService = {
     return data || [];
   },
 
-  async getByCustomer(customerId: string): Promise<DbMission[]> {
+  async getByCustomer(companyId: string): Promise<DbMission[]> {
     const { data, error } = await supabase
       .from('missions')
       .select(`
         *,
         requirement:requirements(*),
         consultant:consultants(*),
-        contact:customer_contacts(*)
+        contact:contacts(*)
       `)
-      .eq('customer_id', customerId)
+      .eq('company_id', companyId)
       .is('deleted_at', null)
       .order('start_date', { ascending: true });
 
@@ -2564,7 +2564,7 @@ export const missionsService = {
       .select(`
         *,
         consultant:consultants(*),
-        customer:customers(*)
+        company:company_id(*)
       `)
       .eq('requirement_id', requirementId)
       .is('deleted_at', null)
@@ -2585,8 +2585,8 @@ export const missionsService = {
         *,
         requirement:requirements(*),
         consultant:consultants(*),
-        customer:customers(*),
-        contact:customer_contacts(*)
+        company:company_id(*),
+        contact:contacts(*)
       `)
       .single();
 
@@ -2610,8 +2610,8 @@ export const missionsService = {
         *,
         requirement:requirements(*),
         consultant:consultants(*),
-        customer:customers(*),
-        contact:customer_contacts(*)
+        company:company_id(*),
+        contact:contacts(*)
       `)
       .single();
 

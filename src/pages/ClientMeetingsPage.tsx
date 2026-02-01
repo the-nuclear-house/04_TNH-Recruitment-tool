@@ -1445,14 +1445,8 @@ export function ClientMeetingsPage() {
           requirement={assessmentForMission.requirement_id ? { id: assessmentForMission.requirement_id } as any : undefined}
           candidate={candidates.find(c => c.id === assessmentForMission.candidate_id)}
           customer={(() => {
-            // Find customer by matching name from the company
             const contact = contacts.find(c => c.id === assessmentForMission.contact_id);
-            const company = contact ? companies.find(co => co.id === contact.company_id) : undefined;
-            // Match to customers table by name
-            if (company) {
-              return customers.find(cust => cust.name.toLowerCase() === company.name.toLowerCase());
-            }
-            return undefined;
+            return contact ? companies.find(co => co.id === contact.company_id) : undefined;
           })()}
         />
       )}

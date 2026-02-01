@@ -1412,14 +1412,7 @@ export function RequirementDetailPage() {
           navigate('/missions');
         }}
         requirement={requirement}
-        customer={(() => {
-          // Match requirement's customer name to customers table
-          const customerName = requirement?.customer || requirement?.company?.name;
-          if (customerName) {
-            return customers.find(c => c.name.toLowerCase() === customerName.toLowerCase());
-          }
-          return undefined;
-        })()}
+        customer={requirement?.company}
         contact={contacts.find(c => c.id === requirement?.contact_id)}
         winningCandidateId={requirement?.winning_candidate_id}
       />

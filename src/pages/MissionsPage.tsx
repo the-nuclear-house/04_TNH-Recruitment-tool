@@ -129,7 +129,7 @@ export function MissionsPage() {
       setMissions(missionsData);
       setCustomers(customersData);
       
-      const customerIds = new Set(missionsData.map(m => m.customer_id));
+      const customerIds = new Set(missionsData.map(m => m.company_id));
       setExpandedCustomers(customerIds);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -144,10 +144,10 @@ export function MissionsPage() {
   const missionsByCustomer = useMemo(() => {
     const grouped: Record<string, DbMission[]> = {};
     missions.forEach(mission => {
-      if (!grouped[mission.customer_id]) {
-        grouped[mission.customer_id] = [];
+      if (!grouped[mission.company_id]) {
+        grouped[mission.company_id] = [];
       }
-      grouped[mission.customer_id].push(mission);
+      grouped[mission.company_id].push(mission);
     });
     return grouped;
   }, [missions]);
@@ -545,7 +545,7 @@ export function MissionsPage() {
                   </div>
                   <div>
                     <p className="text-xs text-brand-grey-400">Customer</p>
-                    <p className="font-medium text-brand-slate-900">{selectedMission.customer?.name}</p>
+                    <p className="font-medium text-brand-slate-900">{selectedMission.company?.name}</p>
                   </div>
                   <div>
                     <p className="text-xs text-brand-grey-400">Start Date</p>
