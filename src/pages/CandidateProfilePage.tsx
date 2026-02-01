@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Mail,
@@ -189,6 +189,7 @@ const countries = [
 export function CandidateProfilePage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
   const { user } = useAuthStore();
   const permissions = usePermissions();
@@ -198,6 +199,10 @@ export function CandidateProfilePage() {
   const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedInterview, setExpandedInterview] = useState<string | null>(null);
+  
+  // URL params for deep linking from Interviews page
+  const urlTab = searchParams.get('tab');
+  const urlInterviewId = searchParams.get('interview');
   
   // Linked requirements
   const [linkedRequirements, setLinkedRequirements] = useState<DbApplication[]>([]);
@@ -410,6 +415,19 @@ export function CandidateProfilePage() {
       loadOffers();
     }
   }, [id]);
+
+  // Auto-open interview modal if coming from Interviews page
+  useEffect(() => {
+    if (urlInterviewId && interviews.length > 0 && !isLoading) {
+      const interview = interviews.find(i => i.id === urlInterviewId);
+      if (interview) {
+        setSelectedInterview(interview);
+        setIsCompleteModalOpen(true);
+        // Clear URL params after opening
+        navigate(`/candidates/${id}`, { replace: true });
+      }
+    }
+  }, [urlInterviewId, interviews, isLoading]);
 
   const loadData = async () => {
     try {

@@ -150,19 +150,9 @@ export function InterviewsPage() {
   };
 
   const handleCompleteInterview = (interview: any) => {
-    setSelectedInterview(interview);
-    setFeedbackForm({
-      outcome: interview.outcome === 'pending' ? '' : interview.outcome,
-      communication_score: interview.communication_score?.toString() || '',
-      professionalism_score: interview.professionalism_score?.toString() || '',
-      enthusiasm_score: interview.enthusiasm_score?.toString() || '',
-      cultural_fit_score: interview.cultural_fit_score?.toString() || '',
-      technical_depth_score: interview.technical_depth_score?.toString() || '',
-      problem_solving_score: interview.problem_solving_score?.toString() || '',
-      general_comments: interview.general_comments || '',
-      recommendation: interview.recommendation || '',
-    });
-    setIsModalOpen(true);
+    // Navigate to candidate profile page with interview tab open
+    // The comprehensive interview completion modal is there
+    navigate(`/candidates/${interview.candidate_id}?tab=interviews&interview=${interview.id}`);
   };
 
   const handleSubmitFeedback = async () => {
