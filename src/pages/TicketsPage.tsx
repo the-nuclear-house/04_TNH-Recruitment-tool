@@ -402,14 +402,9 @@ export function TicketsPage() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className="font-semibold text-brand-slate-900">{ticket.title}</h3>
-                          <Badge variant={config.colour as any}>{config.label}</Badge>
                           {ticket.source === 'approval_request' && (
                             <Badge variant="amber">Needs HR Approval</Badge>
                           )}
-                          {ticket.priority === 'high' || ticket.priority === 'urgent' ? (
-                            <Badge variant="red">{priorityInfo.label}</Badge>
-                          ) : null}
-                          {/* Status badge */}
                           <Badge variant={ticketStatusInfo.colour as any}>{ticketStatusInfo.label}</Badge>
                         </div>
                         <p className="text-sm text-brand-grey-500">{ticket.description}</p>
