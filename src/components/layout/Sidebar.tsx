@@ -34,7 +34,7 @@ export function Sidebar() {
   ].includes(r)) ?? false;
 
   // HR can view Consultants and Tickets
-  const isHR = user?.roles?.some(r => ['hr_staff', 'hr_manager', 'admin', 'superadmin'].includes(r)) ?? false;
+  const isHR = user?.roles?.some(r => ['hr', 'hr_manager', 'admin', 'superadmin'].includes(r)) ?? false;
 
   // Build navigation based on permissions
   const navigation = [

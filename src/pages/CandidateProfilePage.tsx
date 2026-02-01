@@ -703,9 +703,6 @@ export function CandidateProfilePage() {
         professionalism_score: parseInt(phoneForm.professionalism_score),
         enthusiasm_score: parseInt(phoneForm.enthusiasm_score),
         cultural_fit_score: parseInt(phoneForm.cultural_fit_score),
-        contract_preference: phoneForm.contract_preference || undefined,
-        salary_proposed: phoneForm.expected_day_rate ? parseFloat(phoneForm.expected_day_rate) : undefined,
-        warnings: phoneForm.warnings || undefined,
         general_comments: phoneForm.general_comments,
       });
       
@@ -758,8 +755,6 @@ export function CandidateProfilePage() {
         cultural_fit_score: parseInt(techForm.cultural_fit_score),
         technical_depth_score: parseInt(techForm.technical_depth_score),
         problem_solving_score: parseInt(techForm.problem_solving_score),
-        salary_proposed: techForm.salary_proposed ? parseFloat(techForm.salary_proposed) : undefined,
-        warnings: techForm.warnings || undefined,
         general_comments: techForm.general_comments,
       });
       
@@ -801,8 +796,6 @@ export function CandidateProfilePage() {
         professionalism_score: parseInt(directorForm.professionalism_score),
         enthusiasm_score: parseInt(directorForm.enthusiasm_score),
         cultural_fit_score: parseInt(directorForm.cultural_fit_score),
-        salary_proposed: directorForm.salary_proposed ? parseFloat(directorForm.salary_proposed) : undefined,
-        warnings: directorForm.warnings || undefined,
         general_comments: directorForm.general_comments,
       });
       

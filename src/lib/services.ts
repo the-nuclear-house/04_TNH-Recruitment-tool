@@ -809,11 +809,9 @@ export interface UpdateInterviewInput {
   cultural_fit_score?: number;
   technical_depth_score?: number;
   problem_solving_score?: number;
-  contract_preference?: string;
-  salary_proposed?: number;
-  warnings?: string;
   general_comments?: string;
   recommendation?: string;
+  skills_confirmed?: string[];
 }
 
 export const interviewsService = {
@@ -3516,11 +3514,11 @@ export const dashboardStatsService = {
     totals: { interviews: number; customerMeetings: number; consultantsActive: number; consultantsBench: number; };
     pendingApprovals: number;
   }> {
-    // Get all managers (users with manager role)
+    // Get all managers (users with business_manager role)
     const { data: users } = await supabase
       .from('users')
       .select('*')
-      .contains('roles', ['manager']);
+      .contains('roles', ['business_manager']);
     
     const managers = users || [];
     const managerStats = [];

@@ -62,15 +62,28 @@ export const useAuthStore = create<AuthState>()(
             } else {
               // User doesn't exist in our users table - create one
               // Determine roles based on email (for demo/testing)
+              // Role names must match UserRole type in types/index.ts
               const email = session.user.email || '';
               let roles: string[] = ['recruiter'];
               
-              if (email.includes('admin')) {
+              if (email.includes('superadmin')) {
+                roles = ['superadmin'];
+              } else if (email.includes('admin')) {
                 roles = ['admin'];
-              } else if (email.includes('director')) {
-                roles = ['director'];
-              } else if (email.includes('manager')) {
-                roles = ['manager'];
+              } else if (email.includes('business_director') || email.includes('business-director')) {
+                roles = ['business_director'];
+              } else if (email.includes('business_manager') || email.includes('business-manager')) {
+                roles = ['business_manager'];
+              } else if (email.includes('technical_director') || email.includes('technical-director')) {
+                roles = ['technical_director'];
+              } else if (email.includes('technical')) {
+                roles = ['technical'];
+              } else if (email.includes('recruiter_manager') || email.includes('recruiter-manager')) {
+                roles = ['recruiter_manager'];
+              } else if (email.includes('hr_manager') || email.includes('hr-manager')) {
+                roles = ['hr_manager'];
+              } else if (email.includes('hr')) {
+                roles = ['hr'];
               }
               
               // Get a friendly name from email
