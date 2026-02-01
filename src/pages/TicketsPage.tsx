@@ -49,13 +49,13 @@ const ticketTypeConfig: Record<HrTicketType | 'general', { icon: any; colour: st
 };
 
 const statusConfig: Record<string, { label: string; colour: string }> = {
-  pending: { label: 'Pending', colour: 'amber' },
-  in_progress: { label: 'In Progress', colour: 'blue' },
-  contract_sent: { label: 'Contract Sent', colour: 'cyan' },
-  contract_signed: { label: 'Contract Signed', colour: 'purple' },
-  completed: { label: 'Completed', colour: 'green' },
+  pending: { label: 'Open', colour: 'cyan' },
+  in_progress: { label: 'Open', colour: 'cyan' },
+  contract_sent: { label: 'Open', colour: 'cyan' },
+  contract_signed: { label: 'Open', colour: 'cyan' },
+  completed: { label: 'Closed', colour: 'green' },
   cancelled: { label: 'Cancelled', colour: 'grey' },
-  approved: { label: 'Approved', colour: 'green' },
+  approved: { label: 'Closed', colour: 'green' },
 };
 
 const priorityConfig: Record<string, { label: string; colour: string }> = {
@@ -96,7 +96,7 @@ export function TicketsPage() {
   const [selectedTicket, setSelectedTicket] = useState<UITicket | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [filter, setFilter] = useState<'pending' | 'in_progress' | 'completed' | 'all'>('pending');
+  const [filter, setFilter] = useState<'open' | 'closed' | 'all'>('open');
   const [completionNotes, setCompletionNotes] = useState('');
   
   // Workflow confirmation dialogs
@@ -300,54 +300,43 @@ export function TicketsPage() {
   };
 
   const filteredTickets = tickets.filter(t => {
-    if (filter === 'pending') return t.status === 'pending';
-    if (filter === 'in_progress') return ['in_progress', 'contract_sent', 'contract_signed'].includes(t.status);
-    if (filter === 'completed') return t.status === 'completed' || t.status === 'approved';
+    if (filter === 'open') return !['completed', 'approved', 'cancelled'].includes(t.status);
+    if (filter === 'closed') return ['completed', 'approved', 'cancelled'].includes(t.status);
     return true;
   });
 
-  const pendingCount = tickets.filter(t => t.status === 'pending').length;
-  const inProgressCount = tickets.filter(t => ['in_progress', 'contract_sent', 'contract_signed'].includes(t.status)).length;
+  const openCount = tickets.filter(t => !['completed', 'approved', 'cancelled'].includes(t.status)).length;
+  const closedCount = tickets.filter(t => ['completed', 'approved', 'cancelled'].includes(t.status)).length;
 
   return (
     <div className="min-h-screen">
       <Header
         title="HR Tickets"
-        subtitle={`${pendingCount} pending, ${inProgressCount} in progress`}
+        subtitle={`${openCount} open, ${closedCount} closed`}
       />
 
       <div className="p-6 space-y-6">
         {/* Filter Tabs */}
         <div className="flex gap-2">
           <button
-            onClick={() => setFilter('pending')}
+            onClick={() => setFilter('open')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === 'pending'
+              filter === 'open'
                 ? 'bg-brand-cyan text-white'
                 : 'bg-brand-grey-100 text-brand-slate-700 hover:bg-brand-grey-200'
             }`}
           >
-            Pending ({pendingCount})
+            Open ({openCount})
           </button>
           <button
-            onClick={() => setFilter('in_progress')}
+            onClick={() => setFilter('closed')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === 'in_progress'
+              filter === 'closed'
                 ? 'bg-brand-cyan text-white'
                 : 'bg-brand-grey-100 text-brand-slate-700 hover:bg-brand-grey-200'
             }`}
           >
-            In Progress ({inProgressCount})
-          </button>
-          <button
-            onClick={() => setFilter('completed')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === 'completed'
-                ? 'bg-brand-cyan text-white'
-                : 'bg-brand-grey-100 text-brand-slate-700 hover:bg-brand-grey-200'
-            }`}
-          >
-            Completed
+            Closed ({closedCount})
           </button>
           <button
             onClick={() => setFilter('all')}
@@ -368,7 +357,7 @@ export function TicketsPage() {
         ) : filteredTickets.length === 0 ? (
           <EmptyState
             title="No tickets"
-            description={filter === 'pending' ? "You're all caught up! No pending actions." : "No tickets found."}
+            description={filter === 'open' ? "You're all caught up! No open tickets." : "No tickets found."}
           />
         ) : (
           <div className="space-y-4">
@@ -442,6 +431,7 @@ export function TicketsPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      {/* For completed contract tickets, show View Consultant */}
                       {ticket.consultant_id && (
                         <Button
                           variant="ghost"
@@ -451,7 +441,8 @@ export function TicketsPage() {
                           View Consultant
                         </Button>
                       )}
-                      {ticket.candidate_id && (
+                      {/* For open tickets, show View Candidate (but not if consultant exists) */}
+                      {ticket.candidate_id && !ticket.consultant_id && (
                         <Button
                           variant="ghost"
                           size="sm"

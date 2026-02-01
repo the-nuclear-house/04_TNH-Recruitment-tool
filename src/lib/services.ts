@@ -3398,7 +3398,7 @@ export const hrTicketsService = {
     // Update candidate status
     await candidatesService.update(ticket.candidate_id, { status: 'converted_to_consultant' });
 
-    // Complete the ticket
+    // Complete the ticket and link to the new consultant
     const { data, error } = await supabase
       .from('hr_tickets')
       .update({
@@ -3406,6 +3406,7 @@ export const hrTicketsService = {
         completed_at: new Date().toISOString(),
         completed_by: userId,
         completion_notes: `Converted to consultant: ${newConsultant.reference_id || newConsultant.id}`,
+        consultant_id: newConsultant.id,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
