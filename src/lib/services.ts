@@ -2218,7 +2218,7 @@ export const offersService = {
     await supabase
       .from('hr_tickets')
       .insert({
-        ticket_type: 'contract_preparation',
+        ticket_type: 'contract_send',
         title: `Prepare contract for ${candidateName}`,
         description: `Offer approved. Please prepare and send contract to ${candidateName}.${notes ? `\n\nApproval notes: ${notes}` : ''}`,
         priority: 'high',
