@@ -64,6 +64,9 @@ export function CandidatesPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [cvParsed, setCvParsed] = useState(false);
+  
+  // My Candidates filter for recruiters
+  const [myCandidatesOnly, setMyCandidatesOnly] = useState(false);
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -290,6 +293,11 @@ export function CandidatesPage() {
 
   // Filter candidates
   const filteredCandidates = candidates.filter(c => {
+    // My Candidates filter
+    if (myCandidatesOnly && c.assigned_recruiter_id !== user?.id) {
+      return false;
+    }
+    
     // Search filter
     const matchesSearch = !searchQuery || 
       `${c.first_name} ${c.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -332,9 +340,10 @@ export function CandidatesPage() {
     setLocationsFilter([]);
     setExperienceFilter('');
     setStatusFilter([]);
+    setMyCandidatesOnly(false);
   };
 
-  const hasActiveFilters = searchQuery || skillsFilter.length > 0 || locationsFilter.length > 0 || experienceFilter || statusFilter.length > 0;
+  const hasActiveFilters = searchQuery || skillsFilter.length > 0 || locationsFilter.length > 0 || experienceFilter || statusFilter.length > 0 || myCandidatesOnly;
 
   // Column filter dropdown component
   const ColumnFilter = ({ 
@@ -466,6 +475,19 @@ export function CandidatesPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            {/* My Candidates Toggle for recruiters */}
+            {(permissions.isRecruiter || permissions.isRecruiterManager) && (
+              <button
+                onClick={() => setMyCandidatesOnly(!myCandidatesOnly)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  myCandidatesOnly 
+                    ? 'bg-brand-cyan text-white' 
+                    : 'bg-brand-grey-100 text-brand-slate-700 hover:bg-brand-grey-200'
+                }`}
+              >
+                My Candidates
+              </button>
+            )}
             {hasActiveFilters && (
               <Button
                 variant="secondary"

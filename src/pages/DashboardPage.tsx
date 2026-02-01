@@ -914,10 +914,10 @@ export function DashboardPage() {
                 </Card>
 
                 {/* Weekly Activity Chart - Stacked Interviews */}
-                <Card>
+                <Card className="overflow-hidden">
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle>Weekly Activity</CardTitle>
+                      <CardTitle>Interviews</CardTitle>
                       <div className="flex items-center gap-2">
                         <Button variant="ghost" size="sm" onClick={handlePrevSemester}>
                           <ChevronLeft className="h-4 w-4" />
@@ -929,7 +929,7 @@ export function DashboardPage() {
                       </div>
                     </div>
                   </CardHeader>
-                  <div className="px-4">
+                  <div className="px-4 pb-4 overflow-x-auto">
                     {/* Legend */}
                     <div className="flex gap-4 mb-3 text-xs">
                       <div className="flex items-center gap-1">
@@ -946,37 +946,37 @@ export function DashboardPage() {
                       </div>
                     </div>
                     {/* Stacked Bar Chart */}
-                    <div className="flex items-end justify-between h-32 gap-1">
-                      {recruiterStats.interviewsByWeek.map((week: any, idx: number) => {
+                    <div className="flex items-end justify-between h-24 gap-1 min-w-[400px]">
+                      {recruiterStats.interviewsByWeek.slice(0, 12).map((week: any, idx: number) => {
                         const total = week.phone + week.technical + week.director;
-                        const maxHeight = 100;
-                        const scale = total > 0 ? maxHeight / Math.max(...recruiterStats.interviewsByWeek.map((w: any) => w.phone + w.technical + w.director), 1) : 0;
+                        const maxTotal = Math.max(...recruiterStats.interviewsByWeek.map((w: any) => w.phone + w.technical + w.director), 1);
+                        const scale = 80 / maxTotal;
                         return (
-                          <div key={idx} className="flex-1 flex flex-col items-center">
+                          <div key={idx} className="flex-1 flex flex-col items-center min-w-[20px]">
                             <div className="w-full flex flex-col-reverse">
                               {week.phone > 0 && (
                                 <div 
-                                  className="bg-cyan-500 w-full rounded-t"
-                                  style={{ height: `${week.phone * scale}px` }}
+                                  className="bg-cyan-500 w-full"
+                                  style={{ height: `${Math.max(week.phone * scale, 4)}px` }}
                                   title={`Phone: ${week.phone}`}
                                 />
                               )}
                               {week.technical > 0 && (
                                 <div 
                                   className="bg-blue-500 w-full"
-                                  style={{ height: `${week.technical * scale}px` }}
+                                  style={{ height: `${Math.max(week.technical * scale, 4)}px` }}
                                   title={`Technical: ${week.technical}`}
                                 />
                               )}
                               {week.director > 0 && (
                                 <div 
                                   className="bg-amber-500 w-full rounded-t"
-                                  style={{ height: `${week.director * scale}px` }}
+                                  style={{ height: `${Math.max(week.director * scale, 4)}px` }}
                                   title={`Director: ${week.director}`}
                                 />
                               )}
                             </div>
-                            <span className="text-[10px] text-brand-grey-400 mt-1">{week.week}</span>
+                            <span className="text-[9px] text-brand-grey-400 mt-1">{week.week}</span>
                           </div>
                         );
                       })}
@@ -1019,6 +1019,18 @@ export function DashboardPage() {
                   )}
                 </Card>
               </div>
+
+              {/* Second Row: Sourced Chart */}
+              <Card className="overflow-hidden">
+                <CardHeader>
+                  <CardTitle>Candidates Sourced per Week</CardTitle>
+                </CardHeader>
+                <div className="px-4 pb-4">
+                  <div className="h-32">
+                    <WeeklyChart data={recruiterStats.candidatesByWeek} title="Candidates" colour="cyan" />
+                  </div>
+                </div>
+              </Card>
 
               {/* Recent Signed Candidates */}
               {recruiterStats.signedCandidates.length > 0 && (

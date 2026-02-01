@@ -1122,7 +1122,7 @@ export function ConsultantProfilePage() {
         effective_month: salaryIncreaseForm.effective_month,
         effective_year: salaryIncreaseForm.effective_year,
         requested_by: user!.id,
-        hr_required: false,
+        hr_required: true, // Requires HR to process payroll change
       });
 
       toast.success('Request Submitted', `${isContractor ? 'Rate' : 'Salary'} increase request sent for director approval`);
@@ -1162,7 +1162,7 @@ export function ConsultantProfilePage() {
         effective_month: bonusForm.payment_month,
         effective_year: bonusForm.payment_year,
         requested_by: user!.id,
-        hr_required: false,
+        hr_required: true, // Requires HR to process bonus payment
       });
 
       toast.success('Request Submitted', 'Bonus payment request sent for director approval');

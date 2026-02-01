@@ -967,6 +967,11 @@ export function CandidateProfilePage() {
                   <Badge variant={candidate.status === 'converted_to_consultant' ? 'purple' : 'cyan'}>
                     {statusLabels[candidate.status] || candidate.status}
                   </Badge>
+                  {candidate.years_experience && (
+                    <span className="px-3 py-1 bg-cyan-100 text-cyan-800 rounded-full text-sm font-medium">
+                      {candidate.years_experience} yrs exp
+                    </span>
+                  )}
                 </div>
                 <p className="text-brand-grey-400">{candidate.email}</p>
                 {candidate.reference_id && (
@@ -1002,21 +1007,21 @@ export function CandidateProfilePage() {
                   </a>
                 </div>
               )}
+              {candidate.cv_url && (
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="h-4 w-4 text-brand-grey-400" />
+                  <a href={candidate.cv_url} target="_blank" rel="noopener noreferrer" className="text-brand-cyan hover:underline">
+                    View CV
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Experience & Skills */}
+          {/* Skills & Previous Companies */}
           <div className="mt-6 pt-6 border-t border-brand-grey-200">
-            {candidate.years_experience && (
-              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg inline-block">
-                <p className="text-sm text-cyan-700">
-                  <span className="font-bold text-lg text-cyan-800">{candidate.years_experience}</span> years of experience
-                </p>
-              </div>
-            )}
-            
             {candidate.skills && candidate.skills.length > 0 && (
-              <div className="mt-3">
+              <div>
                 <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Skills</h3>
                 <div className="flex flex-wrap gap-2">
                   {candidate.skills.map((skill: string) => (

@@ -14,6 +14,7 @@ import {
   Building,
   UserCog,
   Rocket,
+  Ticket,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useUIStore } from '@/lib/stores/ui-store';
@@ -32,6 +33,9 @@ export function Sidebar() {
     'business_director', 'business_manager'
   ].includes(r)) ?? false;
 
+  // HR can view Consultants and Tickets
+  const isHR = user?.roles?.some(r => ['hr_staff', 'hr_manager', 'admin', 'superadmin'].includes(r)) ?? false;
+
   // Build navigation based on permissions
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, show: true },
@@ -41,8 +45,9 @@ export function Sidebar() {
     { name: 'Interviews', href: '/interviews', icon: Calendar, show: permissions.canViewInterviews },
     { name: 'Client Meetings', href: '/client-meetings', icon: UserCheck, show: canViewCustomers },
     { name: 'Contracts', href: '/contracts', icon: FileText, show: permissions.canViewContracts },
-    { name: 'Consultants', href: '/consultants', icon: UserCog, show: canViewCustomers },
+    { name: 'Consultants', href: '/consultants', icon: UserCog, show: canViewCustomers || isHR },
     { name: 'Missions', href: '/missions', icon: Rocket, show: canViewCustomers },
+    { name: 'Tickets', href: '/tickets', icon: Ticket, show: isHR },
   ].filter(item => item.show);
 
   const bottomNavigation = [

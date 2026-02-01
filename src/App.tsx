@@ -18,6 +18,7 @@ import {
   ConsultantsPage,
   ConsultantProfilePage,
   MissionsPage,
+  TicketsPage,
   OrganisationPage,
   SettingsPage,
   LoginPage,
@@ -73,6 +74,7 @@ function App() {
           <Route path="/consultants" element={<ConsultantsPage />} />
           <Route path="/consultants/:id" element={<ConsultantProfilePage />} />
           <Route path="/missions" element={<MissionsPage />} />
+          <Route path="/tickets" element={<TicketsPage />} />
           <Route path="/organisation" element={<OrganisationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

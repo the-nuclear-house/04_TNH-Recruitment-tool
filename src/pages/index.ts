@@ -13,6 +13,7 @@ export { CustomersPage } from './CustomersPage';
 export { ContractsPage } from './ContractsPage';
 export { ConsultantsPage, ConsultantProfilePage } from './ConsultantsPage';
 export { MissionsPage } from './MissionsPage';
+export { TicketsPage } from './TicketsPage';
 export { OrganisationPage } from './OrganisationPage';
 export { SettingsPage } from './SettingsPage';
 export { LoginPage } from './LoginPage';
