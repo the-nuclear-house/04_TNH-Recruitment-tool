@@ -795,14 +795,14 @@ export function CandidateProfilePage() {
     let eligibleUsers = users;
     
     if (selectedStage === 'phone_qualification') {
-      // Phone: Managers and Recruiters (and Admin)
-      eligibleUsers = users.filter(u => u.roles?.some((r: string) => ['manager', 'recruiter', 'admin'].includes(r)));
+      // Phone: Recruiters, Recruiter Managers (and Admin)
+      eligibleUsers = users.filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager', 'admin', 'superadmin'].includes(r)));
     } else if (selectedStage === 'technical_interview') {
-      // Technical: Only managers and admins
-      eligibleUsers = users.filter(u => u.roles?.some((r: string) => ['manager', 'admin'].includes(r)));
+      // Technical: Technical team and Technical Directors (and Admin)
+      eligibleUsers = users.filter(u => u.roles?.some((r: string) => ['technical', 'technical_director', 'admin', 'superadmin'].includes(r)));
     } else if (selectedStage === 'director_interview') {
-      // Director: Only Directors (and Admin)
-      eligibleUsers = users.filter(u => u.roles?.some((r: string) => ['director', 'admin'].includes(r)));
+      // Director: Business Directors (and Admin)
+      eligibleUsers = users.filter(u => u.roles?.some((r: string) => ['business_director', 'admin', 'superadmin'].includes(r)));
     }
     
     return [
@@ -1611,7 +1611,7 @@ export function CandidateProfilePage() {
                     >
                       <option value="">-- Select Recruiter --</option>
                       {users
-                        .filter(u => u.roles?.some((r: string) => ['recruiter', 'admin'].includes(r)))
+                        .filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager', 'admin', 'superadmin'].includes(r)))
                         .map(u => (
                           <option key={u.id} value={u.id}>{u.full_name}</option>
                         ))
@@ -2566,15 +2566,15 @@ export function CandidateProfilePage() {
                   const manager = managerId ? users.find(u => u.id === managerId) : null;
                   const directorId = manager?.reports_to || managerId;
                   
-                  // If no director found, use any user with director role
+                  // If no director found, use any user with business_director role
                   let approverId = directorId;
                   if (!approverId) {
-                    const director = users.find(u => u.roles?.includes('director'));
+                    const director = users.find(u => u.roles?.includes('business_director'));
                     approverId = director?.id;
                   }
                   
                   if (!approverId) {
-                    toast.error('Error', 'No director found for approval. Please contact admin.');
+                    toast.error('Error', 'No Business Director found for approval. Please contact admin.');
                     return;
                   }
                   

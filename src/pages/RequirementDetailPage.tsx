@@ -165,8 +165,8 @@ export function RequirementDetailPage() {
   const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
   const [existingMission, setExistingMission] = useState<any>(null);
   
-  // Check if user can schedule assessments (Manager, Director, Admin)
-  const canScheduleAssessments = user?.roles?.some(r => ['admin', 'director', 'manager'].includes(r)) ?? false;
+  // Check if user can schedule assessments (Business Manager, Business Director, Admin)
+  const canScheduleAssessments = user?.roles?.some(r => ['admin', 'superadmin', 'business_director', 'business_manager'].includes(r)) ?? false;
 
   useEffect(() => {
     if (id) {
@@ -1350,7 +1350,7 @@ export function RequirementDetailPage() {
             options={[
               { value: '', label: 'Select manager' },
               ...allUsers
-                .filter(u => u.role === 'manager' || u.role === 'director' || u.role === 'admin')
+                .filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director', 'admin', 'superadmin'].includes(r)))
                 .map(u => ({ value: u.id, label: u.full_name || u.email }))
             ]}
             value={editForm.manager_id}

@@ -2901,7 +2901,7 @@ export const approvalRequestsService = {
     return data;
   },
 
-  async reject(id: string, userId: string, reason: string, stage: 'director' | 'hr'): Promise<DbApprovalRequest> {
+  async reject(id: string, userId: string, reason: string, stage: 'business_director' | 'hr_manager' | 'hr'): Promise<DbApprovalRequest> {
     const updateData: any = {
       status: 'rejected',
       rejection_reason: reason,
@@ -2910,7 +2910,7 @@ export const approvalRequestsService = {
       updated_at: new Date().toISOString(),
     };
 
-    if (stage === 'director') {
+    if (stage === 'business_director') {
       updateData.director_status = 'rejected';
     } else {
       updateData.hr_status = 'rejected';

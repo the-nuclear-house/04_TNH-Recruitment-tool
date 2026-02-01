@@ -220,7 +220,7 @@ export function InterviewsPage() {
     
     // Apply "My Candidates" filter
     if (showMyCandidatesOnly && user) {
-      if (user.roles?.includes('recruiter') && !user.roles?.some(r => ['manager', 'director', 'admin'].includes(r))) {
+      if (user.roles?.some(r => ['recruiter'].includes(r)) && !user.roles?.some(r => ['recruiter_manager', 'business_manager', 'business_director', 'admin', 'superadmin'].includes(r))) {
         // Pure recruiters see interviews for candidates they're assigned to
         filtered = filtered.filter(i => {
           const candidate = candidates[i.candidate_id];

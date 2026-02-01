@@ -329,9 +329,9 @@ export function RequirementsPage() {
   const managerOptions = [
     // Current user first as "Myself"
     ...(user ? [{ value: user.id, label: `${user.full_name || user.email} (Myself)` }] : []),
-    // Other managers
+    // Other managers/recruiters
     ...users
-      .filter(u => u.roles?.some((r: string) => ['recruiter', 'admin', 'director'].includes(r)))
+      .filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager', 'business_manager', 'business_director', 'admin', 'superadmin'].includes(r)))
       .filter(u => u.id !== user?.id) // Exclude current user (already shown as Myself)
       .map(u => ({ value: u.id, label: u.full_name })),
   ];

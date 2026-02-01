@@ -395,7 +395,7 @@ export function DashboardPage() {
         const { data: usersData } = await supabase
           .from('users')
           .select('*')
-          .contains('roles', ['manager']);
+          .contains('roles', ['business_manager']);
         setManagers(usersData || []);
         
         const [approvals, offers] = await Promise.all([
@@ -535,7 +535,7 @@ export function DashboardPage() {
     if (!reason) return;
     setProcessingApproval(requestId);
     try {
-      await approvalRequestsService.reject(requestId, user!.id, reason, 'director');
+      await approvalRequestsService.reject(requestId, user!.id, reason, 'business_director');
       toast.success('Rejected', 'Request has been rejected');
       loadDashboardData();
     } catch (error) {

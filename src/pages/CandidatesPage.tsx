@@ -813,7 +813,7 @@ export function CandidatesPage() {
             options={[
               { value: '', label: '-- Select Recruiter --' },
               ...users
-                .filter(u => u.roles?.some((r: string) => ['recruiter', 'admin'].includes(r)))
+                .filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager', 'admin', 'superadmin'].includes(r)))
                 .map(u => ({ value: u.id, label: u.full_name }))
             ]}
             value={formData.assigned_recruiter_id}

@@ -335,9 +335,9 @@ export function OrganisationPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-brand-slate-900">
-                  {users.filter(u => u.roles?.includes('recruiter')).length}
+                  {users.filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager'].includes(r))).length}
                 </p>
-                <p className="text-sm text-brand-grey-400">Recruiters</p>
+                <p className="text-sm text-brand-grey-400">Recruitment</p>
               </div>
             </div>
           </Card>
@@ -348,9 +348,9 @@ export function OrganisationPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-brand-slate-900">
-                  {users.filter(u => u.roles?.includes('manager')).length}
+                  {users.filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director'].includes(r))).length}
                 </p>
-                <p className="text-sm text-brand-grey-400">Managers</p>
+                <p className="text-sm text-brand-grey-400">Business</p>
               </div>
             </div>
           </Card>
@@ -361,9 +361,9 @@ export function OrganisationPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-brand-slate-900">
-                  {users.filter(u => u.roles?.includes('director') || u.roles?.includes('admin')).length}
+                  {users.filter(u => u.roles?.some((r: string) => ['admin', 'superadmin'].includes(r))).length}
                 </p>
-                <p className="text-sm text-brand-grey-400">Directors/Admins</p>
+                <p className="text-sm text-brand-grey-400">Admins</p>
               </div>
             </div>
           </Card>
