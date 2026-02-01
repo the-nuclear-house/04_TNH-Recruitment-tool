@@ -807,7 +807,7 @@ export function CandidateProfilePage() {
     
     return [
       { value: '', label: 'Select Interviewer' },
-      ...eligibleUsers.map(u => ({ value: u.id, label: `${u.full_name} (${u.roles?.join(', ')})` })),
+      ...eligibleUsers.map(u => ({ value: u.id, label: u.full_name })),
     ];
   };
   

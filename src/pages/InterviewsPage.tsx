@@ -493,7 +493,7 @@ export function InterviewsPage() {
                       <div className="flex items-center gap-2 text-right">
                         <div>
                           <p className="text-sm font-medium text-brand-slate-700">
-                            {interviewer?.name || 'Unassigned'}
+                            {interviewer?.full_name || 'Unassigned'}
                           </p>
                           <p className="text-xs text-brand-grey-400 flex items-center gap-1 justify-end">
                             <Clock className="h-3 w-3" />
@@ -503,7 +503,7 @@ export function InterviewsPage() {
                             }
                           </p>
                         </div>
-                        <Avatar name={interviewer?.name || 'U'} size="sm" />
+                        <Avatar name={interviewer?.full_name || 'U'} size="sm" />
                       </div>
 
                       {/* Complete Button */}
@@ -692,7 +692,7 @@ export function InterviewsPage() {
               <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
                 <div>
                   <p className="text-xs text-brand-grey-400">Interviewer</p>
-                  <p className="font-medium text-brand-slate-900">{interviewer?.name || 'Unassigned'}</p>
+                  <p className="font-medium text-brand-slate-900">{interviewer?.full_name || 'Unassigned'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-brand-grey-400">Scheduled</p>

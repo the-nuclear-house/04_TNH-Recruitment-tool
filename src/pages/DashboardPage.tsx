@@ -312,11 +312,22 @@ export function DashboardPage() {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
   
+  // Recruiter specific
+  const [recruiterCandidates, setRecruiterCandidates] = useState<any[]>([]);
+  const [recruiterInterviews, setRecruiterInterviews] = useState<any[]>([]);
+  
   // Director specific
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<DbApprovalRequest[]>([]);
   const [pendingOffers, setPendingOffers] = useState<DbOffer[]>([]);
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
+
+  // Determine if recruiter view (pure recruiter, not manager/director/admin)
+  const isRecruiterView = permissions.isRecruiter && 
+    !permissions.isRecruiterManager && 
+    !permissions.isBusinessManager && 
+    !permissions.isBusinessDirector && 
+    !permissions.isAdmin;
 
   const semesterOptions = useMemo(() => getSemesterOptions(), []);
   
@@ -346,6 +357,33 @@ export function DashboardPage() {
   const loadDashboardData = async () => {
     try {
       setIsLoading(true);
+      
+      // Recruiter view - load their candidates and interviews
+      if (isRecruiterView && user?.id) {
+        // Load candidates assigned to this recruiter
+        const { data: candidatesData } = await supabase
+          .from('candidates')
+          .select('*')
+          .eq('assigned_recruiter_id', user.id)
+          .is('deleted_at', null);
+        setRecruiterCandidates(candidatesData || []);
+        
+        // Load all interviews for recruiter's candidates
+        const candidateIds = (candidatesData || []).map(c => c.id);
+        if (candidateIds.length > 0) {
+          const { data: interviewsData } = await supabase
+            .from('interviews')
+            .select('*')
+            .in('candidate_id', candidateIds)
+            .is('deleted_at', null);
+          setRecruiterInterviews(interviewsData || []);
+        } else {
+          setRecruiterInterviews([]);
+        }
+        
+        setIsLoading(false);
+        return;
+      }
       
       const isDirectorView = permissions.isBusinessDirector || permissions.isAdmin;
       const targetManagerId = selectedManagerId || (isDirectorView ? null : user?.id);
@@ -516,6 +554,85 @@ export function DashboardPage() {
     };
   }, [interviews, meetings, assessments, requirements, consultants, missions, currentSemester, semesterWeeks]);
 
+  // Calculate recruiter stats
+  const recruiterStats = useMemo(() => {
+    if (!currentSemester || !isRecruiterView) return null;
+    
+    const semesterStart = currentSemester.start.toISOString().split('T')[0];
+    const semesterEnd = currentSemester.end.toISOString().split('T')[0];
+    
+    // Filter candidates to semester
+    const semesterCandidates = recruiterCandidates.filter(c => 
+      c.created_at >= semesterStart && c.created_at <= semesterEnd
+    );
+    
+    // Total candidates sourced
+    const totalSourced = semesterCandidates.length;
+    
+    // Candidates by status
+    const signedCandidates = recruiterCandidates.filter(c => c.status === 'hired');
+    const activeCandidates = recruiterCandidates.filter(c => 
+      !['hired', 'rejected', 'withdrawn'].includes(c.status)
+    );
+    
+    // Interview stats for their candidates
+    const phoneInterviews = recruiterInterviews.filter(i => i.stage === 'phone_qualification');
+    const techInterviews = recruiterInterviews.filter(i => i.stage === 'technical_interview');
+    const directorInterviews = recruiterInterviews.filter(i => i.stage === 'director_interview');
+    
+    const passedPhone = phoneInterviews.filter(i => i.outcome === 'pass').length;
+    const passedTech = techInterviews.filter(i => i.outcome === 'pass').length;
+    const passedDirector = directorInterviews.filter(i => i.outcome === 'pass').length;
+    
+    // Conversion rates
+    const phoneToTechRate = phoneInterviews.length > 0 ? Math.round((passedPhone / phoneInterviews.length) * 100) : 0;
+    const techToDirectorRate = techInterviews.length > 0 ? Math.round((passedTech / techInterviews.length) * 100) : 0;
+    const directorToSignedRate = directorInterviews.length > 0 ? Math.round((passedDirector / directorInterviews.length) * 100) : 0;
+    
+    // Average quality score (phone_score from interviews)
+    const scoredInterviews = phoneInterviews.filter(i => i.phone_score && i.phone_score > 0);
+    const avgQualityScore = scoredInterviews.length > 0 
+      ? (scoredInterviews.reduce((sum, i) => sum + (i.phone_score || 0), 0) / scoredInterviews.length).toFixed(1)
+      : 'N/A';
+    
+    // Candidates sourced by week
+    const candidatesByWeek = semesterWeeks.map(w => {
+      const weekEnd = new Date(w.start);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const count = semesterCandidates.filter(c => {
+        const d = new Date(c.created_at);
+        return d >= w.start && d <= weekEnd;
+      }).length;
+      return { week: w.label, value: count };
+    });
+    
+    // Upcoming interviews (phone) for their candidates
+    const today = new Date().toISOString().split('T')[0];
+    const upcomingInterviews = recruiterInterviews
+      .filter(i => i.scheduled_at && i.scheduled_at >= today && i.outcome === 'pending')
+      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+      .slice(0, 5);
+    
+    return {
+      totalSourced,
+      signedCount: signedCandidates.length,
+      activeCount: activeCandidates.length,
+      phoneToTechRate,
+      techToDirectorRate,
+      directorToSignedRate,
+      avgQualityScore,
+      candidatesByWeek,
+      upcomingInterviews,
+      signedCandidates: signedCandidates.slice(0, 5),
+      interviewCounts: {
+        phone: phoneInterviews.length,
+        technical: techInterviews.length,
+        director: directorInterviews.length,
+        signed: signedCandidates.length,
+      },
+    };
+  }, [recruiterCandidates, recruiterInterviews, currentSemester, semesterWeeks, isRecruiterView]);
+
   // Approval handlers
   const handleApproveRequest = async (requestId: string) => {
     setProcessingApproval(requestId);
@@ -589,6 +706,185 @@ export function DashboardPage() {
       setSelectedSemester(semesterOptions[currentIndex - 1].value);
     }
   };
+
+  // Recruiter Dashboard
+  if (isRecruiterView) {
+    return (
+      <div className="min-h-screen">
+        <Header
+          title={`Welcome back, ${user?.full_name?.split(' ')[0] || 'Recruiter'}`}
+          subtitle="Your Recruitment Dashboard"
+        />
+
+        <div className="p-6 space-y-6">
+          {isLoading ? (
+            <Card>
+              <div className="text-center py-12 text-brand-grey-400">Loading dashboard...</div>
+            </Card>
+          ) : recruiterStats ? (
+            <>
+              {/* Key Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-cyan-100 rounded-lg">
+                      <Users className="h-6 w-6 text-cyan-600" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.totalSourced}</p>
+                      <p className="text-sm text-brand-grey-400">Candidates Sourced</p>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-green-100 rounded-lg">
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.signedCount}</p>
+                      <p className="text-sm text-brand-grey-400">Signed</p>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-amber-100 rounded-lg">
+                      <Target className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.activeCount}</p>
+                      <p className="text-sm text-brand-grey-400">Active Candidates</p>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-purple-100 rounded-lg">
+                      <Award className="h-6 w-6 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.avgQualityScore}</p>
+                      <p className="text-sm text-brand-grey-400">Avg Quality Score</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Main Content */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Conversion Funnel */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Your Pipeline</CardTitle>
+                  </CardHeader>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-full bg-cyan-500 text-white py-3 px-4 rounded-lg text-center">
+                      Phone: {recruiterStats.interviewCounts.phone}
+                    </div>
+                    <div className="text-sm text-brand-grey-400">↓ {recruiterStats.phoneToTechRate}%</div>
+                    <div className="w-4/5 bg-blue-500 text-white py-3 px-4 rounded-lg text-center">
+                      Technical: {recruiterStats.interviewCounts.technical}
+                    </div>
+                    <div className="text-sm text-brand-grey-400">↓ {recruiterStats.techToDirectorRate}%</div>
+                    <div className="w-3/5 bg-amber-500 text-white py-3 px-4 rounded-lg text-center">
+                      Director: {recruiterStats.interviewCounts.director}
+                    </div>
+                    <div className="text-sm text-brand-grey-400">↓ {recruiterStats.directorToSignedRate}%</div>
+                    <div className="w-2/5 bg-green-500 text-white py-3 px-4 rounded-lg text-center">
+                      Signed: {recruiterStats.signedCount}
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Weekly Activity Chart */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Candidates Sourced</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={handlePrevSemester}>
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm text-brand-grey-500">{currentSemester?.label}</span>
+                        <Button variant="ghost" size="sm" onClick={handleNextSemester}>
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <div className="h-40">
+                    <WeeklyChart data={recruiterStats.candidatesByWeek} title="Candidates" colour="cyan" />
+                  </div>
+                </Card>
+
+                {/* Upcoming Interviews */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Upcoming Interviews</CardTitle>
+                  </CardHeader>
+                  {recruiterStats.upcomingInterviews.length > 0 ? (
+                    <div className="space-y-2">
+                      {recruiterStats.upcomingInterviews.map((interview: any) => {
+                        const candidate = recruiterCandidates.find(c => c.id === interview.candidate_id);
+                        return (
+                          <div key={interview.id} className="flex items-center justify-between p-3 bg-brand-grey-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <Phone className="h-4 w-4 text-cyan-500" />
+                              <div>
+                                <p className="font-medium text-brand-slate-900 text-sm">
+                                  {candidate?.first_name} {candidate?.last_name}
+                                </p>
+                                <p className="text-xs text-brand-grey-400">
+                                  {formatDate(interview.scheduled_at)}
+                                </p>
+                              </div>
+                            </div>
+                            <Badge variant="cyan">
+                              {interview.stage === 'phone_qualification' ? 'Phone' : 
+                               interview.stage === 'technical_interview' ? 'Tech' : 'Director'}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-center py-6 text-brand-grey-400">No upcoming interviews</p>
+                  )}
+                </Card>
+              </div>
+
+              {/* Recent Signed Candidates */}
+              {recruiterStats.signedCandidates.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                      Your Signed Candidates
+                    </CardTitle>
+                  </CardHeader>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {recruiterStats.signedCandidates.map((candidate: any) => (
+                      <div 
+                        key={candidate.id} 
+                        className="p-4 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 transition-colors"
+                        onClick={() => navigate(`/candidates/${candidate.id}`)}
+                      >
+                        <p className="font-medium text-green-800">
+                          {candidate.first_name} {candidate.last_name}
+                        </p>
+                        <p className="text-sm text-green-600">{candidate.current_title || 'Consultant'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   if (!stats) return null;
 
