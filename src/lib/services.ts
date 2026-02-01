@@ -40,11 +40,16 @@ export interface CreateCandidateInput {
   phone?: string;
   location?: string;
   linkedin_url?: string;
+  current_title?: string;
+  current_company?: string;
+  reason_for_leaving?: string;
+  five_year_plan?: string;
   years_experience?: number;
   degree?: string;
   summary?: string;
   skills?: string[];
   previous_companies?: string[];
+  current_salary?: number;
   minimum_salary_expected?: number;
   right_to_work?: string;
   security_vetting?: string;

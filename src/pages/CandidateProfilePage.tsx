@@ -31,6 +31,7 @@ import {
   Upload,
   ArrowRight,
   UserPlus,
+  Target,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
@@ -342,6 +343,10 @@ export function CandidateProfilePage() {
     outcome: '',
     years_experience: '',
     location: '',
+    current_role: '',
+    current_company: '',
+    reason_for_leaving: '',
+    current_salary: '',
     minimum_salary_expected: '',
     expected_day_rate: '',
     right_to_work: '',
@@ -360,11 +365,13 @@ export function CandidateProfilePage() {
   const [phoneNationalities, setPhoneNationalities] = useState<string[]>(['']);
   const [phoneSkills, setPhoneSkills] = useState<string[]>([]);
   const [phoneSkillInput, setPhoneSkillInput] = useState('');
+  const [phonePreviousCompanies, setPhonePreviousCompanies] = useState<string[]>([]);
   
   // Technical interview form
   const [techForm, setTechForm] = useState({
     outcome: '',
     salary_proposed: '',
+    five_year_plan: '',
     communication_score: '',
     professionalism_score: '',
     enthusiasm_score: '',
@@ -584,6 +591,10 @@ export function CandidateProfilePage() {
         outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
         years_experience: candidate?.years_experience?.toString() || '',
         location: candidate?.location || '',
+        current_role: candidate?.current_title || '',
+        current_company: candidate?.current_company || '',
+        reason_for_leaving: candidate?.reason_for_leaving || '',
+        current_salary: candidate?.current_salary?.toString() || '',
         minimum_salary_expected: candidate?.minimum_salary_expected?.toString() || '',
         expected_day_rate: candidate?.expected_day_rate?.toString() || '',
         right_to_work: candidate?.right_to_work || '',
@@ -603,10 +614,12 @@ export function CandidateProfilePage() {
       const existingNationalities = candidate?.nationalities || [];
       setPhoneNationalities(existingNationalities.length > 0 ? existingNationalities : ['']);
       setPhoneSkills(candidate?.skills || []);
+      setPhonePreviousCompanies(candidate?.previous_companies || []);
     } else if (interview.stage === 'technical_interview') {
       setTechForm({
         outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',
         salary_proposed: interview.salary_proposed?.toString() || '',
+        five_year_plan: candidate?.five_year_plan || '',
         communication_score: interview.communication_score?.toString() || '',
         professionalism_score: interview.professionalism_score?.toString() || '',
         enthusiasm_score: interview.enthusiasm_score?.toString() || '',
@@ -656,10 +669,20 @@ export function CandidateProfilePage() {
       // Filter out empty nationalities
       const validNationalities = phoneNationalities.filter(n => n.trim() !== '');
       
+      // Auto-add current company to previous companies if not already there
+      let updatedPreviousCompanies = [...phonePreviousCompanies];
+      if (phoneForm.current_company && !updatedPreviousCompanies.includes(phoneForm.current_company)) {
+        updatedPreviousCompanies = [phoneForm.current_company, ...updatedPreviousCompanies];
+      }
+      
       // Update candidate with admin info from phone call
       await candidatesService.update(id!, {
         years_experience: phoneForm.years_experience ? parseInt(phoneForm.years_experience) : undefined,
         location: phoneForm.location || undefined,
+        current_title: phoneForm.current_role || undefined,
+        current_company: phoneForm.current_company || undefined,
+        reason_for_leaving: phoneForm.reason_for_leaving || undefined,
+        current_salary: phoneForm.current_salary ? parseInt(phoneForm.current_salary) : undefined,
         minimum_salary_expected: phoneForm.minimum_salary_expected ? parseInt(phoneForm.minimum_salary_expected) : undefined,
         expected_day_rate: phoneForm.expected_day_rate ? parseFloat(phoneForm.expected_day_rate) : undefined,
         right_to_work: phoneForm.right_to_work || undefined,
@@ -669,6 +692,7 @@ export function CandidateProfilePage() {
         open_to_relocate: phoneForm.open_to_relocate || undefined,
         nationalities: validNationalities.length > 0 ? validNationalities : undefined,
         skills: phoneSkills.length > 0 ? phoneSkills : undefined,
+        previous_companies: updatedPreviousCompanies.length > 0 ? updatedPreviousCompanies : undefined,
       });
       
       // Update interview
@@ -718,9 +742,10 @@ export function CandidateProfilePage() {
     setValidationErrors([]);
     setIsSubmitting(true);
     try {
-      // Update candidate skills
+      // Update candidate skills and five year plan
       await candidatesService.update(id!, {
         skills: techSkills.length > 0 ? techSkills : undefined,
+        five_year_plan: techForm.five_year_plan || undefined,
       });
       
       // Update interview
@@ -1446,9 +1471,64 @@ export function CandidateProfilePage() {
 
           {/* Right Column - Details */}
           <div className="space-y-6">
+            {/* Current Employment */}
+            {(candidate.current_title || candidate.current_company || candidate.reason_for_leaving) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Current Employment
+                  </CardTitle>
+                </CardHeader>
+                <div className="space-y-3">
+                  {candidate.current_title && (
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Current Role</p>
+                      <p className="text-sm font-medium text-brand-slate-700">{candidate.current_title}</p>
+                    </div>
+                  )}
+                  {candidate.current_company && (
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Current Company</p>
+                      <p className="text-sm font-medium text-brand-slate-700">{candidate.current_company}</p>
+                    </div>
+                  )}
+                  {candidate.current_salary && (
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Current Salary</p>
+                      <p className="text-sm font-medium text-brand-slate-700">£{candidate.current_salary.toLocaleString()}</p>
+                    </div>
+                  )}
+                  {candidate.reason_for_leaving && (
+                    <div>
+                      <p className="text-xs text-brand-grey-400">Reason for Leaving</p>
+                      <p className="text-sm text-brand-slate-600">{candidate.reason_for_leaving}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {/* Career Aspirations */}
+            {candidate.five_year_plan && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Career Aspirations
+                  </CardTitle>
+                </CardHeader>
+                <div>
+                  <p className="text-xs text-brand-grey-400 mb-1">5-Year Plan</p>
+                  <p className="text-sm text-brand-slate-600">{candidate.five_year_plan}</p>
+                </div>
+              </Card>
+            )}
+
+            {/* Professional Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Details</CardTitle>
+                <CardTitle>Professional Details</CardTitle>
               </CardHeader>
               <div className="space-y-4">
                 {candidate.years_experience && (
@@ -1484,42 +1564,63 @@ export function CandidateProfilePage() {
                     </div>
                   </div>
                 )}
-                
-                {candidate.minimum_salary_expected && (
-                  <div className="flex items-center gap-3">
-                    <PoundSterling className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Minimum Salary Expected</p>
-                      <p className="text-sm text-brand-slate-700">£{candidate.minimum_salary_expected.toLocaleString()}</p>
-                    </div>
-                  </div>
-                )}
+              </div>
+            </Card>
 
-                {candidate.expected_day_rate && (
-                  <div className="flex items-center gap-3">
-                    <PoundSterling className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Expected Day Rate</p>
-                      <p className="text-sm text-brand-slate-700">£{candidate.expected_day_rate}/day</p>
+            {/* Compensation */}
+            {(candidate.minimum_salary_expected || candidate.expected_day_rate || candidate.contract_preference) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PoundSterling className="h-4 w-4" />
+                    Compensation
+                  </CardTitle>
+                </CardHeader>
+                <div className="space-y-4">
+                  {candidate.contract_preference && (
+                    <div className="flex items-center gap-3">
+                      <Briefcase className="h-4 w-4 text-brand-grey-400" />
+                      <div>
+                        <p className="text-xs text-brand-grey-400">Contract Preference</p>
+                        <p className="text-sm text-brand-slate-700">
+                          {candidate.contract_preference === 'contractor' ? 'Contractor' :
+                           candidate.contract_preference === 'permanent' ? 'Permanent' :
+                           candidate.contract_preference === 'open_to_both' ? 'Open to Both' :
+                           candidate.contract_preference}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {candidate.contract_preference && (
-                  <div className="flex items-center gap-3">
-                    <Briefcase className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Contract Preference</p>
-                      <p className="text-sm text-brand-slate-700">
-                        {candidate.contract_preference === 'contractor' ? 'Contractor' :
-                         candidate.contract_preference === 'permanent' ? 'Permanent' :
-                         candidate.contract_preference === 'open_to_both' ? 'Open to Both' :
-                         candidate.contract_preference}
-                      </p>
+                  )}
+                  
+                  {candidate.minimum_salary_expected && (
+                    <div className="flex items-center gap-3">
+                      <PoundSterling className="h-4 w-4 text-brand-grey-400" />
+                      <div>
+                        <p className="text-xs text-brand-grey-400">Minimum Salary Expected</p>
+                        <p className="text-sm text-brand-slate-700">£{candidate.minimum_salary_expected.toLocaleString()}</p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
+                  {candidate.expected_day_rate && (
+                    <div className="flex items-center gap-3">
+                      <PoundSterling className="h-4 w-4 text-brand-grey-400" />
+                      <div>
+                        <p className="text-xs text-brand-grey-400">Expected Day Rate</p>
+                        <p className="text-sm text-brand-slate-700">£{candidate.expected_day_rate}/day</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {/* Availability & Logistics */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Availability</CardTitle>
+              </CardHeader>
+              <div className="space-y-4">
                 {candidate.notice_period && (
                   <div className="flex items-center gap-3">
                     <Clock className="h-4 w-4 text-brand-grey-400" />
@@ -1853,6 +1954,31 @@ export function CandidateProfilePage() {
               placeholder="e.g., 5"
             />
 
+            {/* Current Employment */}
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Input
+                label="Current Role"
+                value={phoneForm.current_role}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, current_role: e.target.value }))}
+                placeholder="e.g., Senior Developer"
+              />
+              <Input
+                label="Current Company"
+                value={phoneForm.current_company}
+                onChange={(e) => setPhoneForm(prev => ({ ...prev, current_company: e.target.value }))}
+                placeholder="e.g., Acme Corp"
+              />
+            </div>
+            
+            <Textarea
+              label="Reason for Leaving"
+              value={phoneForm.reason_for_leaving}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, reason_for_leaving: e.target.value }))}
+              placeholder="Why are they looking to move?"
+              rows={2}
+              className="mt-4"
+            />
+
             <div className="grid grid-cols-2 gap-4 mt-4">
               <Select
                 label="Right to Work in UK"
@@ -1904,6 +2030,16 @@ export function CandidateProfilePage() {
               />
             </div>
 
+            {/* Current Salary */}
+            <Input
+              label="Current Salary (£)"
+              type="number"
+              value={phoneForm.current_salary}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, current_salary: e.target.value }))}
+              placeholder="e.g., 65000"
+              className="mt-4"
+            />
+
             {/* Contract Preference with dynamic salary/rate */}
             <div className="mt-4">
               <Select
@@ -1922,7 +2058,7 @@ export function CandidateProfilePage() {
               {phoneForm.contract_preference === 'open_to_both' && (
                 <div className="grid grid-cols-2 gap-4 mt-3">
                   <Input
-                    label="Min Salary (£)"
+                    label="Min Salary Expected (£)"
                     type="number"
                     value={phoneForm.minimum_salary_expected}
                     onChange={(e) => setPhoneForm(prev => ({ ...prev, minimum_salary_expected: e.target.value }))}
@@ -2123,8 +2259,20 @@ export function CandidateProfilePage() {
         shake={isShaking}
       >
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-          {/* Skills Section */}
+          {/* Career Progression */}
           <div>
+            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Career Progression</h4>
+            <Textarea
+              label="5-Year Plan"
+              value={techForm.five_year_plan}
+              onChange={(e) => setTechForm(prev => ({ ...prev, five_year_plan: e.target.value }))}
+              placeholder="Where does the candidate see themselves in 5 years? What are their career goals and aspirations?"
+              rows={3}
+            />
+          </div>
+
+          {/* Skills Section */}
+          <div className="border-t border-brand-grey-200 pt-4">
             <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Technical Skills (add or remove based on interview)</h4>
             <div className="mb-2">
               <Input

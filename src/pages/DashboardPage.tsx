@@ -322,9 +322,8 @@ export function DashboardPage() {
   const [pendingOffers, setPendingOffers] = useState<DbOffer[]>([]);
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
 
-  // Determine if recruiter view (pure recruiter, not manager/director/admin)
-  const isRecruiterView = permissions.isRecruiter && 
-    !permissions.isRecruiterManager && 
+  // Determine if recruiter view (recruiter or recruiter_manager, not business/admin roles)
+  const isRecruiterView = (permissions.isRecruiter || permissions.isRecruiterManager) && 
     !permissions.isBusinessManager && 
     !permissions.isBusinessDirector && 
     !permissions.isAdmin;
@@ -589,11 +588,38 @@ export function DashboardPage() {
     const techToDirectorRate = techInterviews.length > 0 ? Math.round((passedTech / techInterviews.length) * 100) : 0;
     const directorToSignedRate = directorInterviews.length > 0 ? Math.round((passedDirector / directorInterviews.length) * 100) : 0;
     
-    // Average quality score (phone_score from interviews)
-    const scoredInterviews = phoneInterviews.filter(i => i.phone_score && i.phone_score > 0);
-    const avgQualityScore = scoredInterviews.length > 0 
-      ? (scoredInterviews.reduce((sum, i) => sum + (i.phone_score || 0), 0) / scoredInterviews.length).toFixed(1)
-      : 'N/A';
+    // === ASSESSMENT COMPARISON ===
+    // Get candidate IDs that progressed to technical interviews
+    const candidatesWithTechInterview = new Set(techInterviews.map(i => i.candidate_id));
+    
+    // Recruiter's average (only for candidates who progressed to technical)
+    const phoneInterviewsForProgressed = phoneInterviews.filter(i => 
+      candidatesWithTechInterview.has(i.candidate_id) && 
+      i.communication_score && i.professionalism_score && i.enthusiasm_score && i.cultural_fit_score
+    );
+    
+    let recruiterAvgScore = 'N/A';
+    if (phoneInterviewsForProgressed.length > 0) {
+      const totalPhoneScores = phoneInterviewsForProgressed.reduce((sum, i) => {
+        const avg = (i.communication_score + i.professionalism_score + i.enthusiasm_score + i.cultural_fit_score) / 4;
+        return sum + avg;
+      }, 0);
+      recruiterAvgScore = (totalPhoneScores / phoneInterviewsForProgressed.length).toFixed(1);
+    }
+    
+    // Technical + Director average (for same candidates)
+    const seniorInterviews = [...techInterviews, ...directorInterviews].filter(i => 
+      i.communication_score && i.professionalism_score && i.enthusiasm_score && i.cultural_fit_score
+    );
+    
+    let seniorAvgScore = 'N/A';
+    if (seniorInterviews.length > 0) {
+      const totalSeniorScores = seniorInterviews.reduce((sum, i) => {
+        const avg = (i.communication_score + i.professionalism_score + i.enthusiasm_score + i.cultural_fit_score) / 4;
+        return sum + avg;
+      }, 0);
+      seniorAvgScore = (totalSeniorScores / seniorInterviews.length).toFixed(1);
+    }
     
     // Candidates sourced by week
     const candidatesByWeek = semesterWeeks.map(w => {
@@ -620,7 +646,9 @@ export function DashboardPage() {
       phoneToTechRate,
       techToDirectorRate,
       directorToSignedRate,
-      avgQualityScore,
+      recruiterAvgScore,
+      seniorAvgScore,
+      progressedCount: candidatesWithTechInterview.size,
       candidatesByWeek,
       upcomingInterviews,
       signedCandidates: signedCandidates.slice(0, 5),
@@ -724,7 +752,7 @@ export function DashboardPage() {
           ) : recruiterStats ? (
             <>
               {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <Card className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-3 bg-cyan-100 rounded-lg">
@@ -764,12 +792,38 @@ export function DashboardPage() {
                       <Award className="h-6 w-6 text-purple-600" />
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.avgQualityScore}</p>
-                      <p className="text-sm text-brand-grey-400">Avg Quality Score</p>
+                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.recruiterAvgScore}</p>
+                      <p className="text-sm text-brand-grey-400">Your Avg Rating</p>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-blue-100 rounded-lg">
+                      <Award className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.seniorAvgScore}</p>
+                      <p className="text-sm text-brand-grey-400">Senior Avg Rating</p>
                     </div>
                   </div>
                 </Card>
               </div>
+
+              {/* Assessment Comparison Explanation */}
+              <Card className="p-4 bg-blue-50 border-blue-200">
+                <div className="flex items-start gap-3">
+                  <Award className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium">Assessment Comparison</p>
+                    <p className="text-blue-600 mt-1">
+                      Your Avg Rating is calculated from your phone interviews for candidates who progressed to technical interviews ({recruiterStats.progressedCount} candidates). 
+                      Senior Avg Rating shows how technical and director interviewers rated those same candidates. 
+                      This helps you calibrate your assessments with the rest of the team.
+                    </p>
+                  </div>
+                </div>
+              </Card>
 
               {/* Main Content */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
