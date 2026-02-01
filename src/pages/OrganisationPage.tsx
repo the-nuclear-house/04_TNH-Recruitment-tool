@@ -216,12 +216,23 @@ export function OrganisationPage() {
     
     setIsDeleting(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userToDelete.id);
+      // Use edge function to delete user (handles both auth and users table)
+      const { data: sessionData } = await supabase.auth.getSession();
       
-      if (error) throw error;
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session?.access_token}`,
+        },
+        body: JSON.stringify({ userId: userToDelete.id }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
+      }
       
       toast.success('User Removed', `${userToDelete.full_name} has been removed`);
       setIsDeleteDialogOpen(false);
@@ -229,7 +240,7 @@ export function OrganisationPage() {
       loadUsers();
     } catch (error: any) {
       console.error('Error deleting user:', error);
-      toast.error('Error', 'Failed to delete user');
+      toast.error('Error', error.message || 'Failed to delete user');
     } finally {
       setIsDeleting(false);
     }
