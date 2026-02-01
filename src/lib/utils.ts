@@ -229,6 +229,24 @@ export const interviewStageLabels = {
   director_interview: 'Director Interview',
 } as const;
 
+// Generate time options with 30-minute intervals
+export function getTimeOptions(): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = [];
+  for (let hour = 6; hour <= 21; hour++) {
+    for (const minute of ['00', '30']) {
+      const value = `${hour.toString().padStart(2, '0')}:${minute}`;
+      const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const label = `${hour12}:${minute} ${ampm}`;
+      options.push({ value, label });
+    }
+  }
+  return options;
+}
+
+// Time options constant for Select components
+export const timeOptions = getTimeOptions();
+
 // Compute candidate pipeline status based on their interviews
 export interface InterviewForStatus {
   stage: string;

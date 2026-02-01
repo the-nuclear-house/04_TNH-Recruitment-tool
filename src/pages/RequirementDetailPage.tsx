@@ -38,11 +38,11 @@ import {
   Textarea,
   SearchableSelect,
 } from '@/components/ui';
-import { formatDate, computeCandidatePipelineStatus } from '@/lib/utils';
+import { formatDate, computeCandidatePipelineStatus, timeOptions } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, consultantsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbConsultant } from '@/lib/services';
 import { CreateMissionModal } from '@/components/CreateMissionModal';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
@@ -164,9 +164,16 @@ export function RequirementDetailPage() {
   // Create Mission modal
   const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
   const [existingMission, setExistingMission] = useState<any>(null);
+  const [consultants, setConsultants] = useState<DbConsultant[]>([]);
   
   // Check if user can schedule assessments (Business Manager, Business Director, Admin)
   const canScheduleAssessments = user?.roles?.some(r => ['admin', 'superadmin', 'business_director', 'business_manager'].includes(r)) ?? false;
+
+  // Check if a candidate has been converted to consultant
+  const isCandidateConsultant = (candidateId: string | null | undefined): boolean => {
+    if (!candidateId) return false;
+    return consultants.some(c => c.candidate_id === candidateId);
+  };
 
   useEffect(() => {
     if (id) {
@@ -177,13 +184,14 @@ export function RequirementDetailPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [reqData, usersData, appsData, contactsData, companiesData, allInterviews] = await Promise.all([
+      const [reqData, usersData, appsData, contactsData, companiesData, allInterviews, allConsultants] = await Promise.all([
         requirementsService.getById(id!),
         usersService.getAll(),
         applicationsService.getByRequirement(id!),
         contactsService.getAll(),
         companiesService.getAll(),
         interviewsService.getAll(),
+        consultantsService.getAll(),
       ]);
       
       setRequirement(reqData);
@@ -191,6 +199,7 @@ export function RequirementDetailPage() {
       setAllUsers(usersData);
       setContacts(contactsData);
       setCompanies(companiesData);
+      setConsultants(allConsultants);
       
       // Group interviews by candidate for pipeline status
       const interviewsByCandidate: Record<string, any[]> = {};
@@ -684,7 +693,16 @@ export function RequirementDetailPage() {
                     variant="primary"
                     size="sm"
                     leftIcon={<Rocket className="h-4 w-4" />}
-                    onClick={() => setIsCreateMissionModalOpen(true)}
+                    onClick={() => {
+                      if (isCandidateConsultant(requirement.winning_candidate_id)) {
+                        setIsCreateMissionModalOpen(true);
+                      } else {
+                        toast.warning(
+                          'Cannot Create Mission Yet',
+                          'Progress this candidate to consultant before creating a mission.'
+                        );
+                      }
+                    }}
                   >
                     Create Mission
                   </Button>
@@ -1158,11 +1176,12 @@ export function RequirementDetailPage() {
               value={assessmentForm.scheduled_date}
               onChange={(e) => setAssessmentForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
             />
-            <Input
+            <Select
               label="Time"
-              type="time"
+              options={timeOptions}
               value={assessmentForm.scheduled_time}
               onChange={(e) => setAssessmentForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+              placeholder="Select time"
             />
           </div>
           

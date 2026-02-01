@@ -158,7 +158,8 @@ export function CandidatesPage() {
       toast.success('CV Parsed', `Extracted: ${parsed.skills.length} skills, ${parsed.previousCompanies.length} companies`);
     } catch (error) {
       console.error('Error parsing CV:', error);
-      toast.error('Parse Error', 'Could not extract data from CV. Please fill in manually.');
+      const errorMessage = error instanceof Error ? error.message : 'Could not extract data from CV';
+      toast.error('Parse Error', `${errorMessage}. Please fill in manually.`);
     } finally {
       setIsParsing(false);
     }

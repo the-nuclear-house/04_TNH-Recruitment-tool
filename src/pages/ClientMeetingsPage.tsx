@@ -19,6 +19,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
+import { CreateMissionModal } from '@/components/CreateMissionModal';
 import { 
   Card, 
   Badge, 
@@ -32,7 +33,7 @@ import {
   Textarea,
   ConfirmDialog,
 } from '@/components/ui';
-import { formatDate } from '@/lib/utils';
+import { formatDate, timeOptions } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useToast } from '@/lib/stores/ui-store';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -45,6 +46,7 @@ import {
   requirementsService,
   applicationsService,
   usersService,
+  consultantsService,
   type DbCustomerMeeting,
   type DbCustomerAssessment,
   type DbContact,
@@ -52,6 +54,7 @@ import {
   type DbCompany,
   type DbRequirement,
   type DbUser,
+  type DbConsultant,
 } from '@/lib/services';
 
 type MeetingType = 'client_meeting' | 'candidate_assessment';
@@ -88,6 +91,7 @@ export function ClientMeetingsPage() {
   const [candidates, setCandidates] = useState<DbCandidate[]>([]);
   const [companies, setCompanies] = useState<DbCompany[]>([]);
   const [users, setUsers] = useState<DbUser[]>([]);
+  const [consultants, setConsultants] = useState<DbConsultant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Filters
@@ -142,6 +146,11 @@ export function ClientMeetingsPage() {
   const [selectedAssessment, setSelectedAssessment] = useState<DbCustomerAssessment | null>(null);
   const [isOutcomeModalOpen, setIsOutcomeModalOpen] = useState(false);
   const [outcomeNotes, setOutcomeNotes] = useState('');
+  
+  // Mission creation prompt state
+  const [isCreateMissionPromptOpen, setIsCreateMissionPromptOpen] = useState(false);
+  const [assessmentForMission, setAssessmentForMission] = useState<DbCustomerAssessment | null>(null);
+  const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -150,13 +159,14 @@ export function ClientMeetingsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [meetings, assmnts, conts, cands, comps, usrs] = await Promise.all([
+      const [meetings, assmnts, conts, cands, comps, usrs, consults] = await Promise.all([
         customerMeetingsService.getAll(),
         customerAssessmentsService.getAll(),
         contactsService.getAll(),
         candidatesService.getAll(),
         companiesService.getAll(),
         usersService.getAll(),
+        consultantsService.getAll(),
       ]);
       setCustomerMeetings(meetings);
       setAssessments(assmnts);
@@ -164,6 +174,7 @@ export function ClientMeetingsPage() {
       setCandidates(cands);
       setCompanies(comps);
       setUsers(usrs);
+      setConsultants(consults);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error', 'Failed to load meetings');
@@ -182,6 +193,12 @@ export function ClientMeetingsPage() {
     setViewingItem(assessment);
     setViewingItemType('assessment');
     setIsDetailModalOpen(true);
+  };
+
+  // Check if a candidate has been converted to consultant
+  const isCandidateConsultant = (candidateId: string | null | undefined): boolean => {
+    if (!candidateId) return false;
+    return consultants.some(c => c.candidate_id === candidateId);
   };
 
   const handleDeleteClick = (item: any, type: 'meeting' | 'assessment') => {
@@ -377,6 +394,21 @@ export function ClientMeetingsPage() {
       setViewingItemType(null);
       setSelectedAssessment(null);
       setOutcomeNotes('');
+      
+      // If GO, check if candidate is consultant before prompting mission creation
+      if (outcome === 'go') {
+        const candidateId = targetAssessment.candidate_id || targetAssessment.application?.candidate?.id;
+        if (isCandidateConsultant(candidateId)) {
+          setAssessmentForMission(targetAssessment);
+          setIsCreateMissionPromptOpen(true);
+        } else {
+          toast.info(
+            'Candidate Not Yet a Consultant',
+            'Progress this candidate to consultant before creating a mission.'
+          );
+        }
+      }
+      
       loadData();
     } catch (error) {
       console.error('Error updating outcome:', error);
@@ -713,12 +745,36 @@ export function ClientMeetingsPage() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedAssessment(meeting as DbCustomerAssessment);
                             setIsOutcomeModalOpen(true);
                           }}
                         >
                           Record Outcome
+                        </Button>
+                      )}
+                      
+                      {/* Create Mission button for GO assessments */}
+                      {meeting.outcome === 'go' && (
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
+                            if (isCandidateConsultant(candidateId)) {
+                              setAssessmentForMission(meeting as DbCustomerAssessment);
+                              setIsCreateMissionModalOpen(true);
+                            } else {
+                              toast.warning(
+                                'Cannot Create Mission Yet',
+                                'Progress this candidate to consultant before creating a mission.'
+                              );
+                            }
+                          }}
+                        >
+                          Create Mission
                         </Button>
                       )}
                     </div>
@@ -799,11 +855,12 @@ export function ClientMeetingsPage() {
                   value={meetingForm.scheduled_at}
                   onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduled_at: e.target.value }))}
                 />
-                <Input
+                <Select
                   label="Time"
-                  type="time"
+                  options={timeOptions}
                   value={meetingForm.scheduled_time}
                   onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+                  placeholder="Select time"
                 />
               </div>
 
@@ -926,11 +983,12 @@ export function ClientMeetingsPage() {
                   value={assessmentForm.scheduled_date}
                   onChange={(e) => setAssessmentForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
                 />
-                <Input
+                <Select
                   label="Time"
-                  type="time"
+                  options={timeOptions}
                   value={assessmentForm.scheduled_time}
                   onChange={(e) => setAssessmentForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+                  placeholder="Select time"
                 />
               </div>
 
@@ -1347,6 +1405,46 @@ export function ClientMeetingsPage() {
         variant="danger"
         isLoading={isSubmitting}
       />
+
+      {/* Create Mission Prompt */}
+      <ConfirmDialog
+        isOpen={isCreateMissionPromptOpen}
+        onClose={() => { 
+          setIsCreateMissionPromptOpen(false); 
+          setAssessmentForMission(null); 
+        }}
+        onConfirm={() => {
+          setIsCreateMissionPromptOpen(false);
+          setIsCreateMissionModalOpen(true);
+        }}
+        title="Create Mission"
+        message="Would you like to create a mission for this candidate now?"
+        confirmText="Yes, Create Mission"
+        cancelText="No, Later"
+        variant="primary"
+      />
+
+      {/* Create Mission Modal */}
+      {assessmentForMission && (
+        <CreateMissionModal
+          isOpen={isCreateMissionModalOpen}
+          onClose={() => {
+            setIsCreateMissionModalOpen(false);
+            setAssessmentForMission(null);
+          }}
+          onSuccess={() => {
+            setIsCreateMissionModalOpen(false);
+            setAssessmentForMission(null);
+            loadData();
+          }}
+          requirement={assessmentForMission.requirement_id ? { id: assessmentForMission.requirement_id } as any : undefined}
+          candidate={candidates.find(c => c.id === assessmentForMission.candidate_id)}
+          customer={(() => {
+            const contact = contacts.find(c => c.id === assessmentForMission.contact_id);
+            return contact ? companies.find(co => co.id === contact.company_id) as any : undefined;
+          })()}
+        />
+      )}
     </div>
   );
 }

@@ -51,6 +51,7 @@ import {
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
+import { timeOptions } from '@/lib/utils';
 import {
   companiesService,
   contactsService,
@@ -2230,11 +2231,12 @@ export function CustomersPage() {
               value={meetingForm.scheduled_at}
               onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduled_at: e.target.value }))}
             />
-            <Input
+            <Select
               label="Time"
-              type="time"
+              options={timeOptions}
               value={meetingForm.scheduled_time}
               onChange={(e) => setMeetingForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+              placeholder="Select time"
             />
           </div>
 
