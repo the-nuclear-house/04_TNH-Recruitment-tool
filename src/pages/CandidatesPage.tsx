@@ -83,6 +83,14 @@ export function CandidatesPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Open modal and pre-select current user as recruiter if they are a recruiter
+  const openAddCandidateModal = () => {
+    if (permissions.isRecruiter || permissions.isRecruiterManager) {
+      setFormData(prev => ({ ...prev, assigned_recruiter_id: user?.id || '' }));
+    }
+    setIsModalOpen(true);
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -289,8 +297,8 @@ export function CandidatesPage() {
       setCvFile(null);
       setCvParsed(false);
       
-      // Reload candidates
-      loadCandidates();
+      // Navigate to the new candidate's profile
+      navigate(`/candidates/${newCandidate.id}`);
     } catch (error) {
       console.error('Error creating candidate:', error);
       toast.error('Error', 'Failed to create candidate');
@@ -474,7 +482,7 @@ export function CandidatesPage() {
             <Button 
               variant="success"
               leftIcon={<Plus className="h-4 w-4" />}
-              onClick={() => setIsModalOpen(true)}
+              onClick={openAddCandidateModal}
             >
               Add Candidate
             </Button>
@@ -533,7 +541,7 @@ export function CandidatesPage() {
             description={candidates.length === 0 ? "Add your first candidate to get started." : "Try adjusting your filters."}
             action={{
               label: 'Add Candidate',
-              onClick: () => setIsModalOpen(true),
+              onClick: openAddCandidateModal,
             }}
           />
         ) : (
