@@ -629,7 +629,11 @@ export function CandidateProfilePage() {
         warnings: interview.warnings || '',
         general_comments: interview.general_comments || '',
       });
-      setTechSkills(candidate?.skills || []);
+      // Debug: log skills loading
+      console.log('Loading tech skills from candidate:', candidate?.skills);
+      const skillsToLoad = candidate?.skills || [];
+      console.log('Skills to load:', skillsToLoad);
+      setTechSkills(skillsToLoad);
     } else {
       setDirectorForm({
         outcome: interview.outcome === 'pending' ? '' : interview.outcome || '',

@@ -13,8 +13,8 @@ export interface DbCandidate {
   years_experience: number | null;
   degree: string | null;
   summary: string | null;
-  skills: string[];
-  previous_companies: string[];
+  skills: string[] | null;
+  previous_companies: string[] | null;
   minimum_salary_expected: number | null;
   right_to_work: string;
   security_vetting: string;
