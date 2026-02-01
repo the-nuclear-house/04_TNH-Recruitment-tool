@@ -114,6 +114,10 @@ export function MissionsPage() {
     notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Close mission modal
+  const [isCloseMissionModalOpen, setIsCloseMissionModalOpen] = useState(false);
+  const [closeMissionEndDate, setCloseMissionEndDate] = useState('');
 
   useEffect(() => {
     loadData();
@@ -586,8 +590,8 @@ export function MissionsPage() {
                       variant="success" 
                       leftIcon={<CheckCircle className="h-4 w-4" />}
                       onClick={() => {
-                        setEditForm(prev => ({ ...prev, status: 'completed' }));
-                        setIsEditing(true);
+                        setCloseMissionEndDate(selectedMission.end_date);
+                        setIsCloseMissionModalOpen(true);
                       }}
                     >
                       Close Mission
@@ -699,6 +703,56 @@ export function MissionsPage() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Close Mission Modal */}
+      <Modal
+        isOpen={isCloseMissionModalOpen}
+        onClose={() => setIsCloseMissionModalOpen(false)}
+        title="Close Mission"
+        description={`Mark ${selectedMission?.name} as completed`}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <Input
+            label="End Date"
+            type="date"
+            value={closeMissionEndDate}
+            onChange={(e) => setCloseMissionEndDate(e.target.value)}
+          />
+          
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="secondary" onClick={() => setIsCloseMissionModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="success" 
+              leftIcon={<CheckCircle className="h-4 w-4" />}
+              onClick={async () => {
+                if (!selectedMission) return;
+                setIsSaving(true);
+                try {
+                  await missionsService.update(selectedMission.id, {
+                    end_date: closeMissionEndDate,
+                    status: 'completed',
+                  });
+                  toast.success('Mission Closed', `${selectedMission.name} has been marked as completed`);
+                  setIsCloseMissionModalOpen(false);
+                  setIsMissionModalOpen(false);
+                  loadData();
+                } catch (error) {
+                  console.error('Error closing mission:', error);
+                  toast.error('Error', 'Failed to close mission');
+                } finally {
+                  setIsSaving(false);
+                }
+              }}
+              isLoading={isSaving}
+            >
+              Close Mission
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
