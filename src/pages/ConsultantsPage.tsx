@@ -1042,6 +1042,8 @@ export function ConsultantProfilePage() {
     exit_details: '',
     last_working_day: '',
   });
+  const [exitValidationErrors, setExitValidationErrors] = useState<string[]>([]);
+  const [isExitShaking, setIsExitShaking] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -1253,11 +1255,19 @@ export function ConsultantProfilePage() {
   };
 
   const handleSubmitExit = async () => {
-    if (!exitForm.last_working_day || !exitForm.exit_details) {
-      toast.error('Error', 'Please fill in all required fields');
+    const errors: string[] = [];
+    
+    if (!exitForm.last_working_day) errors.push('last_working_day');
+    if (!exitForm.exit_details.trim()) errors.push('exit_details');
+    
+    if (errors.length > 0) {
+      setExitValidationErrors(errors);
+      setIsExitShaking(true);
+      setTimeout(() => setIsExitShaking(false), 500);
       return;
     }
-
+    
+    setExitValidationErrors([]);
     const exitDate = new Date(exitForm.last_working_day);
 
     setIsSubmittingRequest(true);
@@ -2340,9 +2350,10 @@ export function ConsultantProfilePage() {
       {/* Exit Employee Modal */}
       <Modal
         isOpen={isExitModalOpen}
-        onClose={() => setIsExitModalOpen(false)}
+        onClose={() => { setIsExitModalOpen(false); setExitValidationErrors([]); }}
         title="Exit Employee"
         size="md"
+        shake={isExitShaking}
       >
         <div className="space-y-4">
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -2367,22 +2378,30 @@ export function ConsultantProfilePage() {
           />
 
           <Input
-            label="Last Working Day"
+            label="Last Working Day *"
             type="date"
             value={exitForm.last_working_day}
-            onChange={(e) => setExitForm(prev => ({ ...prev, last_working_day: e.target.value }))}
+            onChange={(e) => {
+              setExitForm(prev => ({ ...prev, last_working_day: e.target.value }));
+              setExitValidationErrors(prev => prev.filter(e => e !== 'last_working_day'));
+            }}
+            error={exitValidationErrors.includes('last_working_day') ? 'Last working day is required' : undefined}
           />
 
           <Textarea
-            label="Exit Details"
+            label="Exit Details / Justification *"
             value={exitForm.exit_details}
-            onChange={(e) => setExitForm(prev => ({ ...prev, exit_details: e.target.value }))}
-            placeholder="Provide details about the exit (notice period, handover, etc.)..."
+            onChange={(e) => {
+              setExitForm(prev => ({ ...prev, exit_details: e.target.value }));
+              setExitValidationErrors(prev => prev.filter(e => e !== 'exit_details'));
+            }}
+            placeholder="Provide details about the exit (notice period, handover, reason, etc.)..."
             rows={4}
+            error={exitValidationErrors.includes('exit_details') ? 'Exit details are required' : undefined}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setIsExitModalOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => { setIsExitModalOpen(false); setExitValidationErrors([]); }}>Cancel</Button>
             <Button variant="danger" onClick={handleSubmitExit} isLoading={isSubmittingRequest}>
               Submit Exit Request
             </Button>
