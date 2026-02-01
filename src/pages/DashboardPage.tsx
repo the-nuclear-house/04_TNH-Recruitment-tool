@@ -632,6 +632,36 @@ export function DashboardPage() {
       return { week: w.label, value: count };
     });
     
+    // Interviews by week (stacked by type)
+    const interviewsByWeek = semesterWeeks.map(w => {
+      const weekEnd = new Date(w.start);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekStart = w.start;
+      
+      const phoneCount = recruiterInterviews.filter(i => {
+        if (!i.scheduled_at || i.stage !== 'phone_qualification') return false;
+        const d = new Date(i.scheduled_at);
+        return d >= weekStart && d <= weekEnd;
+      }).length;
+      
+      const techCount = recruiterInterviews.filter(i => {
+        if (!i.scheduled_at || i.stage !== 'technical_interview') return false;
+        const d = new Date(i.scheduled_at);
+        return d >= weekStart && d <= weekEnd;
+      }).length;
+      
+      const directorCount = recruiterInterviews.filter(i => {
+        if (!i.scheduled_at || i.stage !== 'director_interview') return false;
+        const d = new Date(i.scheduled_at);
+        return d >= weekStart && d <= weekEnd;
+      }).length;
+      
+      return { week: w.label, phone: phoneCount, technical: techCount, director: directorCount };
+    });
+    
+    // Total interviews done
+    const totalInterviews = recruiterInterviews.filter(i => i.outcome !== 'pending').length;
+    
     // Upcoming interviews (phone) for their candidates
     const today = new Date().toISOString().split('T')[0];
     const upcomingInterviews = recruiterInterviews
@@ -642,14 +672,15 @@ export function DashboardPage() {
     return {
       totalSourced,
       signedCount: signedCandidates.length,
-      activeCount: activeCandidates.length,
+      totalInterviews,
       phoneToTechRate,
       techToDirectorRate,
       directorToSignedRate,
-      recruiterAvgScore,
-      seniorAvgScore,
+      recruiterAvgScore: parseFloat(recruiterAvgScore) || 0,
+      seniorAvgScore: parseFloat(seniorAvgScore) || 0,
       progressedCount: candidatesWithTechInterview.size,
       candidatesByWeek,
+      interviewsByWeek,
       upcomingInterviews,
       signedCandidates: signedCandidates.slice(0, 5),
       interviewCounts: {
@@ -737,6 +768,52 @@ export function DashboardPage() {
 
   // Recruiter Dashboard
   if (isRecruiterView) {
+    // Calculate dynamic funnel widths based on max value
+    const maxFunnelValue = Math.max(
+      recruiterStats?.interviewCounts.phone || 1,
+      recruiterStats?.interviewCounts.technical || 0,
+      recruiterStats?.interviewCounts.director || 0,
+      recruiterStats?.signedCount || 0
+    );
+    const getFunnelWidth = (value: number) => {
+      const percentage = maxFunnelValue > 0 ? (value / maxFunnelValue) * 100 : 0;
+      return Math.max(percentage, 20); // Minimum 20% width for visibility
+    };
+
+    // Star rating component
+    const StarRatingVisual = ({ rating, label }: { rating: number; label: string }) => {
+      const fullStars = Math.floor(rating);
+      const partialStar = rating - fullStars;
+      const emptyStars = 5 - Math.ceil(rating);
+      
+      return (
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-1 mb-1">
+            <span className="text-2xl font-bold text-brand-slate-900">{rating > 0 ? rating.toFixed(1) : 'N/A'}</span>
+          </div>
+          {rating > 0 && (
+            <div className="flex gap-0.5">
+              {[...Array(fullStars)].map((_, i) => (
+                <Award key={`full-${i}`} className="h-5 w-5 text-amber-400 fill-amber-400" />
+              ))}
+              {partialStar > 0 && (
+                <div className="relative">
+                  <Award className="h-5 w-5 text-gray-300" />
+                  <div className="absolute inset-0 overflow-hidden" style={{ width: `${partialStar * 100}%` }}>
+                    <Award className="h-5 w-5 text-amber-400 fill-amber-400" />
+                  </div>
+                </div>
+              )}
+              {[...Array(emptyStars)].map((_, i) => (
+                <Award key={`empty-${i}`} className="h-5 w-5 text-gray-300" />
+              ))}
+            </div>
+          )}
+          <p className="text-sm text-brand-grey-400 mt-1">{label}</p>
+        </div>
+      );
+    };
+
     return (
       <div className="min-h-screen">
         <Header
@@ -751,8 +828,8 @@ export function DashboardPage() {
             </Card>
           ) : recruiterStats ? (
             <>
-              {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {/* Row 1: Key Metrics (3 cards) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-3 bg-cyan-100 rounded-lg">
@@ -777,85 +854,70 @@ export function DashboardPage() {
                 </Card>
                 <Card className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-3 bg-amber-100 rounded-lg">
-                      <Target className="h-6 w-6 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.activeCount}</p>
-                      <p className="text-sm text-brand-grey-400">Active Candidates</p>
-                    </div>
-                  </div>
-                </Card>
-                <Card className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-purple-100 rounded-lg">
-                      <Award className="h-6 w-6 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.recruiterAvgScore}</p>
-                      <p className="text-sm text-brand-grey-400">Your Avg Rating</p>
-                    </div>
-                  </div>
-                </Card>
-                <Card className="p-4">
-                  <div className="flex items-center gap-3">
                     <div className="p-3 bg-blue-100 rounded-lg">
-                      <Award className="h-6 w-6 text-blue-600" />
+                      <Phone className="h-6 w-6 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.seniorAvgScore}</p>
-                      <p className="text-sm text-brand-grey-400">Senior Avg Rating</p>
+                      <p className="text-3xl font-bold text-brand-slate-900">{recruiterStats.totalInterviews}</p>
+                      <p className="text-sm text-brand-grey-400">Interviews Done</p>
                     </div>
                   </div>
                 </Card>
               </div>
 
-              {/* Assessment Comparison Explanation */}
-              <Card className="p-4 bg-blue-50 border-blue-200">
-                <div className="flex items-start gap-3">
-                  <Award className="h-5 w-5 text-blue-600 mt-0.5" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-medium">Assessment Comparison</p>
-                    <p className="text-blue-600 mt-1">
-                      Your Avg Rating is calculated from your phone interviews for candidates who progressed to technical interviews ({recruiterStats.progressedCount} candidates). 
-                      Senior Avg Rating shows how technical and director interviewers rated those same candidates. 
-                      This helps you calibrate your assessments with the rest of the team.
-                    </p>
-                  </div>
-                </div>
-              </Card>
+              {/* Row 2: Star Ratings Comparison (2 cards) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-6">
+                  <StarRatingVisual rating={recruiterStats.recruiterAvgScore} label="Your Avg Rating" />
+                </Card>
+                <Card className="p-6">
+                  <StarRatingVisual rating={recruiterStats.seniorAvgScore} label="Senior Avg Rating" />
+                </Card>
+              </div>
 
               {/* Main Content */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Conversion Funnel */}
+                {/* Dynamic Conversion Funnel */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Your Pipeline</CardTitle>
                   </CardHeader>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-full bg-cyan-500 text-white py-3 px-4 rounded-lg text-center">
+                  <div className="flex flex-col items-center gap-2 px-4">
+                    <div 
+                      className="bg-cyan-500 text-white py-3 px-4 rounded-lg text-center transition-all"
+                      style={{ width: `${getFunnelWidth(recruiterStats.interviewCounts.phone)}%` }}
+                    >
                       Phone: {recruiterStats.interviewCounts.phone}
                     </div>
                     <div className="text-sm text-brand-grey-400">↓ {recruiterStats.phoneToTechRate}%</div>
-                    <div className="w-4/5 bg-blue-500 text-white py-3 px-4 rounded-lg text-center">
+                    <div 
+                      className="bg-blue-500 text-white py-3 px-4 rounded-lg text-center transition-all"
+                      style={{ width: `${getFunnelWidth(recruiterStats.interviewCounts.technical)}%` }}
+                    >
                       Technical: {recruiterStats.interviewCounts.technical}
                     </div>
                     <div className="text-sm text-brand-grey-400">↓ {recruiterStats.techToDirectorRate}%</div>
-                    <div className="w-3/5 bg-amber-500 text-white py-3 px-4 rounded-lg text-center">
+                    <div 
+                      className="bg-amber-500 text-white py-3 px-4 rounded-lg text-center transition-all"
+                      style={{ width: `${getFunnelWidth(recruiterStats.interviewCounts.director)}%` }}
+                    >
                       Director: {recruiterStats.interviewCounts.director}
                     </div>
                     <div className="text-sm text-brand-grey-400">↓ {recruiterStats.directorToSignedRate}%</div>
-                    <div className="w-2/5 bg-green-500 text-white py-3 px-4 rounded-lg text-center">
+                    <div 
+                      className="bg-green-500 text-white py-3 px-4 rounded-lg text-center transition-all"
+                      style={{ width: `${getFunnelWidth(recruiterStats.signedCount)}%` }}
+                    >
                       Signed: {recruiterStats.signedCount}
                     </div>
                   </div>
                 </Card>
 
-                {/* Weekly Activity Chart */}
+                {/* Weekly Activity Chart - Stacked Interviews */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle>Candidates Sourced</CardTitle>
+                      <CardTitle>Weekly Activity</CardTitle>
                       <div className="flex items-center gap-2">
                         <Button variant="ghost" size="sm" onClick={handlePrevSemester}>
                           <ChevronLeft className="h-4 w-4" />
@@ -867,8 +929,58 @@ export function DashboardPage() {
                       </div>
                     </div>
                   </CardHeader>
-                  <div className="h-40">
-                    <WeeklyChart data={recruiterStats.candidatesByWeek} title="Candidates" colour="cyan" />
+                  <div className="px-4">
+                    {/* Legend */}
+                    <div className="flex gap-4 mb-3 text-xs">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-cyan-500 rounded" />
+                        <span>Phone</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-blue-500 rounded" />
+                        <span>Technical</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-amber-500 rounded" />
+                        <span>Director</span>
+                      </div>
+                    </div>
+                    {/* Stacked Bar Chart */}
+                    <div className="flex items-end justify-between h-32 gap-1">
+                      {recruiterStats.interviewsByWeek.map((week: any, idx: number) => {
+                        const total = week.phone + week.technical + week.director;
+                        const maxHeight = 100;
+                        const scale = total > 0 ? maxHeight / Math.max(...recruiterStats.interviewsByWeek.map((w: any) => w.phone + w.technical + w.director), 1) : 0;
+                        return (
+                          <div key={idx} className="flex-1 flex flex-col items-center">
+                            <div className="w-full flex flex-col-reverse">
+                              {week.phone > 0 && (
+                                <div 
+                                  className="bg-cyan-500 w-full rounded-t"
+                                  style={{ height: `${week.phone * scale}px` }}
+                                  title={`Phone: ${week.phone}`}
+                                />
+                              )}
+                              {week.technical > 0 && (
+                                <div 
+                                  className="bg-blue-500 w-full"
+                                  style={{ height: `${week.technical * scale}px` }}
+                                  title={`Technical: ${week.technical}`}
+                                />
+                              )}
+                              {week.director > 0 && (
+                                <div 
+                                  className="bg-amber-500 w-full rounded-t"
+                                  style={{ height: `${week.director * scale}px` }}
+                                  title={`Director: ${week.director}`}
+                                />
+                              )}
+                            </div>
+                            <span className="text-[10px] text-brand-grey-400 mt-1">{week.week}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </Card>
 

@@ -56,28 +56,37 @@ CREATE TABLE public.candidates (
   
   -- Professional information
   current_role TEXT,
+  current_title TEXT,
   current_company TEXT,
+  reason_for_leaving TEXT,
+  five_year_plan TEXT,
   years_experience INTEGER,
   degree TEXT,
   summary TEXT,
   
   -- Skills (stored as array for easy querying)
   skills TEXT[] DEFAULT '{}',
+  previous_companies TEXT[] DEFAULT '{}',
+  nationalities TEXT[] DEFAULT '{}',
   
   -- Admin information
   right_to_work TEXT NOT NULL DEFAULT 'unknown' CHECK (right_to_work IN (
     'british_citizen', 'settled_status', 'pre_settled_status', 
     'skilled_worker_visa', 'graduate_visa', 'other_visa', 
-    'requires_sponsorship', 'unknown'
+    'requires_sponsorship', 'unknown', 'other'
   )),
   security_vetting TEXT NOT NULL DEFAULT 'none' CHECK (security_vetting IN (
     'none', 'bpss', 'ctc', 'sc', 'esc', 'dv', 'edv'
   )),
-  open_to_relocate BOOLEAN DEFAULT false,
+  open_to_relocate TEXT,
   relocation_preferences TEXT,
+  notice_period TEXT,
+  contract_preference TEXT,
   
   -- Salary
   current_salary INTEGER,
+  minimum_salary_expected INTEGER,
+  expected_day_rate DECIMAL(10,2),
   salary_expectation_min INTEGER,
   salary_expectation_max INTEGER,
   salary_currency TEXT DEFAULT 'GBP',

@@ -1005,32 +1005,42 @@ export function CandidateProfilePage() {
             </div>
           </div>
 
-          {/* Skills */}
-          {candidate.skills && candidate.skills.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-brand-grey-200">
-              <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Skills</h3>
-              <div className="flex flex-wrap gap-2">
-                {candidate.skills.map((skill: string) => (
-                  <Badge key={skill} variant="cyan">{skill}</Badge>
-                ))}
+          {/* Experience & Skills */}
+          <div className="mt-6 pt-6 border-t border-brand-grey-200">
+            {candidate.years_experience && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg inline-block">
+                <p className="text-sm text-cyan-700">
+                  <span className="font-bold text-lg text-cyan-800">{candidate.years_experience}</span> years of experience
+                </p>
               </div>
-            </div>
-          )}
+            )}
+            
+            {candidate.skills && candidate.skills.length > 0 && (
+              <div className="mt-3">
+                <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Skills</h3>
+                <div className="flex flex-wrap gap-2">
+                  {candidate.skills.map((skill: string) => (
+                    <Badge key={skill} variant="cyan">{skill}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {/* Previous Companies */}
-          {candidate.previous_companies && candidate.previous_companies.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Previous Companies</h3>
-              <div className="flex flex-wrap gap-2">
-                {candidate.previous_companies.map((company: string) => (
-                  <Badge key={company} variant="grey">
-                    <Building2 className="h-3 w-3 mr-1" />
-                    {company}
-                  </Badge>
-                ))}
+            {/* Previous Companies */}
+            {candidate.previous_companies && candidate.previous_companies.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-medium text-brand-slate-700 mb-3">Previous Companies</h3>
+                <div className="flex flex-wrap gap-2">
+                  {candidate.previous_companies.map((company: string) => (
+                    <Badge key={company} variant="grey">
+                      <Building2 className="h-3 w-3 mr-1" />
+                      {company}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </Card>
 
         {/* Main Content Grid */}
@@ -1471,104 +1481,45 @@ export function CandidateProfilePage() {
 
           {/* Right Column - Details */}
           <div className="space-y-6">
-            {/* Current Employment */}
-            {(candidate.current_title || candidate.current_company || candidate.reason_for_leaving) && (
+            {/* Career Journey - Current position, reason for leaving, aspirations */}
+            {(candidate.current_company || candidate.reason_for_leaving || candidate.five_year_plan) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4" />
-                    Current Employment
+                    Career Journey
                   </CardTitle>
                 </CardHeader>
-                <div className="space-y-3">
-                  {candidate.current_title && (
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Current Role</p>
-                      <p className="text-sm font-medium text-brand-slate-700">{candidate.current_title}</p>
-                    </div>
-                  )}
-                  {candidate.current_company && (
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Current Company</p>
-                      <p className="text-sm font-medium text-brand-slate-700">{candidate.current_company}</p>
-                    </div>
-                  )}
-                  {candidate.current_salary && (
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Current Salary</p>
-                      <p className="text-sm font-medium text-brand-slate-700">£{candidate.current_salary.toLocaleString()}</p>
+                <div className="space-y-4">
+                  {(candidate.current_title || candidate.current_company) && (
+                    <div className="p-3 bg-brand-grey-50 rounded-lg">
+                      <p className="text-xs text-brand-grey-400 mb-1">Current Position</p>
+                      {candidate.current_title && (
+                        <p className="text-sm font-medium text-brand-slate-700">{candidate.current_title}</p>
+                      )}
+                      {candidate.current_company && (
+                        <p className="text-sm text-brand-slate-600">at {candidate.current_company}</p>
+                      )}
                     </div>
                   )}
                   {candidate.reason_for_leaving && (
                     <div>
-                      <p className="text-xs text-brand-grey-400">Reason for Leaving</p>
+                      <p className="text-xs text-brand-grey-400 mb-1">Reason for Leaving</p>
                       <p className="text-sm text-brand-slate-600">{candidate.reason_for_leaving}</p>
+                    </div>
+                  )}
+                  {candidate.five_year_plan && (
+                    <div>
+                      <p className="text-xs text-brand-grey-400 mb-1">5-Year Plan</p>
+                      <p className="text-sm text-brand-slate-600">{candidate.five_year_plan}</p>
                     </div>
                   )}
                 </div>
               </Card>
             )}
 
-            {/* Career Aspirations */}
-            {candidate.five_year_plan && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-4 w-4" />
-                    Career Aspirations
-                  </CardTitle>
-                </CardHeader>
-                <div>
-                  <p className="text-xs text-brand-grey-400 mb-1">5-Year Plan</p>
-                  <p className="text-sm text-brand-slate-600">{candidate.five_year_plan}</p>
-                </div>
-              </Card>
-            )}
-
-            {/* Professional Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Professional Details</CardTitle>
-              </CardHeader>
-              <div className="space-y-4">
-                {candidate.years_experience && (
-                  <div className="flex items-center gap-3">
-                    <Briefcase className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Experience</p>
-                      <p className="text-sm text-brand-slate-700">{candidate.years_experience} years</p>
-                    </div>
-                  </div>
-                )}
-                
-                {candidate.right_to_work && candidate.right_to_work !== 'unknown' && (
-                  <div className="flex items-center gap-3">
-                    <User className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Right to Work</p>
-                      <p className="text-sm text-brand-slate-700">
-                        {rightToWorkLabels[candidate.right_to_work] || candidate.right_to_work}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {candidate.security_vetting && candidate.security_vetting !== 'none' && (
-                  <div className="flex items-center gap-3">
-                    <Shield className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Security Clearance</p>
-                      <p className="text-sm text-brand-slate-700">
-                        {clearanceLabels[candidate.security_vetting] || candidate.security_vetting.toUpperCase()}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-
             {/* Compensation */}
-            {(candidate.minimum_salary_expected || candidate.expected_day_rate || candidate.contract_preference) && (
+            {(candidate.current_salary || candidate.minimum_salary_expected || candidate.expected_day_rate || candidate.contract_preference) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1576,85 +1527,94 @@ export function CandidateProfilePage() {
                     Compensation
                   </CardTitle>
                 </CardHeader>
-                <div className="space-y-4">
+                <div className="space-y-3">
+                  {candidate.current_salary && (
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-brand-grey-500">Current Salary</p>
+                      <p className="text-sm font-medium text-brand-slate-700">£{candidate.current_salary.toLocaleString()}</p>
+                    </div>
+                  )}
                   {candidate.contract_preference && (
-                    <div className="flex items-center gap-3">
-                      <Briefcase className="h-4 w-4 text-brand-grey-400" />
-                      <div>
-                        <p className="text-xs text-brand-grey-400">Contract Preference</p>
-                        <p className="text-sm text-brand-slate-700">
-                          {candidate.contract_preference === 'contractor' ? 'Contractor' :
-                           candidate.contract_preference === 'permanent' ? 'Permanent' :
-                           candidate.contract_preference === 'open_to_both' ? 'Open to Both' :
-                           candidate.contract_preference}
-                        </p>
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-brand-grey-500">Contract Type</p>
+                      <p className="text-sm font-medium text-brand-slate-700">
+                        {candidate.contract_preference === 'contractor' ? 'Contractor' :
+                         candidate.contract_preference === 'permanent' ? 'Permanent' :
+                         candidate.contract_preference === 'open_to_both' ? 'Open to Both' :
+                         candidate.contract_preference}
+                      </p>
                     </div>
                   )}
-                  
                   {candidate.minimum_salary_expected && (
-                    <div className="flex items-center gap-3">
-                      <PoundSterling className="h-4 w-4 text-brand-grey-400" />
-                      <div>
-                        <p className="text-xs text-brand-grey-400">Minimum Salary Expected</p>
-                        <p className="text-sm text-brand-slate-700">£{candidate.minimum_salary_expected.toLocaleString()}</p>
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-brand-grey-500">Expected Salary</p>
+                      <p className="text-sm font-medium text-brand-slate-700">£{candidate.minimum_salary_expected.toLocaleString()}</p>
                     </div>
                   )}
-
                   {candidate.expected_day_rate && (
-                    <div className="flex items-center gap-3">
-                      <PoundSterling className="h-4 w-4 text-brand-grey-400" />
-                      <div>
-                        <p className="text-xs text-brand-grey-400">Expected Day Rate</p>
-                        <p className="text-sm text-brand-slate-700">£{candidate.expected_day_rate}/day</p>
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-brand-grey-500">Day Rate</p>
+                      <p className="text-sm font-medium text-brand-slate-700">£{candidate.expected_day_rate}/day</p>
                     </div>
                   )}
                 </div>
               </Card>
             )}
 
-            {/* Availability & Logistics */}
+            {/* Admin Information */}
             <Card>
               <CardHeader>
-                <CardTitle>Availability</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Admin Information
+                </CardTitle>
               </CardHeader>
-              <div className="space-y-4">
-                {candidate.notice_period && (
-                  <div className="flex items-center gap-3">
-                    <Clock className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Notice Period</p>
-                      <p className="text-sm text-brand-slate-700">{formatNoticePeriod(candidate.notice_period)}</p>
-                    </div>
+              <div className="space-y-3">
+                {candidate.right_to_work && candidate.right_to_work !== 'unknown' && (
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-brand-grey-500">Right to Work</p>
+                    <p className="text-sm font-medium text-brand-slate-700">
+                      {rightToWorkLabels[candidate.right_to_work] || candidate.right_to_work}
+                    </p>
                   </div>
                 )}
-
-                {candidate.open_to_relocate && (
-                  <div className="flex items-center gap-3">
-                    <MapPin className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Open to Relocate</p>
-                      <p className="text-sm text-brand-slate-700">
-                        {candidate.open_to_relocate === 'yes' ? 'Yes' :
-                         candidate.open_to_relocate === 'no' ? 'No' :
-                         candidate.open_to_relocate === 'maybe' ? 'Maybe / Depends' :
-                         candidate.open_to_relocate}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {candidate.nationalities && candidate.nationalities.length > 0 && (
-                  <div className="flex items-center gap-3">
-                    <Flag className="h-4 w-4 text-brand-grey-400" />
-                    <div>
-                      <p className="text-xs text-brand-grey-400">Nationality</p>
-                      <p className="text-sm text-brand-slate-700">
-                        {candidate.nationalities.join(', ')}
-                      </p>
-                    </div>
+                  <div className="flex justify-between items-start">
+                    <p className="text-sm text-brand-grey-500">Nationality</p>
+                    <p className="text-sm font-medium text-brand-slate-700 text-right">
+                      {candidate.nationalities.join(', ')}
+                    </p>
+                  </div>
+                )}
+                {candidate.location && (
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-brand-grey-500">Location</p>
+                    <p className="text-sm font-medium text-brand-slate-700">{candidate.location}</p>
+                  </div>
+                )}
+                {candidate.open_to_relocate && (
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-brand-grey-500">Open to Relocate</p>
+                    <p className="text-sm font-medium text-brand-slate-700">
+                      {candidate.open_to_relocate === 'yes' ? 'Yes' :
+                       candidate.open_to_relocate === 'no' ? 'No' :
+                       candidate.open_to_relocate === 'maybe' ? 'Maybe' :
+                       candidate.open_to_relocate}
+                    </p>
+                  </div>
+                )}
+                {candidate.notice_period && (
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-brand-grey-500">Notice Period</p>
+                    <p className="text-sm font-medium text-brand-slate-700">{formatNoticePeriod(candidate.notice_period)}</p>
+                  </div>
+                )}
+                {candidate.security_vetting && candidate.security_vetting !== 'none' && (
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-brand-grey-500">Security Clearance</p>
+                    <p className="text-sm font-medium text-brand-slate-700">
+                      {clearanceLabels[candidate.security_vetting] || candidate.security_vetting.toUpperCase()}
+                    </p>
                   </div>
                 )}
               </div>
