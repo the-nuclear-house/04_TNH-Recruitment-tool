@@ -55,7 +55,7 @@ import { formatDate, timeOptions } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { candidatesService, interviewsService, usersService, commentsService, applicationsService, offersService, consultantsService, cvUploadService, type DbComment, type DbApplication, type DbOffer } from '@/lib/services';
+import { candidatesService, interviewsService, usersService, commentsService, applicationsService, offersService, consultantsService, cvUploadService, documentUploadService, type DbComment, type DbApplication, type DbOffer } from '@/lib/services';
 
 type InterviewStage = 'phone_qualification' | 'technical_interview' | 'director_interview';
 
@@ -471,9 +471,9 @@ export function CandidateProfilePage() {
     }
   };
 
-  const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !id) return;
+  // Direct CV upload function that can be called with a File
+  const uploadCV = async (file: File) => {
+    if (!id) return;
     
     setIsUploadingCV(true);
     try {
@@ -492,6 +492,12 @@ export function CandidateProfilePage() {
         cvInputRef.current.value = '';
       }
     }
+  };
+
+  const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadCV(file);
   };
 
   const loadOffers = async () => {
@@ -1746,19 +1752,40 @@ export function CandidateProfilePage() {
                   </button>
                 </div>
               ) : (
-                <button
+                <div
                   onClick={() => cvInputRef.current?.click()}
-                  disabled={isUploadingCV}
-                  className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.classList.add('border-brand-cyan', 'bg-brand-cyan/5');
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.classList.remove('border-brand-cyan', 'bg-brand-cyan/5');
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.classList.remove('border-brand-cyan', 'bg-brand-cyan/5');
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && (file.name.endsWith('.pdf') || file.name.endsWith('.doc') || file.name.endsWith('.docx'))) {
+                      uploadCV(file);
+                    } else {
+                      toast.error('Invalid File', 'Please upload a PDF, DOC, or DOCX file');
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors cursor-pointer"
                 >
                   <Upload className="h-8 w-8 text-brand-grey-400" />
                   <div className="flex-1 text-left">
                     <p className="text-sm font-medium text-brand-slate-700">
                       {isUploadingCV ? 'Uploading...' : 'Upload CV'}
                     </p>
-                    <p className="text-xs text-brand-grey-400">PDF, DOC, or DOCX</p>
+                    <p className="text-xs text-brand-grey-400">Drag & drop or click to browse</p>
+                    <p className="text-xs text-brand-grey-300">PDF, DOC, or DOCX</p>
                   </div>
-                </button>
+                </div>
               )}
             </Card>
 
@@ -2831,6 +2858,28 @@ export function CandidateProfilePage() {
                     return;
                   }
                   
+                  // Upload documents if provided
+                  let idDocumentUrl = undefined;
+                  let rtwDocumentUrl = undefined;
+                  
+                  if (idDocumentFile) {
+                    try {
+                      idDocumentUrl = await documentUploadService.uploadDocument(idDocumentFile, 'id', id!);
+                    } catch (err) {
+                      console.error('Error uploading ID document:', err);
+                      toast.warning('ID Upload Failed', 'Offer will be created without ID document');
+                    }
+                  }
+                  
+                  if (rtwDocumentFile) {
+                    try {
+                      rtwDocumentUrl = await documentUploadService.uploadDocument(rtwDocumentFile, 'right_to_work', id!);
+                    } catch (err) {
+                      console.error('Error uploading RTW document:', err);
+                      toast.warning('RTW Upload Failed', 'Offer will be created without Right to Work document');
+                    }
+                  }
+                  
                   await offersService.create({
                     candidate_id: id!,
                     requirement_id: linkedRequirements[0]?.requirement_id,
@@ -2844,6 +2893,8 @@ export function CandidateProfilePage() {
                     candidate_full_name: offerForm.candidate_full_name,
                     candidate_address: offerForm.candidate_address,
                     candidate_nationality: candidate?.nationalities?.join(', '),
+                    id_document_url: idDocumentUrl,
+                    right_to_work_document_url: rtwDocumentUrl,
                     approver_id: approverId,
                     notes: offerForm.notes,
                     created_by: user?.id,

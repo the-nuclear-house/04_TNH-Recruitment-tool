@@ -3809,3 +3809,39 @@ export const cvUploadService = {
     if (error) throw error;
   }
 };
+
+// Document upload service for offer documents (ID, Right to Work, etc.)
+export const documentUploadService = {
+  async uploadDocument(file: File, type: 'id' | 'right_to_work', candidateId: string): Promise<string> {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${candidateId}-${type}-${Date.now()}.${fileExt}`;
+    const filePath = `documents/${type}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('candidate-files')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+    return filePath;
+  },
+
+  async getSignedUrl(filePath: string): Promise<string> {
+    const { data, error } = await supabase.storage
+      .from('candidate-files')
+      .createSignedUrl(filePath, 3600);
+
+    if (error) throw error;
+    return data.signedUrl;
+  },
+
+  async deleteDocument(filePath: string): Promise<void> {
+    const { error } = await supabase.storage
+      .from('candidate-files')
+      .remove([filePath]);
+
+    if (error) throw error;
+  }
+};

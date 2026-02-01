@@ -581,13 +581,28 @@ export function ConsultantsPage() {
                   {/* Consultant Rows */}
                   {filteredConsultants.map(consultant => {
                     const consultantMeetings = getMeetingsForConsultant(consultant.id);
-                    const barStyle = getBarStyle(consultant.start_date, consultant.terminated_at || consultant.end_date, weeks);
-                    const statusInfo = statusConfig[consultant.status] || statusConfig.bench;
                     const isTerminated = consultant.status === 'terminated';
                     
-                    // Get termination marker position
-                    const terminationPosition = consultant.terminated_at 
-                      ? getMeetingPosition(consultant.terminated_at, weeks) 
+                    // For terminated consultants, use terminated_at as end date
+                    // If terminated_at is not set, use end_date, otherwise default to a recent date for visual cutoff
+                    const terminatedDate = consultant.terminated_at && consultant.terminated_at.length > 0 
+                      ? consultant.terminated_at 
+                      : null;
+                    const endDate = consultant.end_date && consultant.end_date.length > 0 
+                      ? consultant.end_date 
+                      : null;
+                    
+                    // For terminated consultants without a termination date, default to today to show the bar ending
+                    const effectiveEndDate = isTerminated 
+                      ? (terminatedDate || endDate || new Date().toISOString().split('T')[0])
+                      : endDate;
+                    
+                    const barStyle = getBarStyle(consultant.start_date, effectiveEndDate, weeks);
+                    const statusInfo = statusConfig[consultant.status] || statusConfig.bench;
+                    
+                    // Get termination marker position - only show if we have a specific date
+                    const terminationPosition = isTerminated && (terminatedDate || endDate)
+                      ? getMeetingPosition(terminatedDate || endDate!, weeks) 
                       : null;
                     
                     return (
@@ -636,7 +651,7 @@ export function ConsultantsPage() {
                             <div
                               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white shadow-md border-2 border-white"
                               style={{ left: terminationPosition }}
-                              title={`Exit date: ${formatDate(consultant.terminated_at!)}`}
+                              title={`Exit date: ${formatDate(consultant.terminated_at || consultant.end_date || '')}`}
                             >
                               <XCircle className="h-4 w-4" />
                             </div>

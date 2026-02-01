@@ -177,8 +177,13 @@ export function CandidateFormPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    // Create a copy of the file as a Blob to preserve it for upload
+    // This ensures the file remains valid even after parsing
+    const fileBlob = new Blob([await file.arrayBuffer()], { type: file.type });
+    const fileCopy = new File([fileBlob], file.name, { type: file.type });
+    
     setCvFileName(file.name);
-    setCvFile(file); // Store the file for upload on submit
+    setCvFile(fileCopy); // Store the copy for upload on submit
     setIsParsing(true);
     
     try {
@@ -192,10 +197,6 @@ export function CandidateFormPage() {
       toast.error('Error', error instanceof Error ? error.message : 'Failed to parse CV');
     } finally {
       setIsParsing(false);
-      // Reset file input
-      if (cvInputRef.current) {
-        cvInputRef.current.value = '';
-      }
     }
   };
 

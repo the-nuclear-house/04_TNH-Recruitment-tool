@@ -53,7 +53,7 @@ export function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <img src="/logo.svg" alt="The Nuclear House" className="h-20 w-20 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-white mb-2">Cockpit</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Control Room</h1>
           <p className="text-brand-grey-400">
             The Nuclear House Command Centre
           </p>

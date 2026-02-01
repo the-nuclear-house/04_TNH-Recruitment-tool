@@ -68,7 +68,7 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <div className="flex items-center gap-3">
             <img src="/logo.svg" alt="TNH" className="h-8 w-8" />
-            <span className="text-white font-semibold">Cockpit</span>
+            <span className="text-white font-semibold">Control Room</span>
           </div>
         )}
         {sidebarCollapsed && (
