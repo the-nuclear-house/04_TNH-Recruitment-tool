@@ -57,10 +57,16 @@ export function Modal({
   return (
     <div
       ref={overlayRef}
+      onClick={(e) => {
+        // Prevent any click on the overlay from doing anything
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-slate-900/50 backdrop-blur-sm animate-fade-in"
     >
       <div
         ref={contentRef}
+        onClick={(e) => e.stopPropagation()}
         className={`
           w-full ${sizes[size]} bg-white rounded-2xl shadow-strong
           animate-slide-up overflow-hidden
