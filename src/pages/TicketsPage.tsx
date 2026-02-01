@@ -26,6 +26,7 @@ import {
   Modal,
   EmptyState,
   Textarea,
+  ConfirmDialog,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -39,12 +40,22 @@ import {
 } from '@/lib/services';
 
 const ticketTypeConfig: Record<HrTicketType | 'general', { icon: any; colour: string; label: string }> = {
-  contract_send: { icon: Send, colour: 'cyan', label: 'Send Contract' },
+  contract_send: { icon: Send, colour: 'cyan', label: 'Contract Process' },
   contract_signed: { icon: FileText, colour: 'blue', label: 'Contract Signed' },
   salary_increase: { icon: PoundSterling, colour: 'green', label: 'Salary Increase' },
   bonus_payment: { icon: Gift, colour: 'purple', label: 'Bonus Payment' },
   employee_exit: { icon: XCircle, colour: 'red', label: 'Employee Exit' },
   general: { icon: Ticket, colour: 'grey', label: 'General' },
+};
+
+const statusConfig: Record<string, { label: string; colour: string }> = {
+  pending: { label: 'Pending', colour: 'amber' },
+  in_progress: { label: 'In Progress', colour: 'blue' },
+  contract_sent: { label: 'Contract Sent', colour: 'cyan' },
+  contract_signed: { label: 'Contract Signed', colour: 'purple' },
+  completed: { label: 'Completed', colour: 'green' },
+  cancelled: { label: 'Cancelled', colour: 'grey' },
+  approved: { label: 'Approved', colour: 'green' },
 };
 
 const priorityConfig: Record<string, { label: string; colour: string }> = {
@@ -65,6 +76,7 @@ interface UITicket {
   description: string;
   consultant_id?: string | null;
   candidate_id?: string | null;
+  offer_id?: string | null;
   consultant_name?: string;
   candidate_name?: string;
   created_at: string;
@@ -86,6 +98,10 @@ export function TicketsPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [filter, setFilter] = useState<'pending' | 'in_progress' | 'completed' | 'all'>('pending');
   const [completionNotes, setCompletionNotes] = useState('');
+  
+  // Workflow confirmation dialogs
+  const [confirmAction, setConfirmAction] = useState<'contract_sent' | 'contract_signed' | 'convert' | null>(null);
+  const [ticketForConfirm, setTicketForConfirm] = useState<UITicket | null>(null);
 
   useEffect(() => {
     loadTickets();
@@ -123,6 +139,7 @@ export function TicketsPage() {
           description: getHrTicketDescription(ticket),
           consultant_id: ticket.consultant_id,
           candidate_id: ticket.candidate_id,
+          offer_id: ticket.offer_id,
           consultant_name: consultantName,
           candidate_name: candidateName,
           created_at: ticket.created_at,
@@ -222,6 +239,42 @@ export function TicketsPage() {
     }
   };
 
+  // Contract workflow handlers - these show confirmation first
+  const openConfirmDialog = (action: 'contract_sent' | 'contract_signed' | 'convert', ticket: UITicket) => {
+    setConfirmAction(action);
+    setTicketForConfirm(ticket);
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmAction(null);
+    setTicketForConfirm(null);
+  };
+
+  const handleConfirmedAction = async () => {
+    if (!ticketForConfirm || !confirmAction) return;
+    
+    setIsProcessing(true);
+    try {
+      if (confirmAction === 'contract_sent') {
+        await hrTicketsService.markContractSent(ticketForConfirm.id, user!.id);
+        toast.success('Contract Sent', 'Ticket updated - contract has been sent to candidate');
+      } else if (confirmAction === 'contract_signed') {
+        await hrTicketsService.markContractSigned(ticketForConfirm.id, user!.id);
+        toast.success('Contract Signed', 'Ticket updated - contract has been signed');
+      } else if (confirmAction === 'convert') {
+        await hrTicketsService.convertToConsultant(ticketForConfirm.id, user!.id);
+        toast.success('Converted', 'Candidate has been converted to consultant. Ticket completed.');
+      }
+      closeConfirmDialog();
+      loadTickets();
+    } catch (error) {
+      console.error('Error processing action:', error);
+      toast.error('Error', 'Failed to process action');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleComplete = async (ticket: UITicket) => {
     setIsProcessing(true);
     try {
@@ -248,13 +301,13 @@ export function TicketsPage() {
 
   const filteredTickets = tickets.filter(t => {
     if (filter === 'pending') return t.status === 'pending';
-    if (filter === 'in_progress') return t.status === 'in_progress';
+    if (filter === 'in_progress') return ['in_progress', 'contract_sent', 'contract_signed'].includes(t.status);
     if (filter === 'completed') return t.status === 'completed' || t.status === 'approved';
     return true;
   });
 
   const pendingCount = tickets.filter(t => t.status === 'pending').length;
-  const inProgressCount = tickets.filter(t => t.status === 'in_progress').length;
+  const inProgressCount = tickets.filter(t => ['in_progress', 'contract_sent', 'contract_signed'].includes(t.status)).length;
 
   return (
     <div className="min-h-screen">
@@ -323,6 +376,7 @@ export function TicketsPage() {
               const config = ticketTypeConfig[ticket.ticket_type] || ticketTypeConfig.general;
               const Icon = config.icon;
               const priorityInfo = priorityConfig[ticket.priority] || priorityConfig.normal;
+              const ticketStatusInfo = statusConfig[ticket.status] || statusConfig.pending;
               
               return (
                 <Card key={`${ticket.source}-${ticket.id}`} className="hover:shadow-md transition-shadow">
@@ -341,14 +395,31 @@ export function TicketsPage() {
                           {ticket.priority === 'high' || ticket.priority === 'urgent' ? (
                             <Badge variant="red">{priorityInfo.label}</Badge>
                           ) : null}
-                          {ticket.status === 'in_progress' && (
-                            <Badge variant="amber">In Progress</Badge>
-                          )}
-                          {(ticket.status === 'completed' || ticket.status === 'approved') && (
-                            <Badge variant="green">Completed</Badge>
-                          )}
+                          {/* Status badge */}
+                          <Badge variant={ticketStatusInfo.colour as any}>{ticketStatusInfo.label}</Badge>
                         </div>
                         <p className="text-sm text-brand-grey-500">{ticket.description}</p>
+                        
+                        {/* Workflow progress for contract tickets */}
+                        {ticket.ticket_type === 'contract_send' && ticket.status !== 'completed' && (
+                          <div className="flex items-center gap-2 mt-3">
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'pending' ? 'text-brand-cyan font-medium' : 'text-green-600'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'pending' ? 'bg-brand-cyan' : 'bg-green-500'}`} />
+                              1. Send Contract
+                            </div>
+                            <ArrowRight className="h-3 w-3 text-brand-grey-300" />
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_sent' ? 'text-brand-cyan font-medium' : ticket.status === 'contract_signed' || ticket.status === 'completed' ? 'text-green-600' : 'text-brand-grey-400'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_sent' ? 'bg-brand-cyan' : ticket.status === 'contract_signed' || ticket.status === 'completed' ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
+                              2. Contract Signed
+                            </div>
+                            <ArrowRight className="h-3 w-3 text-brand-grey-300" />
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_signed' ? 'text-brand-cyan font-medium' : 'text-brand-grey-400'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_signed' ? 'bg-brand-cyan' : 'bg-brand-grey-300'}`} />
+                              3. Convert to Consultant
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="flex items-center gap-4 mt-2 text-xs text-brand-grey-400">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
@@ -389,28 +460,73 @@ export function TicketsPage() {
                           View Candidate
                         </Button>
                       )}
-                      {ticket.status === 'pending' && ticket.source === 'hr_ticket' && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleStartWork(ticket)}
-                          disabled={isProcessing}
-                        >
-                          Start Work
-                        </Button>
+                      
+                      {/* Contract workflow buttons */}
+                      {ticket.ticket_type === 'contract_send' && ticket.source === 'hr_ticket' && (
+                        <>
+                          {ticket.status === 'pending' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => openConfirmDialog('contract_sent', ticket)}
+                              disabled={isProcessing}
+                              leftIcon={<Send className="h-4 w-4" />}
+                            >
+                              Mark Contract Sent
+                            </Button>
+                          )}
+                          {ticket.status === 'contract_sent' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => openConfirmDialog('contract_signed', ticket)}
+                              disabled={isProcessing}
+                              leftIcon={<FileText className="h-4 w-4" />}
+                            >
+                              Mark Contract Signed
+                            </Button>
+                          )}
+                          {ticket.status === 'contract_signed' && (
+                            <Button
+                              variant="success"
+                              size="sm"
+                              onClick={() => openConfirmDialog('convert', ticket)}
+                              disabled={isProcessing}
+                              leftIcon={<UserPlus className="h-4 w-4" />}
+                            >
+                              Convert to Consultant
+                            </Button>
+                          )}
+                        </>
                       )}
-                      {(ticket.status === 'pending' || ticket.status === 'in_progress') && (
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedTicket(ticket);
-                            setIsActionModalOpen(true);
-                          }}
-                          rightIcon={<CheckCircle className="h-4 w-4" />}
-                        >
-                          Complete
-                        </Button>
+                      
+                      {/* Generic workflow for other ticket types */}
+                      {ticket.ticket_type !== 'contract_send' && (
+                        <>
+                          {ticket.status === 'pending' && ticket.source === 'hr_ticket' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleStartWork(ticket)}
+                              disabled={isProcessing}
+                            >
+                              Start Work
+                            </Button>
+                          )}
+                          {(ticket.status === 'pending' || ticket.status === 'in_progress') && (
+                            <Button
+                              variant="success"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedTicket(ticket);
+                                setIsActionModalOpen(true);
+                              }}
+                              rightIcon={<CheckCircle className="h-4 w-4" />}
+                            >
+                              Complete
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -477,6 +593,33 @@ export function TicketsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Workflow Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={confirmAction !== null}
+        onClose={closeConfirmDialog}
+        onConfirm={handleConfirmedAction}
+        title={
+          confirmAction === 'contract_sent' ? 'Confirm Contract Sent' :
+          confirmAction === 'contract_signed' ? 'Confirm Contract Signed' :
+          confirmAction === 'convert' ? 'Convert to Consultant' : ''
+        }
+        message={
+          confirmAction === 'contract_sent' 
+            ? `Do you confirm you have sent the contract to ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
+          confirmAction === 'contract_signed' 
+            ? `Do you confirm you have received and verified the signed contract from ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
+          confirmAction === 'convert' 
+            ? `This will create a new consultant record for ${ticketForConfirm?.candidate_name || 'this candidate'} and complete this ticket. Do you want to proceed?` : ''
+        }
+        confirmText={
+          confirmAction === 'contract_sent' ? 'Yes, Contract Sent' :
+          confirmAction === 'contract_signed' ? 'Yes, Contract Signed' :
+          confirmAction === 'convert' ? 'Yes, Convert to Consultant' : 'Confirm'
+        }
+        variant={confirmAction === 'convert' ? 'primary' : 'primary'}
+        isLoading={isProcessing}
+      />
     </div>
   );
 }

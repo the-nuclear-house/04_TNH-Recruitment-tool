@@ -387,7 +387,7 @@ export interface DbConsultantExit {
 // ============================================
 
 export type HrTicketType = 'contract_send' | 'contract_signed' | 'salary_increase' | 'bonus_payment' | 'employee_exit';
-export type HrTicketStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type HrTicketStatus = 'pending' | 'in_progress' | 'contract_sent' | 'contract_signed' | 'completed' | 'cancelled';
 export type HrTicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface DbHrTicket {
@@ -3290,6 +3290,131 @@ export const hrTicketsService = {
 
   async startWork(id: string): Promise<DbHrTicket> {
     return this.update(id, { status: 'in_progress' });
+  },
+
+  // Contract workflow steps
+  async markContractSent(id: string, userId: string): Promise<DbHrTicket> {
+    const ticket = await this.getById(id);
+    if (!ticket) throw new Error('Ticket not found');
+
+    // Update ticket status
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .update({
+        status: 'contract_sent',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update offer status
+    if (ticket.offer_id) {
+      await offersService.markContractSent(ticket.offer_id, userId);
+    }
+
+    // Update candidate status
+    if (ticket.candidate_id) {
+      await candidatesService.update(ticket.candidate_id, { status: 'contract_sent' });
+    }
+
+    return data;
+  },
+
+  async markContractSigned(id: string, userId: string): Promise<DbHrTicket> {
+    const ticket = await this.getById(id);
+    if (!ticket) throw new Error('Ticket not found');
+
+    // Update ticket status
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .update({
+        status: 'contract_signed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update offer status
+    if (ticket.offer_id) {
+      await offersService.markContractSigned(ticket.offer_id, userId);
+    }
+
+    // Update candidate status
+    if (ticket.candidate_id) {
+      await candidatesService.update(ticket.candidate_id, { status: 'contract_signed' });
+    }
+
+    return data;
+  },
+
+  async convertToConsultant(id: string, userId: string): Promise<DbHrTicket> {
+    const ticket = await this.getById(id);
+    if (!ticket) throw new Error('Ticket not found');
+    if (!ticket.candidate_id) throw new Error('No candidate linked to this ticket');
+
+    // Get candidate details
+    const candidate = await candidatesService.getById(ticket.candidate_id);
+    if (!candidate) throw new Error('Candidate not found');
+
+    // Get offer details for salary/rate info
+    let offerData = null;
+    if (ticket.offer_id) {
+      offerData = await offersService.getById(ticket.offer_id);
+    }
+
+    // Create consultant from candidate
+    const candidateData = candidate as any; // Cast to allow access to all DB fields
+    const { data: newConsultant, error: consultantError } = await supabase
+      .from('consultants')
+      .insert({
+        candidate_id: candidate.id,
+        first_name: candidate.first_name,
+        last_name: candidate.last_name,
+        email: candidate.email,
+        phone: candidate.phone,
+        location: candidate.location,
+        linkedin_url: candidate.linkedin_url,
+        job_title: candidateData.current_title || offerData?.job_title,
+        skills: candidate.skills || [],
+        security_vetting: candidate.security_vetting,
+        nationalities: candidate.nationalities,
+        contract_type: offerData?.contract_type || 'permanent',
+        salary_amount: offerData?.salary_amount,
+        day_rate: offerData?.day_rate,
+        start_date: offerData?.start_date || new Date().toISOString().split('T')[0],
+        status: 'bench',
+      })
+      .select()
+      .single();
+
+    if (consultantError) throw consultantError;
+
+    // Update candidate status
+    await candidatesService.update(ticket.candidate_id, { status: 'converted_to_consultant' });
+
+    // Complete the ticket
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        completed_by: userId,
+        completion_notes: `Converted to consultant: ${newConsultant.reference_id || newConsultant.id}`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return data;
   },
 
   async complete(id: string, userId: string, notes?: string): Promise<DbHrTicket> {
