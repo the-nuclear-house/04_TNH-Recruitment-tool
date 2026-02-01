@@ -277,7 +277,13 @@ export function CandidateProfilePage() {
   const handleIdDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingId(false);
+    // Only set dragging false if we're actually leaving the drop zone, not just entering a child
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDraggingId(false);
+    }
   };
   
   const handleIdDrop = (e: React.DragEvent) => {
@@ -285,14 +291,19 @@ export function CandidateProfilePage() {
     e.stopPropagation();
     setIsDraggingId(false);
     
+    console.log('DEBUG - ID Drop event fired');
     const files = e.dataTransfer.files;
+    console.log('DEBUG - Files:', files);
     if (files && files.length > 0) {
       const file = files[0];
+      console.log('DEBUG - File:', file.name, file.type);
       const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
       const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
       const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
       
+      console.log('DEBUG - Valid type:', validTypes.includes(file.type), 'Valid ext:', hasValidExtension);
       if (validTypes.includes(file.type) || hasValidExtension) {
+        console.log('DEBUG - Setting ID document file');
         setIdDocumentFile(file);
       }
     }
@@ -308,7 +319,13 @@ export function CandidateProfilePage() {
   const handleRtwDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingRtw(false);
+    // Only set dragging false if we're actually leaving the drop zone, not just entering a child
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDraggingRtw(false);
+    }
   };
   
   const handleRtwDrop = (e: React.DragEvent) => {
@@ -316,14 +333,17 @@ export function CandidateProfilePage() {
     e.stopPropagation();
     setIsDraggingRtw(false);
     
+    console.log('DEBUG - RTW Drop event fired');
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       const file = files[0];
+      console.log('DEBUG - File:', file.name, file.type);
       const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
       const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
       const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
       
       if (validTypes.includes(file.type) || hasValidExtension) {
+        console.log('DEBUG - Setting RTW document file');
         setRtwDocumentFile(file);
       }
     }

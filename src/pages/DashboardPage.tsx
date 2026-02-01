@@ -1423,7 +1423,9 @@ export function DashboardPage() {
             <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
               <h4 className="font-medium text-amber-800 mb-2">Justification</h4>
               <p className="text-brand-slate-700 whitespace-pre-wrap">
-                {(selectedApprovalRequest.request_data as any).justification || 'No justification provided'}
+                {selectedApprovalRequest.request_type === 'employee_exit' 
+                  ? (selectedApprovalRequest.request_data as EmployeeExitData).exit_details || 'No justification provided'
+                  : (selectedApprovalRequest.request_data as any).justification || (selectedApprovalRequest.request_data as any).reason || 'No justification provided'}
               </p>
             </div>
 

@@ -271,9 +271,14 @@ export function CandidateFormPage() {
         await candidatesService.update(id!, candidateData);
       } else {
         // Auto-assign the current user as recruiter if they are a recruiter
-        const assignedRecruiterId = (permissions.isRecruiter || permissions.isRecruiterManager) 
-          ? user?.id 
-          : undefined;
+        const isRecruiterRole = permissions.isRecruiter || permissions.isRecruiterManager;
+        const assignedRecruiterId = isRecruiterRole ? user?.id : undefined;
+        
+        // Debug - remove after testing
+        console.log('DEBUG - User ID:', user?.id);
+        console.log('DEBUG - isRecruiter:', permissions.isRecruiter);
+        console.log('DEBUG - isRecruiterManager:', permissions.isRecruiterManager);
+        console.log('DEBUG - assignedRecruiterId:', assignedRecruiterId);
         
         const newCandidate = await candidatesService.create({
           ...candidateData,
@@ -282,13 +287,21 @@ export function CandidateFormPage() {
           created_by: user?.id,
         });
         candidateId = newCandidate.id;
+        
+        // Debug - remove after testing
+        console.log('DEBUG - Created candidate ID:', candidateId);
       }
       
       // Upload CV if one was selected
+      console.log('DEBUG - cvFile:', cvFile);
+      console.log('DEBUG - candidateId:', candidateId);
       if (cvFile && candidateId) {
         try {
+          console.log('DEBUG - Uploading CV...');
           const cvUrl = await cvUploadService.uploadCV(cvFile, candidateId);
+          console.log('DEBUG - CV URL:', cvUrl);
           await candidatesService.update(candidateId, { cv_url: cvUrl });
+          console.log('DEBUG - Candidate updated with CV');
         } catch (uploadError) {
           console.error('Error uploading CV:', uploadError);
           toast.warning('CV Upload Failed', 'Candidate was saved but CV upload failed. You can try uploading again later.');
