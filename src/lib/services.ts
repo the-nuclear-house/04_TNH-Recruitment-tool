@@ -2180,6 +2180,19 @@ export const offersService = {
   },
 
   async approve(id: string, approverId: string, notes?: string): Promise<DbOffer> {
+    // First get the offer details to create the ticket
+    const { data: offerData, error: fetchError } = await supabase
+      .from('offers')
+      .select(`
+        *,
+        candidate:candidates(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Update offer status
     const { data, error } = await supabase
       .from('offers')
       .update({
@@ -2193,6 +2206,29 @@ export const offersService = {
       .single();
 
     if (error) throw error;
+
+    // Create HR ticket for contract processing
+    const candidateName = offerData?.candidate 
+      ? `${offerData.candidate.first_name} ${offerData.candidate.last_name}`
+      : 'Unknown Candidate';
+    
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 3); // Due in 3 days
+
+    await supabase
+      .from('hr_tickets')
+      .insert({
+        ticket_type: 'contract_preparation',
+        title: `Prepare contract for ${candidateName}`,
+        description: `Offer approved. Please prepare and send contract to ${candidateName}.${notes ? `\n\nApproval notes: ${notes}` : ''}`,
+        priority: 'high',
+        status: 'pending',
+        candidate_id: offerData?.candidate_id,
+        offer_id: id,
+        due_date: dueDate.toISOString().split('T')[0],
+        created_by: approverId,
+      });
+
     return data;
   },
 
