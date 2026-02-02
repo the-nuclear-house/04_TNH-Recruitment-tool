@@ -13,9 +13,10 @@ import {
   Edit,
   CheckCircle,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
-import { Card, Button, Badge, EmptyState, Modal, Input, Select, Textarea } from '@/components/ui';
+import { Card, Button, Badge, EmptyState, Modal, Input, Select, Textarea, DeleteDialog } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -118,6 +119,10 @@ export function MissionsPage() {
   // Close mission modal
   const [isCloseMissionModalOpen, setIsCloseMissionModalOpen] = useState(false);
   const [closeMissionEndDate, setCloseMissionEndDate] = useState('');
+  
+  // Delete mission
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -263,6 +268,30 @@ export function MissionsPage() {
       toast.error('Error', 'Failed to save changes');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteMission = async (hardDelete: boolean) => {
+    if (!selectedMission) return;
+    
+    setIsDeleting(true);
+    try {
+      if (hardDelete) {
+        await missionsService.hardDelete(selectedMission.id);
+        toast.success('Mission Deleted', 'The mission has been permanently deleted');
+      } else {
+        await missionsService.delete(selectedMission.id, user?.id);
+        toast.success('Mission Archived', 'The mission has been archived');
+      }
+      setIsDeleteDialogOpen(false);
+      setIsMissionModalOpen(false);
+      setSelectedMission(null);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting mission:', error);
+      toast.error('Error', 'Failed to delete mission');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -604,6 +633,15 @@ export function MissionsPage() {
                   >
                     Edit
                   </Button>
+                  {(permissions.isAdmin || permissions.isSuperAdmin) && (
+                    <Button 
+                      variant="danger" 
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </>
             ) : (
@@ -754,6 +792,17 @@ export function MissionsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Mission Dialog */}
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onDelete={handleDeleteMission}
+        itemType="Mission"
+        itemName={selectedMission?.name || 'this mission'}
+        canHardDelete={permissions.isSuperAdmin}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

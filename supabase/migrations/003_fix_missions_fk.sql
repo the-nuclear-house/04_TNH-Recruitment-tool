@@ -11,6 +11,11 @@ ALTER TABLE missions DROP CONSTRAINT IF EXISTS missions_contact_id_fkey;
 ALTER TABLE missions ADD CONSTRAINT missions_contact_id_fkey 
   FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL;
 
+-- Fix winning_candidate_id FK to allow deletion
+ALTER TABLE requirements DROP CONSTRAINT IF EXISTS requirements_winning_candidate_id_fkey;
+ALTER TABLE requirements ADD CONSTRAINT requirements_winning_candidate_id_fkey
+  FOREIGN KEY (winning_candidate_id) REFERENCES candidates(id) ON DELETE SET NULL;
+
 -- Enable RLS
 ALTER TABLE missions ENABLE ROW LEVEL SECURITY;
 

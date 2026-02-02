@@ -2642,6 +2642,27 @@ export const missionsService = {
       }
     }
   },
+
+  async hardDelete(id: string): Promise<void> {
+    // Get mission first to update consultant status
+    const mission = await this.getById(id);
+    
+    const { error } = await supabase
+      .from('missions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    
+    // Check if consultant has other active missions, if not set to bench
+    if (mission?.consultant_id) {
+      const otherMissions = await this.getByConsultant(mission.consultant_id);
+      const activeMissions = otherMissions.filter(m => m.id !== id && m.status === 'active');
+      if (activeMissions.length === 0) {
+        await consultantsService.update(mission.consultant_id, { status: 'bench' });
+      }
+    }
+  },
 };
 
 // ============================================
