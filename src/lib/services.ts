@@ -95,6 +95,11 @@ export interface DbConsultant {
   id_document_url: string | null;
   right_to_work_document_url: string | null;
   assigned_manager_id: string | null;
+  // Ownership fields
+  account_manager_id: string | null;
+  coc_director_id: string | null;
+  company_email: string | null;
+  // Timestamps
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -103,6 +108,8 @@ export interface DbConsultant {
   // Joined
   candidate?: DbCandidate;
   assigned_manager?: DbUser;
+  account_manager?: DbUser;
+  coc_director?: DbUser;
 }
 
 export interface CreateConsultantInput {
@@ -125,6 +132,9 @@ export interface CreateConsultantInput {
   id_document_url?: string;
   right_to_work_document_url?: string;
   assigned_manager_id?: string;
+  account_manager_id?: string;
+  coc_director_id?: string;
+  company_email?: string;
   created_by?: string;
 }
 
@@ -143,8 +153,9 @@ export interface DbMission {
   reference_id: string | null;
   name: string;
   requirement_id: string | null;
+  project_id: string | null;
   consultant_id: string;
-  company_id: string;  // This matches the actual DB column
+  company_id: string;
   contact_id: string | null;
   start_date: string;
   end_date: string;
@@ -160,6 +171,7 @@ export interface DbMission {
   deleted_by: string | null;
   // Joined
   requirement?: DbRequirement;
+  project?: DbProject;
   consultant?: DbConsultant;
   company?: DbCompany;
   contact?: DbContact;
@@ -168,8 +180,9 @@ export interface DbMission {
 export interface CreateMissionInput {
   name: string;
   requirement_id?: string;
+  project_id?: string;
   consultant_id: string;
-  company_id: string;  // This matches the actual DB column
+  company_id: string;
   contact_id?: string;
   start_date: string;
   end_date: string;
@@ -182,6 +195,54 @@ export interface CreateMissionInput {
 
 export interface UpdateMissionInput extends Partial<CreateMissionInput> {
   status?: 'active' | 'completed' | 'cancelled' | 'on_hold';
+}
+
+// ============================================
+// PROJECT TYPES
+// ============================================
+
+export interface DbProject {
+  id: string;
+  reference_id: string | null;
+  name: string;
+  description: string | null;
+  customer_contact_id: string;
+  account_manager_id: string | null;
+  technical_director_id: string | null;
+  type: 'T&M' | 'Fixed_Price';
+  status: 'active' | 'completed' | 'on_hold' | 'cancelled';
+  won_bid_requirement_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  // Joined
+  customer_contact?: DbContact;
+  account_manager?: DbUser;
+  technical_director?: DbUser;
+  missions?: DbMission[];
+}
+
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+  customer_contact_id: string;
+  account_manager_id?: string;
+  technical_director_id?: string;
+  type: 'T&M' | 'Fixed_Price';
+  won_bid_requirement_id?: string;
+  start_date?: string;
+  end_date?: string;
+  notes?: string;
+  created_by?: string;
+}
+
+export interface UpdateProjectInput extends Partial<CreateProjectInput> {
+  status?: 'active' | 'completed' | 'on_hold' | 'cancelled';
 }
 
 // ============================================
@@ -545,8 +606,8 @@ export const candidatesService = {
 
 export interface DbRequirement {
   id: string;
-  reference_id: string | null;  // Human-readable ID like REQ-001
-  title: string | null;         // Descriptive name for the requirement
+  reference_id: string | null;
+  title: string | null;
   customer: string;
   industry: string | null;
   location: string | null;
@@ -563,15 +624,21 @@ export interface DbRequirement {
   // Customer module fields
   company_id: string | null;
   contact_id: string | null;
+  // Project workflow fields
+  project_type: 'T&M' | 'Fixed_Price';
+  project_id: string | null;
+  is_bid: boolean;
+  bid_status: 'qualifying' | 'proposal' | 'submitted' | 'won' | 'lost' | null;
   // Winning candidate (set when assessment = GO)
   winning_candidate_id: string | null;
   won_at: string | null;
   created_at: string;
   updated_at: string;
-  deleted_at: string | null;  // Soft delete timestamp
+  deleted_at: string | null;
   // Joined
   company?: DbCompany;
   contact?: DbContact;
+  project?: DbProject;
   winning_candidate?: DbCandidate;
 }
 
@@ -593,6 +660,11 @@ export interface CreateRequirementInput {
   // Customer module fields
   company_id?: string;
   contact_id?: string;
+  // Project workflow fields
+  project_type?: 'T&M' | 'Fixed_Price';
+  project_id?: string;
+  is_bid?: boolean;
+  bid_status?: 'qualifying' | 'proposal' | 'submitted' | 'won' | 'lost';
   // Winning candidate
   winning_candidate_id?: string;
 }
@@ -1399,13 +1471,14 @@ export const customerAssessmentsService = {
 
 export interface DbCompany {
   id: string;
-  reference_id: string | null;  // Human-readable ID like CUST-001
+  reference_id: string | null;
   name: string;
   trading_name: string | null;
   companies_house_number: string | null;
   industry: string | null;
   company_size: string | null;
   parent_company_id: string | null;
+  is_parent: boolean;
   address_line_1: string | null;
   address_line_2: string | null;
   city: string | null;
@@ -1422,7 +1495,7 @@ export interface DbCompany {
   assigned_manager_id: string | null;
   created_at: string;
   updated_at: string;
-  deleted_at: string | null;  // Soft delete timestamp
+  deleted_at: string | null;
   // Joined data
   parent_company?: DbCompany;
   subsidiaries?: DbCompany[];
@@ -1437,6 +1510,7 @@ export interface CreateCompanyInput {
   industry?: string;
   company_size?: string;
   parent_company_id?: string;
+  is_parent?: boolean;
   address_line_1?: string;
   address_line_2?: string;
   city?: string;
@@ -2478,6 +2552,154 @@ export const consultantsService = {
         deleted_at: new Date().toISOString(),
         deleted_by: deletedBy,
       })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
+
+// ============================================
+// PROJECTS SERVICE
+// ============================================
+
+export const projectsService = {
+  async getAll(): Promise<DbProject[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        customer_contact:customer_contact_id(*, company:company_id(*)),
+        account_manager:account_manager_id(*),
+        technical_director:technical_director_id(*)
+      `)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getById(id: string): Promise<DbProject | null> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        customer_contact:customer_contact_id(*, company:company_id(*)),
+        account_manager:account_manager_id(*),
+        technical_director:technical_director_id(*)
+      `)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getByContact(contactId: string): Promise<DbProject[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        customer_contact:customer_contact_id(*, company:company_id(*)),
+        account_manager:account_manager_id(*),
+        technical_director:technical_director_id(*)
+      `)
+      .eq('customer_contact_id', contactId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getByCompany(companyId: string): Promise<DbProject[]> {
+    // Get projects where the contact belongs to this company
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        customer_contact:customer_contact_id!inner(*, company:company_id(*))
+      `)
+      .eq('customer_contact.company_id', companyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getActiveByContact(contactId: string): Promise<DbProject[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        customer_contact:customer_contact_id(*, company:company_id(*))
+      `)
+      .eq('customer_contact_id', contactId)
+      .eq('status', 'active')
+      .is('deleted_at', null)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(input: CreateProjectInput): Promise<DbProject> {
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        ...input,
+        status: 'active',
+      })
+      .select(`
+        *,
+        customer_contact:customer_contact_id(*, company:company_id(*)),
+        account_manager:account_manager_id(*),
+        technical_director:technical_director_id(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, input: UpdateProjectInput): Promise<DbProject> {
+    const { data, error } = await supabase
+      .from('projects')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        customer_contact:customer_contact_id(*, company:company_id(*)),
+        account_manager:account_manager_id(*),
+        technical_director:technical_director_id(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string, deletedBy?: string): Promise<void> {
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: deletedBy,
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
       .eq('id', id);
 
     if (error) throw error;

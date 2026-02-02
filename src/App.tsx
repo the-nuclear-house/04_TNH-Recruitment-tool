@@ -9,13 +9,15 @@ import {
   RequirementsPage,
   RequirementDetailPage,
   InterviewsPage,
-  CustomerAssessmentsPage,
-  ClientMeetingsPage,
+  CustomerMeetingsPage,
   CustomersPage,
   ContractsPage,
   ConsultantsPage,
   ConsultantProfilePage,
   MissionsPage,
+  BidsPage,
+  TimesheetsPage,
+  LeaveRequestsPage,
   TicketsPage,
   OrganisationPage,
   SettingsPage,
@@ -56,19 +58,31 @@ function App() {
         >
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
-          <Route path="/candidates" element={<CandidatesPage />} />
-          <Route path="/candidates/:id" element={<CandidateProfilePage />} />
+          
+          {/* Sales */}
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customer-meetings" element={<CustomerMeetingsPage />} />
           <Route path="/requirements" element={<RequirementsPage />} />
           <Route path="/requirements/:id" element={<RequirementDetailPage />} />
+          <Route path="/bids" element={<BidsPage />} />
+          
+          {/* Recruitment */}
+          <Route path="/candidates" element={<CandidatesPage />} />
+          <Route path="/candidates/:id" element={<CandidateProfilePage />} />
           <Route path="/interviews" element={<InterviewsPage />} />
-          <Route path="/customer-assessments" element={<CustomerAssessmentsPage />} />
-          <Route path="/client-meetings" element={<ClientMeetingsPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
+          
+          {/* Operations */}
           <Route path="/consultants" element={<ConsultantsPage />} />
           <Route path="/consultants/:id" element={<ConsultantProfilePage />} />
           <Route path="/missions" element={<MissionsPage />} />
+          <Route path="/timesheets" element={<TimesheetsPage />} />
+          
+          {/* HR */}
+          <Route path="/leave-requests" element={<LeaveRequestsPage />} />
           <Route path="/tickets" element={<TicketsPage />} />
+          
+          {/* Admin */}
           <Route path="/organisation" element={<OrganisationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
