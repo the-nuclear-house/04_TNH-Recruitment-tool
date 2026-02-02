@@ -678,9 +678,10 @@ export const requirementsService = {
         *,
         company:company_id(*),
         contact:contact_id(*),
+        project:project_id(*),
         winning_candidate:winning_candidate_id(*)
       `)
-      .is('deleted_at', null)  // Exclude soft-deleted records
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -695,6 +696,7 @@ export const requirementsService = {
         *,
         company:company_id(*),
         contact:contact_id(*),
+        project:project_id(*),
         winning_candidate:winning_candidate_id(*)
       `)
       .eq('id', id)

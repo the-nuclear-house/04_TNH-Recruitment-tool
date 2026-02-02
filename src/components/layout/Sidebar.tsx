@@ -62,7 +62,6 @@ export function Sidebar() {
   // Top-level items (always visible)
   const topItems: NavItem[] = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Search', href: '/search', icon: Search },
   ];
 
   // Build navigation groups based on permissions

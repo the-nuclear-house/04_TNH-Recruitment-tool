@@ -29,12 +29,14 @@ import {
   applicationsService,
   customerAssessmentsService,
   missionsService,
+  projectsService,
   type DbRequirement, 
   type DbUser, 
   type DbCompany, 
   type DbContact,
   type DbApplication,
   type DbCustomerAssessment,
+  type DbProject,
 } from '@/lib/services';
 
 type RequirementStatus = 'active' | 'opportunity' | 'cancelled' | 'lost' | 'won';
@@ -121,7 +123,12 @@ export function RequirementsPage() {
     clearance_required: 'none',
     engineering_discipline: 'software',
     manager_id: '',
+    project_type: 'T&M' as 'T&M' | 'Fixed_Price',
+    project_id: '',
   });
+  
+  // Projects for selected contact
+  const [contactProjects, setContactProjects] = useState<DbProject[]>([]);
 
   // Set default manager to current user
   useEffect(() => {
@@ -195,14 +202,28 @@ export function RequirementsPage() {
   };
 
   // When contact is selected, auto-fill location from their company
-  const handleContactSelect = (contactId: string) => {
+  const handleContactSelect = async (contactId: string) => {
     const contact = allContacts.find(c => c.id === contactId);
     const company = contact?.company || companies.find(c => c.id === contact?.company_id);
     setFormData(prev => ({
       ...prev,
       contact_id: contactId,
       location: company?.city || prev.location,
+      project_id: '', // Reset project when contact changes
     }));
+    
+    // Load active projects for this contact
+    if (contactId) {
+      try {
+        const projects = await projectsService.getActiveByContact(contactId);
+        setContactProjects(projects);
+      } catch (error) {
+        console.error('Error loading projects:', error);
+        setContactProjects([]);
+      }
+    } else {
+      setContactProjects([]);
+    }
   };
 
   const handleFormChange = (field: string, value: string) => {
@@ -239,6 +260,9 @@ export function RequirementsPage() {
     const selectedContact = allContacts.find(c => c.id === formData.contact_id);
     const selectedCompany = selectedContact?.company || companies.find(c => c.id === selectedContact?.company_id);
     
+    // Determine if this is a bid (Fixed Price with no existing project)
+    const isBid = formData.project_type === 'Fixed_Price' && !formData.project_id;
+    
     setIsSubmitting(true);
     try {
       await requirementsService.create({
@@ -250,15 +274,23 @@ export function RequirementsPage() {
         location: formData.location || undefined,
         max_day_rate: formData.max_day_rate ? parseInt(formData.max_day_rate) : undefined,
         description: formData.description || undefined,
-        status: formData.status,
+        status: isBid ? 'opportunity' : formData.status,
         clearance_required: formData.clearance_required,
         engineering_discipline: formData.engineering_discipline,
         manager_id: formData.manager_id || undefined,
         skills: skills.length > 0 ? skills : undefined,
         created_by: user?.id,
+        // New project workflow fields
+        project_type: formData.project_type,
+        project_id: formData.project_id || undefined,
+        is_bid: isBid,
+        bid_status: isBid ? 'qualifying' : undefined,
       });
       
-      toast.success('Requirement Created', `"${formData.title}" has been created`);
+      const message = isBid 
+        ? `Bid "${formData.title}" has been created and is in qualifying stage`
+        : `"${formData.title}" has been created`;
+      toast.success(isBid ? 'Bid Created' : 'Requirement Created', message);
       setIsModalOpen(false);
       setFormData({
         title: '',
@@ -270,8 +302,11 @@ export function RequirementsPage() {
         clearance_required: 'none',
         engineering_discipline: 'software',
         manager_id: user?.id || '',
+        project_type: 'T&M',
+        project_id: '',
       });
       setSkills([]);
+      setContactProjects([]);
       loadData();
     } catch (error) {
       console.error('Error creating requirement:', error);
@@ -470,6 +505,18 @@ export function RequirementsPage() {
                               → {requirement.contact.first_name} {requirement.contact.last_name}
                             </span>
                           )}
+                          {/* Project Type Badge */}
+                          {requirement.project_type && (
+                            <Badge variant={requirement.project_type === 'Fixed_Price' ? 'purple' : 'cyan'}>
+                              {requirement.project_type === 'Fixed_Price' ? 'Fixed Price' : 'T&M'}
+                            </Badge>
+                          )}
+                          {/* Bid Status Badge */}
+                          {requirement.is_bid && requirement.bid_status && (
+                            <Badge variant="amber">
+                              Bid: {requirement.bid_status.charAt(0).toUpperCase() + requirement.bid_status.slice(1)}
+                            </Badge>
+                          )}
                           {requirement.clearance_required && requirement.clearance_required !== 'none' && (
                             <Badge variant="orange">
                               {clearanceLabels[requirement.clearance_required] || requirement.clearance_required}
@@ -653,6 +700,46 @@ export function RequirementsPage() {
             />
           </div>
 
+          {/* Project Type and Existing Project Selection */}
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Project Type *"
+              options={[
+                { value: 'T&M', label: 'Time & Materials' },
+                { value: 'Fixed_Price', label: 'Fixed Price / Work Package' },
+              ]}
+              value={formData.project_type}
+              onChange={(e) => handleFormChange('project_type', e.target.value)}
+            />
+            <Select
+              label="Existing Project"
+              options={[
+                { value: '', label: 'New Project (will be created on win)' },
+                ...contactProjects.map(p => ({
+                  value: p.id,
+                  label: `${p.name} (${p.type})`,
+                })),
+              ]}
+              value={formData.project_id}
+              onChange={(e) => handleFormChange('project_id', e.target.value)}
+              disabled={!formData.contact_id}
+            />
+          </div>
+
+          {/* Info banner based on selection */}
+          {formData.project_type === 'Fixed_Price' && !formData.project_id && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              <strong>Bid Process:</strong> This will create a bid that goes through qualifying → proposal → submitted stages. 
+              If won, a project will be created and you can then add staffing requirements.
+            </div>
+          )}
+          {formData.project_id && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              <strong>Staffing Requirement:</strong> This requirement will be added to the existing project. 
+              On win, a mission will be created within that project.
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-4">
             <Input
               label="Max Day Rate (£)"
@@ -666,6 +753,7 @@ export function RequirementsPage() {
               options={statusOptions}
               value={formData.status}
               onChange={(e) => handleFormChange('status', e.target.value)}
+              disabled={formData.project_type === 'Fixed_Price' && !formData.project_id}
             />
             <Select
               label="Engineering Discipline"
