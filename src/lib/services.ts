@@ -3632,6 +3632,36 @@ export const hrTicketsService = {
     return data;
   },
 
+  async markITAccessCreated(id: string, userId: string): Promise<DbHrTicket> {
+    const ticket = await this.getById(id);
+    if (!ticket) throw new Error('Ticket not found');
+
+    // Update ticket status
+    const { data, error } = await supabase
+      .from('hr_tickets')
+      .update({
+        status: 'it_access_created',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update offer status
+    if (ticket.offer_id) {
+      await offersService.markITAccessCreated(ticket.offer_id, userId);
+    }
+
+    // Update candidate status
+    if (ticket.candidate_id) {
+      await candidatesService.update(ticket.candidate_id, { status: 'active_consultant' });
+    }
+
+    return data;
+  },
+
   async convertToConsultant(id: string, userId: string): Promise<DbHrTicket> {
     const ticket = await this.getById(id);
     if (!ticket) throw new Error('Ticket not found');

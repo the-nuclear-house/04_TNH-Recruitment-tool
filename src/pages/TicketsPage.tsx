@@ -104,7 +104,7 @@ export function TicketsPage() {
   const [completionNotes, setCompletionNotes] = useState('');
   
   // Workflow confirmation dialogs
-  const [confirmAction, setConfirmAction] = useState<'contract_sent' | 'contract_signed' | 'convert' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'contract_sent' | 'contract_signed' | 'it_access' | 'convert' | null>(null);
   const [ticketForConfirm, setTicketForConfirm] = useState<UITicket | null>(null);
 
   useEffect(() => {
@@ -230,7 +230,7 @@ export function TicketsPage() {
   };
 
   // Contract workflow handlers - these show confirmation first
-  const openConfirmDialog = (action: 'contract_sent' | 'contract_signed' | 'convert', ticket: UITicket) => {
+  const openConfirmDialog = (action: 'contract_sent' | 'contract_signed' | 'it_access' | 'convert', ticket: UITicket) => {
     setConfirmAction(action);
     setTicketForConfirm(ticket);
   };
@@ -286,6 +286,9 @@ export function TicketsPage() {
       } else if (confirmAction === 'contract_signed') {
         await hrTicketsService.markContractSigned(ticketForConfirm.id, user!.id);
         toast.success('Contract Signed', 'Ticket updated - contract has been signed');
+      } else if (confirmAction === 'it_access') {
+        await hrTicketsService.markITAccessCreated(ticketForConfirm.id, user!.id);
+        toast.success('IT Access Created', 'Ticket updated - IT credentials have been set up');
       } else if (confirmAction === 'convert') {
         await hrTicketsService.convertToConsultant(ticketForConfirm.id, user!.id);
         toast.success('Converted', 'Candidate has been converted to consultant. Ticket completed.');
@@ -411,20 +414,25 @@ export function TicketsPage() {
                         
                         {/* Workflow progress for contract tickets */}
                         {ticket.ticket_type === 'contract_send' && ticket.status !== 'completed' && (
-                          <div className="flex items-center gap-2 mt-3">
+                          <div className="flex items-center gap-1 mt-3 flex-wrap">
                             <div className={`flex items-center gap-1 text-xs ${ticket.status === 'pending' ? 'text-brand-cyan font-medium' : 'text-green-600'}`}>
                               <div className={`w-2 h-2 rounded-full ${ticket.status === 'pending' ? 'bg-brand-cyan' : 'bg-green-500'}`} />
-                              1. Send Contract
+                              1. Send
                             </div>
                             <ArrowRight className="h-3 w-3 text-brand-grey-300" />
-                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_sent' ? 'text-brand-cyan font-medium' : ticket.status === 'contract_signed' || ticket.status === 'completed' ? 'text-green-600' : 'text-brand-grey-400'}`}>
-                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_sent' ? 'bg-brand-cyan' : ticket.status === 'contract_signed' || ticket.status === 'completed' ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
-                              2. Contract Signed
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_sent' ? 'text-brand-cyan font-medium' : ticket.status === 'contract_signed' || ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'text-green-600' : 'text-brand-grey-400'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_sent' ? 'bg-brand-cyan' : ticket.status === 'contract_signed' || ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
+                              2. Signed
                             </div>
                             <ArrowRight className="h-3 w-3 text-brand-grey-300" />
-                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_signed' ? 'text-brand-cyan font-medium' : 'text-brand-grey-400'}`}>
-                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_signed' ? 'bg-brand-cyan' : 'bg-brand-grey-300'}`} />
-                              3. Convert to Consultant
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_signed' ? 'text-brand-cyan font-medium' : ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'text-green-600' : 'text-brand-grey-400'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_signed' ? 'bg-brand-cyan' : ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
+                              3. IT Access
+                            </div>
+                            <ArrowRight className="h-3 w-3 text-brand-grey-300" />
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'it_access_created' ? 'text-brand-cyan font-medium' : 'text-brand-grey-400'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'it_access_created' ? 'bg-brand-cyan' : 'bg-brand-grey-300'}`} />
+                              4. Convert
                             </div>
                           </div>
                         )}
@@ -524,6 +532,17 @@ export function TicketsPage() {
                             </Button>
                           )}
                           {ticket.status === 'contract_signed' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => openConfirmDialog('it_access', ticket)}
+                              disabled={isProcessing}
+                              leftIcon={<CheckCircle className="h-4 w-4" />}
+                            >
+                              Mark IT Access Created
+                            </Button>
+                          )}
+                          {ticket.status === 'it_access_created' && (
                             <Button
                               variant="success"
                               size="sm"
@@ -630,6 +649,7 @@ export function TicketsPage() {
         title={
           confirmAction === 'contract_sent' ? 'Confirm Contract Sent' :
           confirmAction === 'contract_signed' ? 'Confirm Contract Signed' :
+          confirmAction === 'it_access' ? 'Confirm IT Access Created' :
           confirmAction === 'convert' ? 'Convert to Consultant' : ''
         }
         message={
@@ -637,12 +657,15 @@ export function TicketsPage() {
             ? `Do you confirm you have sent the contract to ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
           confirmAction === 'contract_signed' 
             ? `Do you confirm you have received and verified the signed contract from ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
+          confirmAction === 'it_access'
+            ? `Do you confirm IT credentials and access have been set up for ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
           confirmAction === 'convert' 
             ? `This will create a new consultant record for ${ticketForConfirm?.candidate_name || 'this candidate'} and complete this ticket. Do you want to proceed?` : ''
         }
         confirmText={
           confirmAction === 'contract_sent' ? 'Yes, Contract Sent' :
           confirmAction === 'contract_signed' ? 'Yes, Contract Signed' :
+          confirmAction === 'it_access' ? 'Yes, IT Access Created' :
           confirmAction === 'convert' ? 'Yes, Convert to Consultant' : 'Confirm'
         }
         variant={confirmAction === 'convert' ? 'primary' : 'primary'}

@@ -425,9 +425,12 @@ export function CandidateProfilePage() {
   const [offers, setOffers] = useState<DbOffer[]>([]);
   const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
   const [isCreatingOffer, setIsCreatingOffer] = useState(false);
+  const [editingOffer, setEditingOffer] = useState<DbOffer | null>(null);
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
   const [offerForm, setOfferForm] = useState({
     job_title: '',
     salary_amount: '',
+    salary_currency: 'GBP',
     contract_type: 'permanent',
     day_rate: '',
     start_date: '',
@@ -435,6 +438,8 @@ export function CandidateProfilePage() {
     work_location: '',
     candidate_full_name: '',
     candidate_address: '',
+    candidate_nationality: '',
+    approver_id: '',
     notes: '',
   });
   const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null);
@@ -1336,13 +1341,16 @@ export function CandidateProfilePage() {
                           setOfferForm({
                             job_title: linkedRequirements[0]?.requirement?.title || '',
                             salary_amount: proposedSalary || '',
+                            salary_currency: 'GBP',
                             contract_type: candidate?.contract_preference === 'contractor' ? 'contract' : 'permanent',
                             day_rate: candidate?.expected_day_rate || '',
                             start_date: '',
                             end_date: '',
                             work_location: linkedRequirements[0]?.requirement?.location || candidate?.location || '',
                             candidate_full_name: `${candidate?.first_name} ${candidate?.last_name}`,
-                            candidate_address: '',
+                            candidate_address: candidate?.address || '',
+                            candidate_nationality: candidate?.nationality || '',
+                            approver_id: '',
                             notes: '',
                           });
                           setIdDocumentFile(null);
@@ -1359,41 +1367,42 @@ export function CandidateProfilePage() {
                     <div className="space-y-4">
                       {/* Visual Pipeline */}
                       <div className="flex items-center justify-between p-4 bg-brand-grey-50 rounded-lg">
-                        {['pending_approval', 'approved', 'contract_sent', 'contract_signed'].map((status, idx) => {
+                        {['pending_approval', 'approved', 'contract_sent', 'contract_signed', 'it_access_created'].map((status, idx) => {
                           const statusLabels: Record<string, string> = {
                             pending_approval: 'Pending Approval',
                             approved: 'Approved',
                             contract_sent: 'Contract Sent',
                             contract_signed: 'Contract Signed',
+                            it_access_created: 'IT Access',
                           };
-                          const statusOrder = ['pending_approval', 'approved', 'contract_sent', 'contract_signed'];
+                          const statusOrder = ['pending_approval', 'approved', 'contract_sent', 'contract_signed', 'it_access_created'];
                           const currentIdx = statusOrder.indexOf(activeOffer.status);
                           const isComplete = idx < currentIdx || activeOffer.status === status;
                           const isCurrent = activeOffer.status === status;
                           
                           return (
                             <div key={status} className="flex items-center">
-                              <div className={`flex flex-col items-center ${idx > 0 ? 'ml-2' : ''}`}>
+                              <div className={`flex flex-col items-center ${idx > 0 ? 'ml-1' : ''}`}>
                                 <div className={`
-                                  w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium
+                                  w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium
                                   ${isComplete ? 'bg-green-100 text-green-700' : 
                                     isCurrent ? 'bg-amber-100 text-amber-700' : 
                                     'bg-brand-grey-200 text-brand-grey-400'}
                                 `}>
                                   {isComplete && idx < currentIdx ? (
-                                    <CheckCircle className="h-5 w-5" />
+                                    <CheckCircle className="h-4 w-4" />
                                   ) : (
                                     idx + 1
                                   )}
                                 </div>
-                                <span className={`text-xs mt-1 text-center max-w-[80px] ${
+                                <span className={`text-[10px] mt-1 text-center max-w-[60px] leading-tight ${
                                   isComplete || isCurrent ? 'text-brand-slate-700 font-medium' : 'text-brand-grey-400'
                                 }`}>
                                   {statusLabels[status]}
                                 </span>
                               </div>
-                              {idx < 3 && (
-                                <ArrowRight className={`h-4 w-4 mx-2 ${
+                              {idx < 4 && (
+                                <ArrowRight className={`h-3 w-3 mx-1 ${
                                   idx < currentIdx ? 'text-green-500' : 'text-brand-grey-300'
                                 }`} />
                               )}
@@ -1401,6 +1410,39 @@ export function CandidateProfilePage() {
                           );
                         })}
                       </div>
+
+                      {/* Edit Offer Button - only for pending_approval and if user created the offer */}
+                      {activeOffer.status === 'pending_approval' && activeOffer.requested_by === user?.id && (
+                        <div className="flex justify-end">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            leftIcon={<Edit className="h-4 w-4" />}
+                            onClick={() => {
+                              // Open edit offer modal
+                              setEditingOffer(activeOffer);
+                              setOfferForm({
+                                job_title: activeOffer.job_title,
+                                salary_amount: activeOffer.salary_amount?.toString() || '',
+                                salary_currency: activeOffer.salary_currency || 'GBP',
+                                contract_type: activeOffer.contract_type,
+                                day_rate: activeOffer.day_rate?.toString() || '',
+                                start_date: activeOffer.start_date,
+                                end_date: activeOffer.end_date || '',
+                                work_location: activeOffer.work_location || '',
+                                candidate_full_name: activeOffer.candidate_full_name || `${candidate?.first_name} ${candidate?.last_name}`,
+                                candidate_address: activeOffer.candidate_address || candidate?.address || '',
+                                candidate_nationality: activeOffer.candidate_nationality || candidate?.nationality || '',
+                                approver_id: activeOffer.approver_id || '',
+                                notes: activeOffer.notes || '',
+                              });
+                              setIsOfferModalOpen(true);
+                            }}
+                          >
+                            Edit Offer
+                          </Button>
+                        </div>
+                      )}
                       
                       {/* Offer Details */}
                       <div className="grid grid-cols-2 gap-4 text-sm">

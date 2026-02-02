@@ -377,8 +377,8 @@ export function ContractsPage() {
                       </div>
                       
                       {/* Visual Pipeline */}
-                      <div className="flex flex-col items-end gap-2 ml-4">
-                        <div className="flex items-center gap-1">
+                      <div className="flex flex-col items-end gap-1 ml-4">
+                        <div className="flex items-center">
                           {['pending_approval', 'approved', 'contract_sent', 'contract_signed', 'it_access_created', 'converted'].map((status, idx) => {
                             const statusOrder = ['pending_approval', 'approved', 'contract_sent', 'contract_signed', 'it_access_created', 'converted'];
                             const currentIdx = offer.candidate?.status === 'converted_to_consultant' 
@@ -391,7 +391,7 @@ export function ContractsPage() {
                             return (
                               <div key={status} className="flex items-center">
                                 <div className={`
-                                  w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium
+                                  w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium
                                   ${isComplete ? 'bg-green-100 text-green-700' : 'bg-brand-grey-100 text-brand-grey-400'}
                                   ${isCurrent ? 'ring-2 ring-offset-1 ring-green-500' : ''}
                                 `}>
@@ -404,14 +404,14 @@ export function ContractsPage() {
                             );
                           })}
                         </div>
-                        {/* Legend */}
-                        <div className="flex items-center gap-2 text-[9px] text-brand-grey-400">
-                          <span>1. Approval</span>
-                          <span>2. HR</span>
-                          <span>3. Sent</span>
-                          <span>4. Signed</span>
-                          <span>5. IT</span>
-                          <span>6. Done</span>
+                        {/* Legend - aligned with circles */}
+                        <div className="flex items-center">
+                          {['Appr.', 'HR', 'Sent', 'Sign', 'IT', 'Done'].map((label, idx) => (
+                            <div key={label} className="flex items-center">
+                              <span className="w-7 text-center text-[8px] text-brand-grey-400">{label}</span>
+                              {idx < 5 && <span className="w-3" />}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>

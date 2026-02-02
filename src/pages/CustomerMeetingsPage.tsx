@@ -1424,27 +1424,7 @@ export function CustomerMeetingsPage() {
         variant="primary"
       />
 
-      {/* Create Mission Modal */}
-      {assessmentForMission && (
-        <CreateMissionModal
-          isOpen={isCreateMissionModalOpen}
-          onClose={() => {
-            setIsCreateMissionModalOpen(false);
-            setAssessmentForMission(null);
-          }}
-          onSuccess={() => {
-            setIsCreateMissionModalOpen(false);
-            setAssessmentForMission(null);
-            loadData();
-          }}
-          requirement={assessmentForMission.requirement_id ? { id: assessmentForMission.requirement_id } as any : undefined}
-          candidate={candidates.find(c => c.id === assessmentForMission.candidate_id)}
-          company={(() => {
-            const contact = contacts.find(c => c.id === assessmentForMission.contact_id);
-            return contact ? companies.find(co => co.id === contact.company_id) : undefined;
-          })()}
-        />
-      )}
+      {/* Mission creation is now handled through RequirementDetailPage with proper project flow */}
     </div>
   );
 }

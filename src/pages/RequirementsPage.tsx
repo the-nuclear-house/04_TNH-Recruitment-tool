@@ -827,7 +827,7 @@ export function RequirementsPage() {
         </div>
       </Modal>
 
-      {/* Create Mission Modal */}
+      {/* Create Mission Modal - needs project_id from requirement */}
       {missionRequirement && (
         <CreateMissionModal
           isOpen={isCreateMissionModalOpen}
@@ -839,10 +839,12 @@ export function RequirementsPage() {
             loadData();
             navigate('/missions');
           }}
+          projectId={missionRequirement.project_id || ''}
+          projectName={missionRequirement.project?.name}
           requirement={missionRequirement}
-          company={missionRequirement.company as any}
           contact={missionRequirement.contact}
           winningCandidateId={missionRequirement.winning_candidate_id || undefined}
+          customerName={missionRequirement.company?.name || missionRequirement.customer}
         />
       )}
     </div>
