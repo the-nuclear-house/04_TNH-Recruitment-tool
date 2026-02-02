@@ -22,15 +22,7 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { 
-  missionsService, 
-  companiesService, 
-  projectsService,
-  consultantsService,
-  type DbMission, 
-  type DbCompany,
-  type DbProject,
-} from '@/lib/services';
+import { missionsService, companiesService, projectsService, consultantsService, type DbMission, type DbCompany, type DbProject } from '@/lib/services';
 
 const workModeLabels: Record<string, string> = {
   full_onsite: 'On-site',
@@ -91,6 +83,34 @@ function getMissionBarStyle(mission: DbMission, weeks: Date[]): { left: string; 
   };
 }
 
+function getProjectBarStyle(project: DbProject, weeks: Date[]): { left: string; width: string } | null {
+  if (weeks.length === 0 || !project.start_date) return null;
+  
+  const timelineStart = weeks[0];
+  const timelineEnd = new Date(weeks[weeks.length - 1]);
+  timelineEnd.setDate(timelineEnd.getDate() + 6);
+  
+  const projectStart = new Date(project.start_date);
+  const projectEnd = project.end_date ? new Date(project.end_date) : timelineEnd;
+  
+  const visibleStart = projectStart < timelineStart ? timelineStart : projectStart;
+  const visibleEnd = projectEnd > timelineEnd ? timelineEnd : projectEnd;
+  
+  const totalDays = (timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
+  const startOffset = (visibleStart.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
+  const duration = (visibleEnd.getTime() - visibleStart.getTime()) / (1000 * 60 * 60 * 24);
+  
+  const left = (startOffset / totalDays) * 100;
+  const width = (duration / totalDays) * 100;
+  
+  if (width <= 0) return null;
+  
+  return {
+    left: `${Math.max(0, left)}%`,
+    width: `${Math.min(100 - left, width)}%`,
+  };
+}
+
 export function MissionsPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -101,6 +121,7 @@ export function MissionsPage() {
   const [companies, setCompanies] = useState<DbCompany[]>([]);
   const [projects, setProjects] = useState<DbProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   
   const [timelineStart, setTimelineStart] = useState<Date>(() => {
@@ -150,8 +171,11 @@ export function MissionsPage() {
       setCompanies(companiesData);
       setProjects(projectsData);
       
-      // Expand all projects by default
-      const projectIds = new Set(projectsData.map(p => p.id));
+      const customerIds = new Set(missionsData.map(m => m.company_id));
+      setExpandedCustomers(customerIds);
+      
+      // Expand all projects that have missions
+      const projectIds = new Set(missionsData.map(m => m.project_id).filter(Boolean) as string[]);
       setExpandedProjects(projectIds);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -163,29 +187,61 @@ export function MissionsPage() {
 
   const weeks = useMemo(() => getWeeksInRange(timelineStart, numWeeks), [timelineStart, numWeeks]);
 
-  // Group missions by project
-  const missionsByProject = useMemo(() => {
+  // Group missions by customer, then by project
+  const missionsByCustomerAndProject = useMemo(() => {
+    const grouped: Record<string, { noProject: DbMission[]; byProject: Record<string, DbMission[]> }> = {};
+    
+    missions.forEach(mission => {
+      if (!grouped[mission.company_id]) {
+        grouped[mission.company_id] = { noProject: [], byProject: {} };
+      }
+      
+      if (mission.project_id) {
+        if (!grouped[mission.company_id].byProject[mission.project_id]) {
+          grouped[mission.company_id].byProject[mission.project_id] = [];
+        }
+        grouped[mission.company_id].byProject[mission.project_id].push(mission);
+      } else {
+        grouped[mission.company_id].noProject.push(mission);
+      }
+    });
+    
+    return grouped;
+  }, [missions]);
+
+  // Legacy grouping for backwards compatibility
+  const missionsByCustomer = useMemo(() => {
     const grouped: Record<string, DbMission[]> = {};
     missions.forEach(mission => {
-      const projectId = mission.project_id || 'no-project';
-      if (!grouped[projectId]) {
-        grouped[projectId] = [];
+      if (!grouped[mission.company_id]) {
+        grouped[mission.company_id] = [];
       }
-      grouped[projectId].push(mission);
+      grouped[mission.company_id].push(mission);
     });
     return grouped;
   }, [missions]);
 
-  // Get projects that have missions
-  const projectsWithMissions = useMemo(() => {
-    const projectIds = new Set(missions.map(m => m.project_id).filter(Boolean));
-    return projects.filter(p => projectIds.has(p.id));
-  }, [projects, missions]);
+  const companiesWithMissions = useMemo(() => {
+    return companies.filter(c => missionsByCustomer[c.id]?.length > 0);
+  }, [companies, missionsByCustomer]);
 
-  // Missions without a project (legacy or orphaned)
-  const orphanedMissions = useMemo(() => {
-    return missions.filter(m => !m.project_id);
-  }, [missions]);
+  // Get projects for a specific company
+  const getProjectsForCompany = (companyId: string) => {
+    const projectIds = Object.keys(missionsByCustomerAndProject[companyId]?.byProject || {});
+    return projects.filter(p => projectIds.includes(p.id));
+  };
+
+  const toggleProject = (projectId: string) => {
+    setExpandedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  };
 
   const goToPreviousWeeks = () => {
     setTimelineStart(prev => {
@@ -209,45 +265,16 @@ export function MissionsPage() {
     setTimelineStart(today);
   };
 
-  const toggleProject = (projectId: string) => {
-    setExpandedProjects(prev => {
+  const toggleCustomer = (customerId: string) => {
+    setExpandedCustomers(prev => {
       const next = new Set(prev);
-      if (next.has(projectId)) {
-        next.delete(projectId);
+      if (next.has(customerId)) {
+        next.delete(customerId);
       } else {
-        next.add(projectId);
+        next.add(customerId);
       }
       return next;
     });
-  };
-
-  // Calculate project bar style for Gantt chart
-  const getProjectBarStyle = (project: DbProject): { left: string; width: string } | null => {
-    if (!project.start_date || !project.end_date || weeks.length === 0) return null;
-    
-    const timelineStart = weeks[0];
-    const timelineEnd = new Date(weeks[weeks.length - 1]);
-    timelineEnd.setDate(timelineEnd.getDate() + 6);
-    
-    const projectStart = new Date(project.start_date);
-    const projectEnd = new Date(project.end_date);
-    
-    const visibleStart = projectStart < timelineStart ? timelineStart : projectStart;
-    const visibleEnd = projectEnd > timelineEnd ? timelineEnd : projectEnd;
-    
-    const totalDays = (timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
-    const startOffset = (visibleStart.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
-    const duration = (visibleEnd.getTime() - visibleStart.getTime()) / (1000 * 60 * 60 * 24);
-    
-    const left = (startOffset / totalDays) * 100;
-    const width = (duration / totalDays) * 100;
-    
-    if (width <= 0) return null;
-    
-    return {
-      left: `${Math.max(0, left)}%`,
-      width: `${Math.min(100 - Math.max(0, left), width)}%`,
-    };
   };
 
   // Open mission detail
@@ -358,7 +385,7 @@ export function MissionsPage() {
     active: missions.filter(m => m.status === 'active').length,
     total: missions.length,
     consultants: new Set(missions.filter(m => m.status === 'active').map(m => m.consultant_id)).size,
-    projects: projectsWithMissions.length,
+    companies: companiesWithMissions.length,
   };
 
   if (isLoading) {
@@ -378,7 +405,7 @@ export function MissionsPage() {
     <div className="min-h-screen">
       <Header 
         title="Missions" 
-        subtitle={`${stats.active} active missions across ${stats.projects} projects`}
+        subtitle={`${stats.active} active missions across ${stats.companies} customers`}
       />
 
       <div className="p-6 space-y-6">
@@ -423,11 +450,11 @@ export function MissionsPage() {
           <Card>
             <div className="flex items-center gap-3">
               <div className="p-2 bg-amber-100 rounded-lg">
-                <FolderOpen className="h-5 w-5 text-amber-600" />
+                <Building2 className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{stats.projects}</p>
-                <p className="text-sm text-brand-grey-400">Active Projects</p>
+                <p className="text-2xl font-bold text-brand-slate-900">{stats.companies}</p>
+                <p className="text-sm text-brand-grey-400">Active Customers</p>
               </div>
             </div>
           </Card>
@@ -463,8 +490,8 @@ export function MissionsPage() {
             <div className="overflow-x-auto">
               {/* Timeline Header */}
               <div className="flex border-b border-brand-grey-200 min-w-[900px]">
-                <div className="w-72 flex-shrink-0 p-3 bg-brand-grey-50 font-medium text-brand-slate-700 border-r border-brand-grey-200">
-                  Project / Consultant
+                <div className="w-64 flex-shrink-0 p-3 bg-brand-grey-50 font-medium text-brand-slate-700 border-r border-brand-grey-200">
+                  Customer / Consultant
                 </div>
                 <div className="flex-1 flex">
                   {weeks.map((week, idx) => {
@@ -483,165 +510,200 @@ export function MissionsPage() {
                 </div>
               </div>
 
-              {/* Timeline Body - Grouped by Project */}
-              {projectsWithMissions.map(project => {
-                const projectMissions = missionsByProject[project.id] || [];
-                const isExpanded = expandedProjects.has(project.id);
-                const projectBarStyle = getProjectBarStyle(project);
-                const customerName = project.customer_contact?.company?.name || 'Unknown';
+              {/* Timeline Body */}
+              {companiesWithMissions.map(customer => {
+                const customerData = missionsByCustomerAndProject[customer.id];
+                const customerMissions = missionsByCustomer[customer.id] || [];
+                const isExpanded = expandedCustomers.has(customer.id);
+                const customerProjects = getProjectsForCompany(customer.id);
+                const missionsWithoutProject = customerData?.noProject || [];
                 
                 return (
-                  <div key={project.id} className="min-w-[900px]">
-                    {/* Project Header - with project bar */}
+                  <div key={customer.id} className="min-w-[900px]">
+                    {/* Customer Header */}
                     <div 
-                      className="flex border-b border-brand-grey-200 bg-gradient-to-r from-purple-50 to-white cursor-pointer hover:from-purple-100 transition-colors"
-                      onClick={() => toggleProject(project.id)}
+                      className="flex items-center border-b border-brand-grey-200 bg-brand-grey-50 cursor-pointer hover:bg-brand-grey-100 transition-colors"
+                      onClick={() => toggleCustomer(customer.id)}
                     >
-                      <div className="w-72 flex-shrink-0 p-3 flex items-center gap-2 border-r border-brand-grey-200">
+                      <div className="w-64 flex-shrink-0 p-3 flex items-center gap-2 border-r border-brand-grey-200">
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-purple-500" />
+                          <ChevronDown className="h-4 w-4 text-brand-grey-400" />
                         ) : (
-                          <ChevronUp className="h-4 w-4 text-purple-500" />
+                          <ChevronUp className="h-4 w-4 text-brand-grey-400" />
                         )}
-                        <FolderOpen className="h-4 w-4 text-purple-500" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-brand-slate-900 truncate">{project.name}</p>
-                          <p className="text-xs text-brand-grey-400 truncate">{customerName} • {project.reference_id}</p>
-                        </div>
-                        <Badge variant="purple">{projectMissions.length}</Badge>
+                        <Building2 className="h-4 w-4 text-brand-grey-400" />
+                        <span className="font-medium text-brand-slate-900">{customer.name}</span>
+                        <Badge variant="grey">{customerMissions.length}</Badge>
                       </div>
-                      {/* Project timeline bar */}
-                      <div className="flex-1 relative py-2">
-                        {projectBarStyle && (
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2 h-3 bg-purple-200 border-2 border-purple-400 rounded"
-                            style={{ left: projectBarStyle.left, width: projectBarStyle.width, minWidth: '8px' }}
-                            title={`${project.name}\n${formatDate(project.start_date || '')} - ${formatDate(project.end_date || '')}`}
-                          />
-                        )}
-                      </div>
+                      <div className="flex-1" />
                     </div>
 
-                    {/* Missions under this project */}
-                    {isExpanded && projectMissions.map(mission => {
-                      const barStyle = getMissionBarStyle(mission, weeks);
-                      const statusInfo = statusConfig[mission.status] || statusConfig.active;
+                    {/* Projects and their Missions */}
+                    {isExpanded && customerProjects.map(project => {
+                      const projectMissions = customerData?.byProject[project.id] || [];
+                      const isProjectExpanded = expandedProjects.has(project.id);
+                      const projectBarStyle = getProjectBarStyle(project, weeks);
                       
                       return (
-                        <div 
-                          key={mission.id} 
-                          className="flex border-b border-brand-grey-100 hover:bg-brand-grey-50/50 transition-colors cursor-pointer"
-                          onClick={() => openMissionDetail(mission)}
-                        >
-                          {/* Mission Info */}
-                          <div className="w-72 flex-shrink-0 p-3 pl-8 border-r border-brand-grey-200">
-                            <div className="flex items-start gap-2">
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-brand-slate-900 text-sm truncate">
-                                  {mission.consultant?.first_name} {mission.consultant?.last_name}
-                                </p>
-                                <p className="text-xs text-brand-grey-400 truncate">
-                                  {mission.reference_id}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className={`px-1.5 py-0.5 rounded text-xs ${statusInfo.colour}`}>
-                                    {statusInfo.label}
-                                  </span>
-                                  <span className="text-xs text-brand-grey-400">
-                                    £{mission.sold_daily_rate}/day
-                                  </span>
-                                </div>
-                              </div>
+                        <div key={project.id}>
+                          {/* Project Header Row */}
+                          <div 
+                            className="flex items-center border-b border-brand-grey-200 bg-slate-100/50 cursor-pointer hover:bg-slate-100 transition-colors"
+                            onClick={() => toggleProject(project.id)}
+                          >
+                            <div className="w-64 flex-shrink-0 p-2 pl-8 flex items-center gap-2 border-r border-brand-grey-200">
+                              {isProjectExpanded ? (
+                                <ChevronDown className="h-3.5 w-3.5 text-brand-grey-400" />
+                              ) : (
+                                <ChevronUp className="h-3.5 w-3.5 text-brand-grey-400" />
+                              )}
+                              <FolderOpen className="h-3.5 w-3.5 text-slate-500" />
+                              <span className="font-medium text-slate-700 text-sm">{project.name}</span>
+                              <Badge variant="grey" className="text-xs">{projectMissions.length}</Badge>
+                            </div>
+                            {/* Project Timeline Bar */}
+                            <div className="flex-1 relative py-2">
+                              {projectBarStyle && (
+                                <div
+                                  className="absolute top-1/2 -translate-y-1/2 h-8 rounded bg-slate-300/60 border-2 border-slate-400"
+                                  style={{ left: projectBarStyle.left, width: projectBarStyle.width, minWidth: '8px' }}
+                                  title={`${project.name}\n${project.start_date || '?'} - ${project.end_date || 'ongoing'}`}
+                                />
+                              )}
                             </div>
                           </div>
                           
-                          {/* Timeline Bar */}
-                          <div className="flex-1 relative py-3">
-                            {barStyle && (
-                              <div
-                                className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full transition-all hover:h-8 ${
-                                  mission.status === 'active' ? 'bg-green-500' :
-                                  mission.status === 'completed' ? 'bg-blue-400' :
-                                  mission.status === 'on_hold' ? 'bg-amber-400' :
-                                  'bg-red-400'
-                                }`}
-                                style={{ left: barStyle.left, width: barStyle.width, minWidth: '8px' }}
-                                title={`${mission.name}\n${formatDate(mission.start_date)} - ${formatDate(mission.end_date)}`}
-                              />
-                            )}
-                          </div>
+                          {/* Project Missions - Indented */}
+                          {isProjectExpanded && projectMissions.map(mission => {
+                            const barStyle = getMissionBarStyle(mission, weeks);
+                            const statusInfo = statusConfig[mission.status] || statusConfig.active;
+                            
+                            return (
+                              <div 
+                                key={mission.id} 
+                                className="flex border-b border-brand-grey-100 hover:bg-brand-grey-50/50 transition-colors cursor-pointer"
+                                onClick={() => openMissionDetail(mission)}
+                              >
+                                {/* Mission Info - extra indent */}
+                                <div className="w-64 flex-shrink-0 p-3 pl-12 border-r border-brand-grey-200">
+                                  <div className="flex items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-brand-slate-900 text-sm truncate">
+                                        {mission.consultant?.first_name} {mission.consultant?.last_name}
+                                      </p>
+                                      <p className="text-xs text-brand-grey-400 truncate">
+                                        {mission.name}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span className={`px-1.5 py-0.5 rounded text-xs ${statusInfo.colour}`}>
+                                          {statusInfo.label}
+                                        </span>
+                                        <span className="text-xs text-brand-grey-400">
+                                          £{mission.sold_daily_rate}/day
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Timeline Bar */}
+                                <div className="flex-1 relative py-3">
+                                  {barStyle && (
+                                    <div
+                                      className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full transition-all hover:h-8 ${
+                                        mission.status === 'active' ? 'bg-green-500' :
+                                        mission.status === 'completed' ? 'bg-blue-400' :
+                                        mission.status === 'on_hold' ? 'bg-amber-400' :
+                                        'bg-red-400'
+                                      }`}
+                                      style={{ left: barStyle.left, width: barStyle.width, minWidth: '8px' }}
+                                      title={`${mission.name}\n${formatDate(mission.start_date)} - ${formatDate(mission.end_date)}`}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })}
+
+                    {/* Missions without a project */}
+                    {isExpanded && missionsWithoutProject.length > 0 && (
+                      <>
+                        {customerProjects.length > 0 && (
+                          <div className="flex items-center border-b border-brand-grey-200 bg-slate-50">
+                            <div className="w-64 flex-shrink-0 p-2 pl-8 text-xs text-brand-grey-400 border-r border-brand-grey-200">
+                              Missions without project
+                            </div>
+                            <div className="flex-1" />
+                          </div>
+                        )}
+                        {missionsWithoutProject.map(mission => {
+                          const barStyle = getMissionBarStyle(mission, weeks);
+                          const statusInfo = statusConfig[mission.status] || statusConfig.active;
+                          
+                          return (
+                            <div 
+                              key={mission.id} 
+                              className="flex border-b border-brand-grey-100 hover:bg-brand-grey-50/50 transition-colors cursor-pointer"
+                              onClick={() => openMissionDetail(mission)}
+                            >
+                              {/* Mission Info */}
+                              <div className="w-64 flex-shrink-0 p-3 border-r border-brand-grey-200">
+                                <div className="flex items-start gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-brand-slate-900 text-sm truncate">
+                                      {mission.consultant?.first_name} {mission.consultant?.last_name}
+                                    </p>
+                                    <p className="text-xs text-brand-grey-400 truncate">
+                                      {mission.name}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className={`px-1.5 py-0.5 rounded text-xs ${statusInfo.colour}`}>
+                                        {statusInfo.label}
+                                      </span>
+                                      <span className="text-xs text-brand-grey-400">
+                                        £{mission.sold_daily_rate}/day
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Timeline Bar */}
+                              <div className="flex-1 relative py-3">
+                                {barStyle && (
+                                  <div
+                                    className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full transition-all hover:h-8 ${
+                                      mission.status === 'active' ? 'bg-green-500' :
+                                      mission.status === 'completed' ? 'bg-blue-400' :
+                                      mission.status === 'on_hold' ? 'bg-amber-400' :
+                                      'bg-red-400'
+                                    }`}
+                                    style={{ left: barStyle.left, width: barStyle.width, minWidth: '8px' }}
+                                    title={`${mission.name}\n${formatDate(mission.start_date)} - ${formatDate(mission.end_date)}`}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                 );
               })}
-
-              {/* Orphaned missions (no project) */}
-              {orphanedMissions.length > 0 && (
-                <div className="min-w-[900px]">
-                  <div className="flex border-b border-brand-grey-200 bg-amber-50 cursor-pointer">
-                    <div className="w-72 flex-shrink-0 p-3 flex items-center gap-2 border-r border-brand-grey-200">
-                      <Building2 className="h-4 w-4 text-amber-500" />
-                      <span className="font-medium text-amber-700">Missions without Project</span>
-                      <Badge variant="amber">{orphanedMissions.length}</Badge>
-                    </div>
-                    <div className="flex-1" />
-                  </div>
-                  {orphanedMissions.map(mission => {
-                    const barStyle = getMissionBarStyle(mission, weeks);
-                    const statusInfo = statusConfig[mission.status] || statusConfig.active;
-                    
-                    return (
-                      <div 
-                        key={mission.id} 
-                        className="flex border-b border-brand-grey-100 hover:bg-brand-grey-50/50 transition-colors cursor-pointer"
-                        onClick={() => openMissionDetail(mission)}
-                      >
-                        <div className="w-72 flex-shrink-0 p-3 pl-8 border-r border-brand-grey-200">
-                          <div className="flex items-start gap-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-brand-slate-900 text-sm truncate">
-                                {mission.consultant?.first_name} {mission.consultant?.last_name}
-                              </p>
-                              <p className="text-xs text-brand-grey-400 truncate">
-                                {mission.company?.name} • {mission.reference_id}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className={`px-1.5 py-0.5 rounded text-xs ${statusInfo.colour}`}>
-                                  {statusInfo.label}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex-1 relative py-3">
-                          {barStyle && (
-                            <div
-                              className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full transition-all hover:h-8 ${
-                                mission.status === 'active' ? 'bg-green-500' :
-                                mission.status === 'completed' ? 'bg-blue-400' :
-                                mission.status === 'on_hold' ? 'bg-amber-400' :
-                                'bg-red-400'
-                              }`}
-                              style={{ left: barStyle.left, width: barStyle.width, minWidth: '8px' }}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </Card>
         )}
+
 
         {/* Legend */}
         <div className="flex items-center gap-6 text-sm text-brand-grey-500">
           <span className="font-medium">Legend:</span>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-3 rounded border-2 border-purple-400 bg-purple-200" />
+            <div className="w-5 h-5 rounded bg-slate-300/60 border-2 border-slate-400" />
             <span>Project</span>
           </div>
           <div className="flex items-center gap-2">

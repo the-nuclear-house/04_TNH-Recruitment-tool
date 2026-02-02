@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Modal, Button, Input, Select, Textarea } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { 
   missionsService, 
   consultantsService,
+  requirementsService,
+  companiesService,
   projectsService,
   type DbRequirement, 
+  type DbCompany, 
   type DbContact,
   type DbConsultant,
   type DbCandidate,
@@ -17,28 +21,28 @@ interface CreateMissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  // Required: project to create mission under
-  projectId: string;
-  projectName?: string;
-  // Pre-populated data
+  // Pre-populated data from requirement
   requirement?: DbRequirement;
+  company?: DbCompany;
   contact?: DbContact;
   candidate?: DbCandidate;
   winningCandidateId?: string;
-  customerName?: string;
+  // Project data - now required for mission creation
+  project?: DbProject;
+  projectId?: string;
 }
 
 export function CreateMissionModal({
   isOpen,
   onClose,
   onSuccess,
-  projectId,
-  projectName,
-  requirement,
+  requirement: propRequirement,
+  company: propCompany,
   contact,
   candidate,
   winningCandidateId,
-  customerName,
+  project: propProject,
+  projectId: propProjectId,
 }: CreateMissionModalProps) {
   const toast = useToast();
   const { user } = useAuthStore();
@@ -47,7 +51,11 @@ export function CreateMissionModal({
   const [isCheckingConsultant, setIsCheckingConsultant] = useState(false);
   const [consultant, setConsultant] = useState<DbConsultant | null>(null);
   const [consultantError, setConsultantError] = useState<string | null>(null);
-  const [project, setProject] = useState<DbProject | null>(null);
+  
+  // Resolved data (fetched if needed)
+  const [requirement, setRequirement] = useState<DbRequirement | undefined>(propRequirement);
+  const [company, setCompany] = useState<DbCompany | undefined>(propCompany);
+  const [project, setProject] = useState<DbProject | undefined>(propProject);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -59,27 +67,80 @@ export function CreateMissionModal({
     notes: '',
   });
 
-  // Load project details
+  // Fetch full requirement, company, and project data if only IDs provided
   useEffect(() => {
-    const loadProject = async () => {
-      if (!isOpen || !projectId) return;
+    const fetchData = async () => {
+      if (!isOpen) return;
       
-      try {
-        const proj = await projectsService.getById(projectId);
-        setProject(proj);
-      } catch (error) {
-        console.error('Error loading project:', error);
+      let resolvedRequirement = propRequirement;
+      let resolvedProjectId = propProjectId;
+      
+      // Fetch full requirement if we only have an ID
+      if (propRequirement?.id && !propRequirement.title) {
+        try {
+          const fullReq = await requirementsService.getById(propRequirement.id);
+          if (fullReq) {
+            resolvedRequirement = fullReq;
+            setRequirement(fullReq);
+            // If requirement has company, use it
+            if (fullReq.company && !propCompany?.id) {
+              setCompany(fullReq.company);
+            }
+            // If requirement has project_id, use it
+            if (fullReq.project_id && !propProjectId) {
+              resolvedProjectId = fullReq.project_id;
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching requirement:', error);
+        }
+      } else {
+        setRequirement(propRequirement);
+        // Check if requirement has project_id
+        if (propRequirement?.project_id && !propProjectId) {
+          resolvedProjectId = propRequirement.project_id;
+        }
+      }
+      
+      // Use prop company if provided
+      if (propCompany?.id) {
+        setCompany(propCompany);
+      } else if (resolvedRequirement?.company_id && !propCompany?.id) {
+        // Fetch company if we have company_id but no company data
+        try {
+          const company = await companiesService.getById(resolvedRequirement.company_id);
+          if (company) {
+            setCompany(company);
+          }
+        } catch (error) {
+          console.error('Error fetching company:', error);
+        }
+      }
+      
+      // Fetch project if we have a project ID
+      if (propProject?.id) {
+        setProject(propProject);
+      } else if (resolvedProjectId) {
+        try {
+          const fetchedProject = await projectsService.getById(resolvedProjectId);
+          if (fetchedProject) {
+            setProject(fetchedProject);
+          }
+        } catch (error) {
+          console.error('Error fetching project:', error);
+        }
       }
     };
     
-    loadProject();
-  }, [isOpen, projectId]);
+    fetchData();
+  }, [isOpen, propRequirement, propCompany, propProject, propProjectId]);
 
   // Check if candidate has been converted to consultant
   useEffect(() => {
     const checkConsultant = async () => {
       if (!isOpen) return;
       
+      // Determine which candidate ID to use
       const candidateId = winningCandidateId || candidate?.id;
       
       if (!candidateId) {
@@ -94,19 +155,19 @@ export function CreateMissionModal({
         const foundConsultant = await consultantsService.getByCandidateId(candidateId);
         if (foundConsultant) {
           setConsultant(foundConsultant);
-          // Generate mission name: Customer - Project - Consultant
-          const resolvedCustomerName = customerName || contact?.company?.name || 'Customer';
-          const resolvedProjectName = projectName || project?.name || 'Project';
+          // Generate mission name: Customer - Project Name - Consultant
+          const customerName = company?.name || requirement?.customer || 'Customer';
+          const projectName = project?.name || requirement?.title || 'Project';
           const consultantName = `${foundConsultant.first_name} ${foundConsultant.last_name}`;
-          const missionName = `${resolvedCustomerName} - ${resolvedProjectName} - ${consultantName}`;
+          const missionName = `${customerName} - ${projectName} - ${consultantName}`;
           
+          // Pre-fill dates from project if available
           setFormData(prev => ({
             ...prev,
             name: missionName,
-            location: requirement?.location || '',
-            // Default dates from project if available
-            start_date: project?.start_date || '',
-            end_date: project?.end_date || '',
+            location: company?.city || company?.address_line_1 || '',
+            start_date: project?.start_date || prev.start_date,
+            end_date: project?.end_date || prev.end_date,
           }));
         } else {
           setConsultantError('You cannot create a mission with a candidate. Transform your candidate to a consultant first.');
@@ -120,32 +181,7 @@ export function CreateMissionModal({
     };
     
     checkConsultant();
-  }, [isOpen, winningCandidateId, candidate?.id, requirement, project, projectName, customerName, contact]);
-
-  // Validate mission dates against project boundaries
-  const validateDates = (): string | null => {
-    if (!formData.start_date || !formData.end_date) return null;
-    if (!project?.start_date || !project?.end_date) return null;
-    
-    const missionStart = new Date(formData.start_date);
-    const missionEnd = new Date(formData.end_date);
-    const projectStart = new Date(project.start_date);
-    const projectEnd = new Date(project.end_date);
-    
-    if (missionStart < projectStart) {
-      return `Mission cannot start before project start date (${project.start_date})`;
-    }
-    if (missionEnd > projectEnd) {
-      return `Mission cannot end after project end date (${project.end_date})`;
-    }
-    if (missionEnd < missionStart) {
-      return 'End date cannot be before start date';
-    }
-    
-    return null;
-  };
-
-  const dateError = validateDates();
+  }, [isOpen, winningCandidateId, candidate?.id, requirement, company, project]);
 
   const handleSubmit = async () => {
     if (!consultant) {
@@ -153,8 +189,8 @@ export function CreateMissionModal({
       return;
     }
     
-    if (!projectId) {
-      toast.error('Error', 'No project selected. Please create or select a project first.');
+    if (!company?.id) {
+      toast.error('Error', 'No company associated with this requirement. Please ensure the company exists with the same name.');
       return;
     }
     
@@ -172,23 +208,47 @@ export function CreateMissionModal({
       toast.error('Error', 'Please enter the sold daily rate');
       return;
     }
-
-    // Validate dates against project
-    const dateValidationError = validateDates();
-    if (dateValidationError) {
-      toast.error('Date Error', dateValidationError);
-      return;
+    
+    // Validate mission dates against project boundaries
+    if (project) {
+      const missionStart = new Date(formData.start_date);
+      const missionEnd = new Date(formData.end_date);
+      
+      if (project.start_date) {
+        const projectStart = new Date(project.start_date);
+        if (missionStart < projectStart) {
+          toast.error('Validation Error', `Mission start date cannot be before project start date (${project.start_date})`);
+          return;
+        }
+      }
+      
+      if (project.end_date) {
+        const projectEnd = new Date(project.end_date);
+        if (missionEnd > projectEnd) {
+          toast.error('Validation Error', `Mission end date cannot be after project end date (${project.end_date})`);
+          return;
+        }
+      }
     }
+    
+    // Debug: log what we're sending
+    console.log('Creating mission with:', {
+      company_id: company?.id,
+      company_name: company?.name,
+      consultant_id: consultant.id,
+      requirement_id: requirement?.id,
+      project_id: project?.id,
+    });
     
     setIsLoading(true);
     try {
       await missionsService.create({
         name: formData.name,
-        project_id: projectId,
         requirement_id: requirement?.id,
         consultant_id: consultant.id,
-        company_id: project?.customer_contact?.company_id || contact?.company_id || '',
-        contact_id: contact?.id || project?.customer_contact_id,
+        company_id: company?.id,
+        contact_id: contact?.id,
+        project_id: project?.id,
         start_date: formData.start_date,
         end_date: formData.end_date,
         sold_daily_rate: parseFloat(formData.sold_daily_rate),
@@ -198,7 +258,7 @@ export function CreateMissionModal({
         created_by: user?.id,
       });
       
-      toast.success('Mission Created', `Mission has been created successfully`);
+      toast.success('Mission Created', `Mission ${formData.name} has been created`);
       onClose();
       onSuccess?.();
     } catch (error: any) {
@@ -233,117 +293,112 @@ export function CreateMissionModal({
         
         {consultantError && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700">{consultantError}</p>
+            <p className="text-sm text-red-700">{consultantError}</p>
           </div>
         )}
         
-        {consultant && (
+        {consultant && !consultantError && (
           <>
-            {/* Context Info */}
+            {/* Read-only info */}
             <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
               <div>
-                <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Customer</p>
-                <p className="font-medium text-brand-slate-900">{customerName || 'Unknown'}</p>
+                <p className="text-xs text-brand-grey-400 mb-1">Customer</p>
+                <p className="text-sm font-medium text-brand-slate-900">{company?.name || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Contact</p>
-                <p className="font-medium text-brand-slate-900">
-                  {contact ? `${contact.first_name} ${contact.last_name}` : 'Unknown'}
+                <p className="text-xs text-brand-grey-400 mb-1">Contact</p>
+                <p className="text-sm font-medium text-brand-slate-900">
+                  {contact ? `${contact.first_name} ${contact.last_name}` : 'N/A'}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Consultant</p>
-                <p className="font-medium text-brand-cyan">
-                  {consultant.first_name} {consultant.last_name} ({consultant.reference_id})
+                <p className="text-xs text-brand-grey-400 mb-1">Consultant</p>
+                <p className="text-sm font-medium text-brand-slate-900">
+                  {consultant.first_name} {consultant.last_name}
+                  <span className="text-brand-grey-400 ml-1">({consultant.reference_id})</span>
                 </p>
               </div>
               <div>
-                <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Requirement</p>
-                <p className="font-medium text-brand-slate-900">{requirement?.title || 'N/A'}</p>
+                <p className="text-xs text-brand-grey-400 mb-1">Project</p>
+                <p className="text-sm font-medium text-brand-slate-900">
+                  {project?.name || 'N/A'}
+                  {project?.reference_id && <span className="text-brand-grey-400 ml-1">({project.reference_id})</span>}
+                </p>
               </div>
-              {project && (
-                <>
-                  <div className="col-span-2 border-t border-brand-grey-200 pt-3 mt-1">
-                    <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Project</p>
-                    <p className="font-medium text-brand-slate-900">
-                      {project.reference_id} - {project.name}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Project Dates</p>
-                    <p className="text-sm text-brand-grey-600">
-                      {project.start_date} to {project.end_date}
-                    </p>
-                  </div>
-                </>
+              <div>
+                <p className="text-xs text-brand-grey-400 mb-1">Requirement</p>
+                <p className="text-sm font-medium text-brand-slate-900">{requirement?.title || requirement?.reference_id || 'N/A'}</p>
+              </div>
+              {project && (project.start_date || project.end_date) && (
+                <div>
+                  <p className="text-xs text-brand-grey-400 mb-1">Project Dates</p>
+                  <p className="text-sm font-medium text-brand-slate-900">
+                    {project.start_date || '?'} to {project.end_date || '?'}
+                  </p>
+                </div>
               )}
             </div>
+
+            {/* Project date warning */}
+            {project && (project.start_date || project.end_date) && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>Mission dates must be within project boundaries: {project.start_date || 'No start'} to {project.end_date || 'No end'}</span>
+              </div>
+            )}
 
             {/* Mission Name */}
             <Input
               label="Mission Name"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Customer - Project - Consultant"
+              placeholder="Customer - Project - Consultant Name"
             />
 
-            {/* Dates with validation */}
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Start Date *"
-                  type="date"
-                  value={formData.start_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                  min={project?.start_date || undefined}
-                  max={project?.end_date || undefined}
-                />
-                <Input
-                  label="End Date *"
-                  type="date"
-                  value={formData.end_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                  min={formData.start_date || project?.start_date || undefined}
-                  max={project?.end_date || undefined}
-                />
-              </div>
-              {dateError && (
-                <p className="text-sm text-red-600">{dateError}</p>
-              )}
-              {project && (
-                <p className="text-xs text-brand-grey-400">
-                  Mission dates must be within project boundaries: {project.start_date} to {project.end_date}
-                </p>
-              )}
-            </div>
-
-            {/* Rate and Location */}
+            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <Input
-                label="Sold Daily Rate (£) *"
-                type="number"
-                value={formData.sold_daily_rate}
-                onChange={(e) => setFormData(prev => ({ ...prev, sold_daily_rate: e.target.value }))}
-                placeholder="e.g. 650"
+                label="Start Date *"
+                type="date"
+                value={formData.start_date}
+                min={project?.start_date || undefined}
+                max={project?.end_date || undefined}
+                onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
               />
+              <Input
+                label="End Date *"
+                type="date"
+                value={formData.end_date}
+                min={project?.start_date || undefined}
+                max={project?.end_date || undefined}
+                onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+              />
+            </div>
+
+            {/* Commercial */}
+            <Input
+              label="Sold Daily Rate (£) *"
+              type="number"
+              value={formData.sold_daily_rate}
+              onChange={(e) => setFormData(prev => ({ ...prev, sold_daily_rate: e.target.value }))}
+              placeholder="e.g. 650"
+            />
+
+            {/* Location */}
+            <div className="grid grid-cols-2 gap-4">
               <Input
                 label="Location"
                 value={formData.location}
                 onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                 placeholder="e.g. London, Manchester"
               />
+              <Select
+                label="Work Mode *"
+                options={workModeOptions}
+                value={formData.work_mode}
+                onChange={(e) => setFormData(prev => ({ ...prev, work_mode: e.target.value as 'full_onsite' | 'hybrid' | 'remote' }))}
+              />
             </div>
-
-            {/* Work Mode */}
-            <Select
-              label="Work Mode *"
-              options={workModeOptions}
-              value={formData.work_mode}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
-                work_mode: e.target.value as 'full_onsite' | 'hybrid' | 'remote' 
-              }))}
-            />
 
             {/* Notes */}
             <Textarea
@@ -351,23 +406,25 @@ export function CreateMissionModal({
               value={formData.notes}
               onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
               placeholder="Any additional notes about this mission..."
-              rows={3}
+              rows={2}
             />
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
-              <Button variant="secondary" onClick={onClose}>Cancel</Button>
-              <Button 
-                variant="success" 
-                onClick={handleSubmit} 
-                isLoading={isLoading}
-                disabled={!consultant || !formData.start_date || !formData.end_date || !formData.sold_daily_rate || !!dateError}
-              >
-                Create Mission
-              </Button>
-            </div>
           </>
         )}
+
+        {/* Actions */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            isLoading={isLoading}
+            disabled={!!consultantError || isCheckingConsultant || !consultant}
+          >
+            Create Mission
+          </Button>
+        </div>
       </div>
     </Modal>
   );

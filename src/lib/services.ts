@@ -3654,11 +3654,6 @@ export const hrTicketsService = {
       await offersService.markITAccessCreated(ticket.offer_id, userId);
     }
 
-    // Update candidate status
-    if (ticket.candidate_id) {
-      await candidatesService.update(ticket.candidate_id, { status: 'active_consultant' });
-    }
-
     return data;
   },
 

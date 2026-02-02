@@ -21,6 +21,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { CreateMissionModal } from '@/components/CreateMissionModal';
+import { CreateProjectModal } from '@/components/CreateProjectModal';
+import { CreateRequirementModal } from '@/components/CreateRequirementModal';
 import { 
   requirementsService, 
   usersService, 
@@ -105,37 +107,15 @@ export function RequirementsPage() {
   }>>({});
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [skills, setSkills] = useState<string[]>([]);
-  const [skillInput, setSkillInput] = useState('');
   
   // Create Mission modal
   const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
   const [missionRequirement, setMissionRequirement] = useState<DbRequirement | null>(null);
-
-  const [formData, setFormData] = useState({
-    title: '',
-    contact_id: '',
-    location: '',
-    max_day_rate: '',
-    description: '',
-    status: 'active',
-    clearance_required: 'none',
-    engineering_discipline: 'software',
-    manager_id: '',
-    project_type: 'T&M' as 'T&M' | 'Fixed_Price',
-    project_id: '',
-  });
   
-  // Projects for selected contact
-  const [contactProjects, setContactProjects] = useState<DbProject[]>([]);
-
-  // Set default manager to current user
-  useEffect(() => {
-    if (user?.id && !formData.manager_id) {
-      setFormData(prev => ({ ...prev, manager_id: user.id }));
-    }
-  }, [user?.id]);
+  // Create Project modal (shown before CreateMissionModal when requirement has no project)
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [projectRequirement, setProjectRequirement] = useState<DbRequirement | null>(null);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -201,121 +181,6 @@ export function RequirementsPage() {
     }
   };
 
-  // When contact is selected, auto-fill location from their company
-  const handleContactSelect = async (contactId: string) => {
-    const contact = allContacts.find(c => c.id === contactId);
-    const company = contact?.company || companies.find(c => c.id === contact?.company_id);
-    setFormData(prev => ({
-      ...prev,
-      contact_id: contactId,
-      location: company?.city || prev.location,
-      project_id: '', // Reset project when contact changes
-    }));
-    
-    // Load active projects for this contact
-    if (contactId) {
-      try {
-        const projects = await projectsService.getActiveByContact(contactId);
-        setContactProjects(projects);
-      } catch (error) {
-        console.error('Error loading projects:', error);
-        setContactProjects([]);
-      }
-    } else {
-      setContactProjects([]);
-    }
-  };
-
-  const handleFormChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSkillInputChange = (value: string) => {
-    setSkillInput(value);
-  };
-
-  const handleSkillKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && skillInput.trim()) {
-      e.preventDefault();
-      // Parse comma-separated values on Enter
-      const parts = skillInput.split(',').map(s => s.trim()).filter(s => s);
-      const newSkills = parts.filter(s => !skills.includes(s));
-      if (newSkills.length > 0) {
-        setSkills([...skills, ...newSkills]);
-      }
-      setSkillInput('');
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.contact_id) {
-      toast.error('Validation Error', 'Please select a contact');
-      return;
-    }
-    if (!formData.title) {
-      toast.error('Validation Error', 'Please enter a title for the requirement');
-      return;
-    }
-    
-    const selectedContact = allContacts.find(c => c.id === formData.contact_id);
-    const selectedCompany = selectedContact?.company || companies.find(c => c.id === selectedContact?.company_id);
-    
-    // Determine if this is a bid (Fixed Price with no existing project)
-    const isBid = formData.project_type === 'Fixed_Price' && !formData.project_id;
-    
-    setIsSubmitting(true);
-    try {
-      await requirementsService.create({
-        title: formData.title,
-        customer: selectedCompany?.name || '',
-        company_id: selectedCompany?.id,
-        contact_id: formData.contact_id,
-        industry: selectedCompany?.industry || undefined,
-        location: formData.location || undefined,
-        max_day_rate: formData.max_day_rate ? parseInt(formData.max_day_rate) : undefined,
-        description: formData.description || undefined,
-        status: isBid ? 'opportunity' : formData.status,
-        clearance_required: formData.clearance_required,
-        engineering_discipline: formData.engineering_discipline,
-        manager_id: formData.manager_id || undefined,
-        skills: skills.length > 0 ? skills : undefined,
-        created_by: user?.id,
-        // New project workflow fields
-        project_type: formData.project_type,
-        project_id: formData.project_id || undefined,
-        is_bid: isBid,
-        bid_status: isBid ? 'qualifying' : undefined,
-      });
-      
-      const message = isBid 
-        ? `Bid "${formData.title}" has been created and is in qualifying stage`
-        : `"${formData.title}" has been created`;
-      toast.success(isBid ? 'Bid Created' : 'Requirement Created', message);
-      setIsModalOpen(false);
-      setFormData({
-        title: '',
-        contact_id: '',
-        location: '',
-        max_day_rate: '',
-        description: '',
-        status: 'active',
-        clearance_required: 'none',
-        engineering_discipline: 'software',
-        manager_id: user?.id || '',
-        project_type: 'T&M',
-        project_id: '',
-      });
-      setSkills([]);
-      setContactProjects([]);
-      loadData();
-    } catch (error) {
-      console.error('Error creating requirement:', error);
-      toast.error('Error', 'Failed to create requirement');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const filteredRequirements = requirements.filter(req => {
     const query = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
@@ -331,55 +196,6 @@ export function RequirementsPage() {
   });
 
   const activeRequirements = requirements.filter(r => r.status === 'active' || r.status === 'opportunity').length;
-
-  const statusOptions = [
-    { value: 'opportunity', label: 'Opportunity' },
-    { value: 'active', label: 'Active' },
-  ];
-
-  const clearanceOptions = [
-    { value: 'none', label: 'None Required' },
-    { value: 'bpss', label: 'BPSS' },
-    { value: 'ctc', label: 'CTC' },
-    { value: 'sc', label: 'SC' },
-    { value: 'esc', label: 'eSC' },
-    { value: 'dv', label: 'DV' },
-    { value: 'edv', label: 'eDV' },
-    { value: 'doe_q', label: 'DOE Q (US)' },
-    { value: 'doe_l', label: 'DOE L (US)' },
-  ];
-
-  const engineeringOptions = [
-    { value: 'software', label: 'Software Engineering' },
-    { value: 'electrical', label: 'Electrical Engineering' },
-    { value: 'mechanical', label: 'Mechanical Engineering' },
-    { value: 'civil', label: 'Civil Engineering' },
-    { value: 'systems', label: 'Systems Engineering' },
-    { value: 'nuclear', label: 'Nuclear Engineering' },
-    { value: 'chemical', label: 'Chemical Engineering' },
-    { value: 'structural', label: 'Structural Engineering' },
-    { value: 'other', label: 'Other' },
-  ];
-
-  const managerOptions = [
-    // Current user first as "Myself"
-    ...(user ? [{ value: user.id, label: `${user.full_name || user.email} (Myself)` }] : []),
-    // Other managers/recruiters
-    ...users
-      .filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager', 'business_manager', 'business_director', 'admin', 'superadmin'].includes(r)))
-      .filter(u => u.id !== user?.id) // Exclude current user (already shown as Myself)
-      .map(u => ({ value: u.id, label: u.full_name })),
-  ];
-
-  // Format contacts for searchable select
-  const contactSearchOptions = allContacts.map(c => {
-    const companyName = c.company?.name || companies.find(co => co.id === c.company_id)?.name || '';
-    return { 
-      value: c.id, 
-      label: `${c.first_name} ${c.last_name}`,
-      sublabel: `${c.role ? c.role + ' - ' : ''}${companyName}`
-    };
-  });
 
   return (
     <div className="min-h-screen">
@@ -629,8 +445,15 @@ export function RequirementsPage() {
                             leftIcon={<Rocket className="h-4 w-4" />}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setMissionRequirement(requirement);
-                              setIsCreateMissionModalOpen(true);
+                              // If requirement has no project, create project first
+                              if (!requirement.project_id) {
+                                setProjectRequirement(requirement);
+                                setIsCreateProjectModalOpen(true);
+                              } else {
+                                // Has project, go straight to mission
+                                setMissionRequirement(requirement);
+                                setIsCreateMissionModalOpen(true);
+                              }
                             }}
                           >
                             Create Mission
@@ -668,183 +491,64 @@ export function RequirementsPage() {
         )}
       </div>
 
-      {/* New Requirement Modal */}
-      <Modal
+      {/* New Requirement Modal - using shared component */}
+      <CreateRequirementModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="New Requirement"
-        description="Create a new customer requirement"
-        size="xl"
-      >
-        <div className="space-y-4">
-          <Input
-            label="Title *"
-            value={formData.title}
-            onChange={(e) => handleFormChange('title', e.target.value)}
-            placeholder="e.g., Senior Java Developer, DevOps Engineer"
-          />
+        onSuccess={loadData}
+        allContacts={allContacts}
+        allCompanies={companies}
+      />
 
-          <div className="grid grid-cols-2 gap-4">
-            <SearchableSelect
-              label="Contact *"
-              placeholder="Type to search contacts..."
-              options={contactSearchOptions}
-              value={formData.contact_id}
-              onChange={(val) => handleContactSelect(val)}
-            />
-            <Input
-              label="Location"
-              value={formData.location}
-              onChange={(e) => handleFormChange('location', e.target.value)}
-              placeholder="e.g., London, Remote"
-            />
-          </div>
+      {/* Create Project Modal - shown when requirement has no project */}
+      {projectRequirement && (
+        <CreateProjectModal
+          isOpen={isCreateProjectModalOpen}
+          onClose={() => {
+            setIsCreateProjectModalOpen(false);
+            setProjectRequirement(null);
+            setCreatedProjectId(null);
+          }}
+          onSuccess={(projectId) => {
+            // Project created, now open the mission modal
+            setCreatedProjectId(projectId);
+            setIsCreateProjectModalOpen(false);
+            
+            // Link the project to the requirement
+            requirementsService.update(projectRequirement.id, { project_id: projectId });
+            
+            // Open mission modal with the new project
+            setMissionRequirement({
+              ...projectRequirement,
+              project_id: projectId,
+            });
+            setIsCreateMissionModalOpen(true);
+            loadData();
+          }}
+          requirement={projectRequirement}
+          company={projectRequirement.company as any}
+          contact={projectRequirement.contact}
+        />
+      )}
 
-          {/* Project Type and Existing Project Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Project Type *"
-              options={[
-                { value: 'T&M', label: 'Time & Materials' },
-                { value: 'Fixed_Price', label: 'Fixed Price / Work Package' },
-              ]}
-              value={formData.project_type}
-              onChange={(e) => handleFormChange('project_type', e.target.value)}
-            />
-            <Select
-              label="Existing Project"
-              options={[
-                { value: '', label: 'New Project (will be created on win)' },
-                ...contactProjects.map(p => ({
-                  value: p.id,
-                  label: `${p.name} (${p.type})`,
-                })),
-              ]}
-              value={formData.project_id}
-              onChange={(e) => handleFormChange('project_id', e.target.value)}
-              disabled={!formData.contact_id}
-            />
-          </div>
-
-          {/* Info banner based on selection */}
-          {formData.project_type === 'Fixed_Price' && !formData.project_id && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-              <strong>Bid Process:</strong> This will create a bid that goes through qualifying → proposal → submitted stages. 
-              If won, a project will be created and you can then add staffing requirements.
-            </div>
-          )}
-          {formData.project_id && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-              <strong>Staffing Requirement:</strong> This requirement will be added to the existing project. 
-              On win, a mission will be created within that project.
-            </div>
-          )}
-
-          <div className="grid grid-cols-3 gap-4">
-            <Input
-              label="Max Day Rate (£)"
-              type="number"
-              value={formData.max_day_rate}
-              onChange={(e) => handleFormChange('max_day_rate', e.target.value)}
-              placeholder="550"
-            />
-            <Select
-              label="Status"
-              options={statusOptions}
-              value={formData.status}
-              onChange={(e) => handleFormChange('status', e.target.value)}
-              disabled={formData.project_type === 'Fixed_Price' && !formData.project_id}
-            />
-            <Select
-              label="Engineering Discipline"
-              options={engineeringOptions}
-              value={formData.engineering_discipline}
-              onChange={(e) => handleFormChange('engineering_discipline', e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Clearance Required"
-              options={clearanceOptions}
-              value={formData.clearance_required}
-              onChange={(e) => handleFormChange('clearance_required', e.target.value)}
-            />
-          </div>
-
-          <Select
-            label="Assigned Manager"
-            options={managerOptions}
-            value={formData.manager_id}
-            onChange={(e) => handleFormChange('manager_id', e.target.value)}
-          />
-
-          {/* Skills */}
-          <div>
-            <label className="block text-sm font-medium text-brand-slate-700 mb-1">
-              Required Skills
-            </label>
-            <Input
-              placeholder="Type skill, use comma to separate, Enter to add..."
-              value={skillInput}
-              onChange={(e) => handleSkillInputChange(e.target.value)}
-              onKeyDown={handleSkillKeyDown}
-            />
-            {skills.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {skills.map(skill => (
-                  <Badge key={skill} variant="cyan">
-                    {skill}
-                    <button
-                      type="button"
-                      onClick={() => setSkills(skills.filter(s => s !== skill))}
-                      className="ml-1.5 hover:text-cyan-900"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <Textarea
-            label="Description"
-            value={formData.description}
-            onChange={(e) => handleFormChange('description', e.target.value)}
-            placeholder="Describe the requirement, project details, team structure..."
-            rows={3}
-          />
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="success" onClick={handleSubmit} isLoading={isSubmitting}>
-              Create Requirement
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Create Mission Modal - needs project_id from requirement */}
+      {/* Create Mission Modal */}
       {missionRequirement && (
         <CreateMissionModal
           isOpen={isCreateMissionModalOpen}
           onClose={() => {
             setIsCreateMissionModalOpen(false);
             setMissionRequirement(null);
+            setCreatedProjectId(null);
           }}
           onSuccess={() => {
             loadData();
             navigate('/missions');
           }}
-          projectId={missionRequirement.project_id || ''}
-          projectName={missionRequirement.project?.name}
           requirement={missionRequirement}
+          company={missionRequirement.company as any}
           contact={missionRequirement.contact}
           winningCandidateId={missionRequirement.winning_candidate_id || undefined}
-          customerName={missionRequirement.company?.name || missionRequirement.customer}
+          projectId={missionRequirement.project_id || createdProjectId || undefined}
         />
       )}
     </div>

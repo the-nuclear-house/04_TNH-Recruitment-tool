@@ -13,6 +13,7 @@ import {
   Avatar,
   ConfirmDialog,
 } from '@/components/ui';
+import { CreateRequirementModal } from '@/components/CreateRequirementModal';
 import {
   Plus,
   Minus,
@@ -52,7 +53,6 @@ import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { timeOptions } from '@/lib/utils';
-import { CreateRequirementModal } from '@/components/CreateRequirementModal';
 import {
   companiesService,
   contactsService,
@@ -117,6 +117,35 @@ const reqIndustryOptions = [
   { value: 'energy', label: 'Energy' },
   { value: 'transport', label: 'Transport' },
   { value: 'technology', label: 'Technology' },
+];
+
+const reqStatusOptions = [
+  { value: 'opportunity', label: 'Opportunity' },
+  { value: 'active', label: 'Active' },
+];
+
+const clearanceOptions = [
+  { value: 'none', label: 'None Required' },
+  { value: 'bpss', label: 'BPSS' },
+  { value: 'ctc', label: 'CTC' },
+  { value: 'sc', label: 'SC' },
+  { value: 'esc', label: 'eSC' },
+  { value: 'dv', label: 'DV' },
+  { value: 'edv', label: 'eDV' },
+  { value: 'doe_q', label: 'DOE Q (US)' },
+  { value: 'doe_l', label: 'DOE L (US)' },
+];
+
+const engineeringOptions = [
+  { value: 'software', label: 'Software Engineering' },
+  { value: 'electrical', label: 'Electrical Engineering' },
+  { value: 'mechanical', label: 'Mechanical Engineering' },
+  { value: 'civil', label: 'Civil Engineering' },
+  { value: 'systems', label: 'Systems Engineering' },
+  { value: 'nuclear', label: 'Nuclear Engineering' },
+  { value: 'chemical', label: 'Chemical Engineering' },
+  { value: 'structural', label: 'Structural Engineering' },
+  { value: 'other', label: 'Other' },
 ];
 
 const statusColours: Record<string, string> = {
@@ -230,6 +259,18 @@ export function CustomersPage() {
   // Requirement modal
   const [isRequirementModalOpen, setIsRequirementModalOpen] = useState(false);
   const [lockedContact, setLockedContact] = useState<DbContact | null>(null); // When creating from contact profile
+  const [requirementForm, setRequirementForm] = useState({
+    title: '',
+    contact_id: '',
+    location: '',
+    max_day_rate: '',
+    description: '',
+    status: 'active',
+    clearance_required: 'none',
+    engineering_discipline: 'software',
+  });
+  const [requirementSkills, setRequirementSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
 
   // Delete confirmation
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -376,16 +417,12 @@ export function CustomersPage() {
     setIsEditingCompany(false);
     // When parentId is provided, we're creating a subsidiary
     // When no parentId, we're creating a parent company
-    
-    // Get parent company's Companies House number if creating subsidiary
-    const parentCompany = parentId ? companies.find(c => c.id === parentId) : null;
-    
     setCompanyForm({
       name: '',
       trading_name: '',
-      companies_house_number: parentCompany?.companies_house_number || '',
-      industry: parentCompany?.industry || '',
-      company_size: parentCompany?.company_size || '',
+      companies_house_number: '',
+      industry: '',
+      company_size: '',
       parent_company_id: parentId || '',
       is_parent: !parentId, // If no parent, this IS a parent company
       address_line_1: '',
@@ -775,7 +812,75 @@ export function CustomersPage() {
     if (selectedCompany) {
       // If contact provided, lock it (coming from contact profile)
       setLockedContact(contact || null);
+      
+      setRequirementForm({
+        title: '',
+        contact_id: contact?.id || '',
+        location: selectedCompany.city || '',
+        max_day_rate: '',
+        description: '',
+        status: 'active',
+        clearance_required: 'none',
+        engineering_discipline: 'software',
+      });
+      setRequirementSkills([]);
+      setSkillInput('');
       setIsRequirementModalOpen(true);
+    }
+  };
+
+  const handleSaveRequirement = async () => {
+    if (!requirementForm.title) {
+      toast.error('Validation Error', 'Please enter a title');
+      return;
+    }
+    if (!requirementForm.contact_id) {
+      toast.error('Validation Error', 'Please select a contact');
+      return;
+    }
+    if (!selectedCompany) return;
+
+    const selectedReqContact = contacts.find(c => c.id === requirementForm.contact_id);
+
+    setIsSubmitting(true);
+    try {
+      await requirementsService.create({
+        title: requirementForm.title,
+        customer: selectedCompany.name,
+        company_id: selectedCompany.id,
+        contact_id: requirementForm.contact_id,
+        industry: selectedCompany.industry || undefined,
+        location: requirementForm.location || undefined,
+        max_day_rate: requirementForm.max_day_rate ? parseInt(requirementForm.max_day_rate) : undefined,
+        description: requirementForm.description || undefined,
+        status: requirementForm.status,
+        clearance_required: requirementForm.clearance_required,
+        engineering_discipline: requirementForm.engineering_discipline,
+        skills: requirementSkills.length > 0 ? requirementSkills : undefined,
+        created_by: user?.id,
+      });
+      
+      toast.success('Requirement Created', `"${requirementForm.title}" has been created`);
+      setIsRequirementModalOpen(false);
+      // Reload company details to show new requirement
+      await loadCompanyDetails(selectedCompany.id);
+    } catch (error: any) {
+      console.error('Error creating requirement:', error);
+      toast.error('Error', error.message || 'Failed to create requirement');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkillKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && skillInput.trim()) {
+      e.preventDefault();
+      const parts = skillInput.split(',').map(s => s.trim()).filter(s => s);
+      const newSkills = parts.filter(s => !requirementSkills.includes(s));
+      if (newSkills.length > 0) {
+        setRequirementSkills([...requirementSkills, ...newSkills]);
+      }
+      setSkillInput('');
     }
   };
 
@@ -1139,10 +1244,10 @@ export function CustomersPage() {
                     Add Contact
                   </Button>
                 )}
-                {/* Only show Add Location / Subsidiary for parent companies (no parent_company_id) */}
+                {/* Only show Add Subsidiary for parent companies (no parent_company_id) */}
                 {!selectedCompany.parent_company_id && (
                   <Button variant="success" leftIcon={<Building2 className="h-4 w-4" />} onClick={() => handleOpenAddCompany(selectedCompany.id)}>
-                    Add Location / Subsidiary
+                    Add Subsidiary
                   </Button>
                 )}
               </div>
@@ -1303,7 +1408,7 @@ export function CustomersPage() {
                               className="mt-4"
                               onClick={() => handleOpenAddCompany(selectedCompany.id)}
                             >
-                              Add First Location / Subsidiary
+                              Add First Subsidiary
                             </Button>
                           </Card>
                         );
@@ -1709,7 +1814,7 @@ export function CustomersPage() {
       <Modal
         isOpen={isCompanyModalOpen}
         onClose={() => setIsCompanyModalOpen(false)}
-        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Location / Subsidiary' : 'Add Company')}
+        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Subsidiary' : 'Add Company')}
         size="xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -1794,7 +1899,7 @@ export function CustomersPage() {
                 placeholder="12345678"
               />
               {companyForm.parent_company_id && (
-                <p className="text-xs text-brand-grey-400 mt-1">Change if different from parent</p>
+                <p className="text-xs text-brand-grey-400 mt-1">Leave as parent's if the same</p>
               )}
             </div>
             <Select
@@ -1811,15 +1916,7 @@ export function CustomersPage() {
             />
           </div>
 
-          {/* Status - shown for all companies */}
-          <Select
-            label="Status"
-            options={statusOptions}
-            value={companyForm.status}
-            onChange={(e) => setCompanyForm(prev => ({ ...prev, status: e.target.value }))}
-          />
-
-          {/* Only show address and contact info for subsidiaries */}
+          {/* Only show address, contact info and status for subsidiaries */}
           {companyForm.parent_company_id && (
             <>
               <div className="border-t border-brand-grey-200 pt-4">
@@ -1875,6 +1972,13 @@ export function CustomersPage() {
                   />
                 </div>
               </div>
+
+              <Select
+                label="Status"
+                options={statusOptions}
+                value={companyForm.status}
+                onChange={(e) => setCompanyForm(prev => ({ ...prev, status: e.target.value }))}
+              />
             </>
           )}
 
@@ -2200,12 +2304,15 @@ export function CustomersPage() {
       <CreateRequirementModal
         isOpen={isRequirementModalOpen}
         onClose={() => { setIsRequirementModalOpen(false); setLockedContact(null); }}
-        onSuccess={() => loadCompanyDetails(selectedCompany?.id || '')}
-        preselectedCompanyId={selectedCompany?.id}
-        preselectedContactId={lockedContact?.id}
-        preselectedCompanyName={selectedCompany?.name}
-        preselectedContactName={lockedContact ? `${lockedContact.first_name} ${lockedContact.last_name}` : undefined}
-        preselectedContactRole={lockedContact?.role || undefined}
+        onSuccess={async () => {
+          if (selectedCompany) {
+            await loadCompanyDetails(selectedCompany.id);
+          }
+        }}
+        company={selectedCompany || undefined}
+        contact={lockedContact || undefined}
+        allContacts={contacts}
+        allCompanies={companies}
       />
 
       {/* Delete Confirmation */}

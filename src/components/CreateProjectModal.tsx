@@ -1,40 +1,24 @@
 import { useState, useEffect } from 'react';
-import {
-  Modal,
-  Input,
-  Select,
-  SearchableSelect,
-  Textarea,
-  Button,
-} from '@/components/ui';
+import { Modal, Button, Input, Select, Textarea, SearchableSelect } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import {
   projectsService,
   usersService,
-  type DbUser,
-  type DbContact,
   type DbRequirement,
+  type DbCompany,
+  type DbContact,
+  type DbUser,
 } from '@/lib/services';
-
-const projectTypeOptions = [
-  { value: 'T&M', label: 'Time & Materials (T&M)' },
-  { value: 'Fixed_Price', label: 'Fixed Price' },
-];
-
-const statusOptions = [
-  { value: 'active', label: 'Active' },
-  { value: 'on_hold', label: 'On Hold' },
-];
 
 interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (projectId: string, projectName: string) => void;
-  // Pre-fill from requirement
+  onSuccess?: (projectId: string) => void;
+  // Pre-populated data from requirement
   requirement?: DbRequirement;
+  company?: DbCompany;
   contact?: DbContact;
-  customerName?: string;
 }
 
 export function CreateProjectModal({
@@ -42,175 +26,183 @@ export function CreateProjectModal({
   onClose,
   onSuccess,
   requirement,
+  company,
   contact,
-  customerName,
 }: CreateProjectModalProps) {
   const toast = useToast();
   const { user } = useAuthStore();
 
-  const [managers, setManagers] = useState<DbUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [users, setUsers] = useState<DbUser[]>([]);
 
-  const [form, setForm] = useState({
+  const [formData, setFormData] = useState({
     name: '',
     description: '',
     type: 'T&M' as 'T&M' | 'Fixed_Price',
-    account_manager_id: '',
-    technical_director_id: '',
     start_date: '',
     end_date: '',
+    account_manager_id: '',
+    technical_director_id: '',
     notes: '',
   });
 
-  // Load managers on open
+  // Load users for dropdowns
   useEffect(() => {
-    if (isOpen) {
-      loadManagers();
-      // Pre-fill from requirement
-      if (requirement) {
-        setForm(prev => ({
-          ...prev,
-          name: `${customerName || 'Project'} - ${requirement.title}`,
-          type: requirement.project_type || 'T&M',
-          description: requirement.description || '',
-        }));
+    const loadUsers = async () => {
+      try {
+        const usersData = await usersService.getAll();
+        setUsers(usersData);
+      } catch (error) {
+        console.error('Error loading users:', error);
       }
-    }
-  }, [isOpen, requirement, customerName]);
+    };
 
-  const loadManagers = async () => {
+    if (isOpen) {
+      loadUsers();
+    }
+  }, [isOpen]);
+
+  // Pre-fill form when requirement data is available
+  useEffect(() => {
+    if (isOpen && requirement) {
+      const projectName = `${company?.name || requirement.customer || 'Project'} - ${requirement.title || 'Untitled'}`;
+      setFormData(prev => ({
+        ...prev,
+        name: projectName,
+        type: requirement.project_type || 'T&M',
+        description: requirement.description || '',
+        account_manager_id: requirement.manager_id || user?.id || '',
+      }));
+    }
+  }, [isOpen, requirement, company, user?.id]);
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData({
+        name: '',
+        description: '',
+        type: 'T&M',
+        start_date: '',
+        end_date: '',
+        account_manager_id: '',
+        technical_director_id: '',
+        notes: '',
+      });
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      toast.error('Validation Error', 'Please enter a project name');
+      return;
+    }
+
+    if (!contact?.id) {
+      toast.error('Validation Error', 'No contact associated with this requirement');
+      return;
+    }
+
+    if (!formData.start_date) {
+      toast.error('Validation Error', 'Please select a start date');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const usersData = await usersService.getAll();
-      setManagers(usersData.filter(u => 
-        u.roles?.some((r: string) => ['business_manager', 'business_director', 'admin', 'superadmin'].includes(r))
-      ));
-    } catch (error) {
-      console.error('Error loading managers:', error);
+      const project = await projectsService.create({
+        name: formData.name,
+        description: formData.description || undefined,
+        customer_contact_id: contact.id,
+        type: formData.type,
+        start_date: formData.start_date,
+        end_date: formData.end_date || undefined,
+        account_manager_id: formData.account_manager_id || undefined,
+        technical_director_id: formData.technical_director_id || undefined,
+        won_bid_requirement_id: requirement?.id,
+        notes: formData.notes || undefined,
+        created_by: user?.id,
+      });
+
+      toast.success('Project Created', `Project "${formData.name}" has been created`);
+      onClose();
+      onSuccess?.(project.id);
+    } catch (error: any) {
+      console.error('Error creating project:', error);
+      toast.error('Error', error.message || 'Failed to create project');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSubmit = async () => {
-    if (!form.name) {
-      toast.error('Validation Error', 'Project name is required');
-      return;
-    }
-    if (!form.start_date) {
-      toast.error('Validation Error', 'Start date is required');
-      return;
-    }
-    if (!form.end_date) {
-      toast.error('Validation Error', 'End date is required');
-      return;
-    }
-    if (!contact?.id) {
-      toast.error('Validation Error', 'Contact is required');
-      return;
-    }
+  // Manager options - business directors and managers
+  const accountManagerOptions = [
+    { value: '', label: 'Select Account Manager' },
+    ...users
+      .filter(u => u.roles?.some((r: string) => ['business_director', 'business_manager', 'admin', 'superadmin'].includes(r)))
+      .map(u => ({ value: u.id, label: u.full_name })),
+  ];
 
-    // Validate dates
-    const startDate = new Date(form.start_date);
-    const endDate = new Date(form.end_date);
-    if (endDate < startDate) {
-      toast.error('Validation Error', 'End date cannot be before start date');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const project = await projectsService.create({
-        name: form.name,
-        description: form.description || undefined,
-        customer_contact_id: contact.id,
-        account_manager_id: form.account_manager_id || user?.id,
-        technical_director_id: form.technical_director_id || undefined,
-        type: form.type,
-        start_date: form.start_date,
-        end_date: form.end_date,
-        notes: form.notes || undefined,
-        created_by: user?.id,
-        won_bid_requirement_id: requirement?.is_bid ? requirement.id : undefined,
-      });
-
-      toast.success('Project Created', `Project ${project.reference_id} has been created`);
-      onSuccess(project.id, project.name);
-      handleClose();
-    } catch (error: any) {
-      console.error('Error creating project:', error);
-      toast.error('Error', error.message || 'Failed to create project');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleClose = () => {
-    setForm({
-      name: '',
-      description: '',
-      type: 'T&M',
-      account_manager_id: '',
-      technical_director_id: '',
-      start_date: '',
-      end_date: '',
-      notes: '',
-    });
-    onClose();
-  };
+  // Technical Director options
+  const technicalDirectorOptions = [
+    { value: '', label: 'Select Technical Director (optional)' },
+    ...users
+      .filter(u => u.roles?.some((r: string) => ['technical_director', 'admin', 'superadmin'].includes(r)))
+      .map(u => ({ value: u.id, label: u.full_name })),
+  ];
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleClose}
+      onClose={onClose}
       title="Create Project"
-      description="Create a new project for the won requirement"
+      description="Create a new project for this won requirement"
       size="lg"
     >
-      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-        {/* Context Info */}
+      <div className="space-y-6">
+        {/* Read-only info from requirement */}
         <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
           <div>
-            <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Customer</p>
-            <p className="font-medium text-brand-slate-900">{customerName || 'Unknown'}</p>
+            <p className="text-xs text-brand-grey-400 mb-1">Customer</p>
+            <p className="text-sm font-medium text-brand-slate-900">{company?.name || requirement?.customer || 'N/A'}</p>
           </div>
           <div>
-            <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Contact</p>
-            <p className="font-medium text-brand-slate-900">
-              {contact ? `${contact.first_name} ${contact.last_name}` : 'Unknown'}
+            <p className="text-xs text-brand-grey-400 mb-1">Contact</p>
+            <p className="text-sm font-medium text-brand-slate-900">
+              {contact ? `${contact.first_name} ${contact.last_name}` : 'N/A'}
             </p>
           </div>
-          {requirement && (
-            <>
-              <div>
-                <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Requirement</p>
-                <p className="font-medium text-brand-slate-900">{requirement.title}</p>
-              </div>
-              <div>
-                <p className="text-xs text-brand-grey-500 uppercase tracking-wider">Type</p>
-                <p className="font-medium text-brand-slate-900">
-                  {requirement.project_type === 'Fixed_Price' ? 'Fixed Price' : 'Time & Materials'}
-                </p>
-              </div>
-            </>
-          )}
+          <div>
+            <p className="text-xs text-brand-grey-400 mb-1">Requirement</p>
+            <p className="text-sm font-medium text-brand-slate-900">
+              {requirement?.title || requirement?.reference_id || 'N/A'}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-brand-grey-400 mb-1">Project Type</p>
+            <p className="text-sm font-medium text-brand-slate-900">
+              {formData.type === 'T&M' ? 'Time & Materials' : 'Fixed Price'}
+            </p>
+          </div>
         </div>
 
         {/* Project Name */}
         <Input
           label="Project Name *"
-          value={form.name}
-          onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-          placeholder="e.g. Framatome - Digital Twin Platform"
+          value={formData.name}
+          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          placeholder="e.g., Rolls Royce - SMR Safety Analysis"
         />
 
-        {/* Project Type */}
+        {/* Project Type - pre-filled but editable */}
         <Select
           label="Project Type *"
-          options={projectTypeOptions}
-          value={form.type}
-          onChange={(e) => setForm(prev => ({ ...prev, type: e.target.value as 'T&M' | 'Fixed_Price' }))}
+          options={[
+            { value: 'T&M', label: 'Time & Materials' },
+            { value: 'Fixed_Price', label: 'Fixed Price / Work Package' },
+          ]}
+          value={formData.type}
+          onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'T&M' | 'Fixed_Price' }))}
         />
 
         {/* Dates */}
@@ -218,67 +210,60 @@ export function CreateProjectModal({
           <Input
             label="Start Date *"
             type="date"
-            value={form.start_date}
-            onChange={(e) => setForm(prev => ({ ...prev, start_date: e.target.value }))}
+            value={formData.start_date}
+            onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
           />
           <Input
-            label="End Date *"
+            label="End Date"
             type="date"
-            value={form.end_date}
-            onChange={(e) => setForm(prev => ({ ...prev, end_date: e.target.value }))}
+            value={formData.end_date}
+            onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
           />
         </div>
 
-        {/* Managers */}
+        {/* Ownership */}
         <div className="grid grid-cols-2 gap-4">
-          <SearchableSelect
+          <Select
             label="Account Manager"
-            options={[
-              { value: '', label: 'Assign to me' },
-              ...managers.map(m => ({ value: m.id, label: m.full_name }))
-            ]}
-            value={form.account_manager_id}
-            onChange={(value) => setForm(prev => ({ ...prev, account_manager_id: value }))}
-            placeholder="Assign to me"
+            options={accountManagerOptions}
+            value={formData.account_manager_id}
+            onChange={(e) => setFormData(prev => ({ ...prev, account_manager_id: e.target.value }))}
           />
-          <SearchableSelect
+          <Select
             label="Technical Director"
-            options={[
-              { value: '', label: 'None' },
-              ...managers.map(m => ({ value: m.id, label: m.full_name }))
-            ]}
-            value={form.technical_director_id}
-            onChange={(value) => setForm(prev => ({ ...prev, technical_director_id: value }))}
-            placeholder="Select..."
+            options={technicalDirectorOptions}
+            value={formData.technical_director_id}
+            onChange={(e) => setFormData(prev => ({ ...prev, technical_director_id: e.target.value }))}
           />
         </div>
 
         {/* Description */}
         <Textarea
           label="Description"
-          value={form.description}
-          onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
-          placeholder="Project scope, objectives..."
+          value={formData.description}
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="Project scope, deliverables, key milestones..."
           rows={3}
         />
 
         {/* Notes */}
         <Textarea
           label="Notes"
-          value={form.notes}
-          onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
-          placeholder="Internal notes..."
+          value={formData.notes}
+          onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+          placeholder="Any additional notes..."
           rows={2}
         />
 
         {/* Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
-          <Button variant="secondary" onClick={handleClose}>Cancel</Button>
-          <Button 
-            variant="success" 
-            onClick={handleSubmit} 
-            isLoading={isSubmitting}
-            disabled={!form.name || !form.start_date || !form.end_date}
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            isLoading={isLoading}
           >
             Create Project
           </Button>

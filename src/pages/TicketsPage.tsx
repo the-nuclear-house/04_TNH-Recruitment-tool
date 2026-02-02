@@ -285,10 +285,10 @@ export function TicketsPage() {
         toast.success('Contract Sent', 'Ticket updated - contract has been sent to candidate');
       } else if (confirmAction === 'contract_signed') {
         await hrTicketsService.markContractSigned(ticketForConfirm.id, user!.id);
-        toast.success('Contract Signed', 'Ticket updated - contract has been signed');
+        toast.success('Contract Signed', 'Ticket updated - contract has been signed. Now create IT access.');
       } else if (confirmAction === 'it_access') {
         await hrTicketsService.markITAccessCreated(ticketForConfirm.id, user!.id);
-        toast.success('IT Access Created', 'Ticket updated - IT credentials have been set up');
+        toast.success('IT Access Created', 'IT credentials have been set up. Ready to convert to consultant.');
       } else if (confirmAction === 'convert') {
         await hrTicketsService.convertToConsultant(ticketForConfirm.id, user!.id);
         toast.success('Converted', 'Candidate has been converted to consultant. Ticket completed.');
@@ -414,25 +414,25 @@ export function TicketsPage() {
                         
                         {/* Workflow progress for contract tickets */}
                         {ticket.ticket_type === 'contract_send' && ticket.status !== 'completed' && (
-                          <div className="flex items-center gap-1 mt-3 flex-wrap">
+                          <div className="flex items-center gap-2 mt-3 flex-wrap">
                             <div className={`flex items-center gap-1 text-xs ${ticket.status === 'pending' ? 'text-brand-cyan font-medium' : 'text-green-600'}`}>
                               <div className={`w-2 h-2 rounded-full ${ticket.status === 'pending' ? 'bg-brand-cyan' : 'bg-green-500'}`} />
-                              1. Send
+                              1. Send Contract
                             </div>
                             <ArrowRight className="h-3 w-3 text-brand-grey-300" />
-                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_sent' ? 'text-brand-cyan font-medium' : ticket.status === 'contract_signed' || ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'text-green-600' : 'text-brand-grey-400'}`}>
-                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_sent' ? 'bg-brand-cyan' : ticket.status === 'contract_signed' || ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
-                              2. Signed
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_sent' ? 'text-brand-cyan font-medium' : ['contract_signed', 'it_access_created', 'completed'].includes(ticket.status) ? 'text-green-600' : 'text-brand-grey-400'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_sent' ? 'bg-brand-cyan' : ['contract_signed', 'it_access_created', 'completed'].includes(ticket.status) ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
+                              2. Contract Signed
                             </div>
                             <ArrowRight className="h-3 w-3 text-brand-grey-300" />
-                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_signed' ? 'text-brand-cyan font-medium' : ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'text-green-600' : 'text-brand-grey-400'}`}>
-                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_signed' ? 'bg-brand-cyan' : ticket.status === 'it_access_created' || ticket.status === 'completed' ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
+                            <div className={`flex items-center gap-1 text-xs ${ticket.status === 'contract_signed' ? 'text-brand-cyan font-medium' : ['it_access_created', 'completed'].includes(ticket.status) ? 'text-green-600' : 'text-brand-grey-400'}`}>
+                              <div className={`w-2 h-2 rounded-full ${ticket.status === 'contract_signed' ? 'bg-brand-cyan' : ['it_access_created', 'completed'].includes(ticket.status) ? 'bg-green-500' : 'bg-brand-grey-300'}`} />
                               3. IT Access
                             </div>
                             <ArrowRight className="h-3 w-3 text-brand-grey-300" />
                             <div className={`flex items-center gap-1 text-xs ${ticket.status === 'it_access_created' ? 'text-brand-cyan font-medium' : 'text-brand-grey-400'}`}>
                               <div className={`w-2 h-2 rounded-full ${ticket.status === 'it_access_created' ? 'bg-brand-cyan' : 'bg-brand-grey-300'}`} />
-                              4. Convert
+                              4. Convert to Consultant
                             </div>
                           </div>
                         )}
@@ -658,7 +658,7 @@ export function TicketsPage() {
           confirmAction === 'contract_signed' 
             ? `Do you confirm you have received and verified the signed contract from ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
           confirmAction === 'it_access'
-            ? `Do you confirm IT credentials and access have been set up for ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
+            ? `Do you confirm IT access credentials have been created for ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
           confirmAction === 'convert' 
             ? `This will create a new consultant record for ${ticketForConfirm?.candidate_name || 'this candidate'} and complete this ticket. Do you want to proceed?` : ''
         }

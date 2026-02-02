@@ -42,9 +42,8 @@ import { formatDate, computeCandidatePipelineStatus, timeOptions } from '@/lib/u
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, consultantsService, projectsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbConsultant } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, consultantsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbConsultant } from '@/lib/services';
 import { CreateMissionModal } from '@/components/CreateMissionModal';
-import { CreateProjectModal } from '@/components/CreateProjectModal';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
@@ -169,11 +168,6 @@ export function RequirementDetailPage() {
   const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
   const [existingMission, setExistingMission] = useState<any>(null);
   const [consultants, setConsultants] = useState<DbConsultant[]>([]);
-  
-  // Create Project modal (for when requirement has no project_id)
-  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
-  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
-  const [createdProjectName, setCreatedProjectName] = useState<string | null>(null);
   
   // Check if user can schedule assessments (Business Manager, Business Director, Admin)
   const canScheduleAssessments = user?.roles?.some(r => ['admin', 'superadmin', 'business_director', 'business_manager'].includes(r)) ?? false;
@@ -736,21 +730,13 @@ export function RequirementDetailPage() {
                     size="sm"
                     leftIcon={<Rocket className="h-4 w-4" />}
                     onClick={() => {
-                      if (!isCandidateConsultant(requirement.winning_candidate_id)) {
+                      if (isCandidateConsultant(requirement.winning_candidate_id)) {
+                        setIsCreateMissionModalOpen(true);
+                      } else {
                         toast.warning(
                           'Cannot Create Mission Yet',
                           'Progress this candidate to consultant before creating a mission.'
                         );
-                        return;
-                      }
-                      
-                      // Check if requirement has a project_id
-                      if (requirement.project_id || createdProjectId) {
-                        // Project exists - go straight to mission creation
-                        setIsCreateMissionModalOpen(true);
-                      } else {
-                        // No project - need to create one first
-                        setIsCreateProjectModalOpen(true);
                       }
                     }}
                   >
@@ -1543,27 +1529,6 @@ export function RequirementDetailPage() {
         isLoading={isDeleting}
       />
 
-      {/* Create Project Modal (shown when no project exists) */}
-      <CreateProjectModal
-        isOpen={isCreateProjectModalOpen}
-        onClose={() => setIsCreateProjectModalOpen(false)}
-        onSuccess={(projectId, projectName) => {
-          // Save the created project info
-          setCreatedProjectId(projectId);
-          setCreatedProjectName(projectName);
-          // Update requirement with project_id
-          requirementsService.update(id!, { project_id: projectId }).then(() => {
-            loadData();
-          });
-          // Close project modal and open mission modal
-          setIsCreateProjectModalOpen(false);
-          setIsCreateMissionModalOpen(true);
-        }}
-        requirement={requirement}
-        contact={contacts.find(c => c.id === requirement?.contact_id)}
-        customerName={requirement?.company?.name || requirement?.customer}
-      />
-
       {/* Create Mission Modal */}
       <CreateMissionModal
         isOpen={isCreateMissionModalOpen}
@@ -1572,12 +1537,11 @@ export function RequirementDetailPage() {
           loadData();
           navigate('/missions');
         }}
-        projectId={requirement?.project_id || createdProjectId || ''}
-        projectName={createdProjectName || requirement?.project?.name}
         requirement={requirement}
+        company={requirement?.company}
         contact={contacts.find(c => c.id === requirement?.contact_id)}
         winningCandidateId={requirement?.winning_candidate_id}
-        customerName={requirement?.company?.name || requirement?.customer}
+        projectId={requirement?.project_id || undefined}
       />
     </div>
   );
