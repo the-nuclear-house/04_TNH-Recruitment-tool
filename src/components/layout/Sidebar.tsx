@@ -136,12 +136,12 @@ export function Sidebar() {
       <div className="h-16 flex items-center justify-between px-4 border-b border-brand-slate-800">
         {!sidebarCollapsed && (
           <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="TNH" className="h-8 w-8" />
+            <img src="/logo-icon-white.svg" alt="TNH" className="h-8 w-8" />
             <span className="text-white font-semibold">Control Room</span>
           </div>
         )}
         {sidebarCollapsed && (
-          <img src="/logo.svg" alt="TNH" className="h-8 w-8 mx-auto" />
+          <img src="/logo-icon-white.svg" alt="TNH" className="h-8 w-8 mx-auto" />
         )}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -188,13 +188,13 @@ export function Sidebar() {
             {!sidebarCollapsed ? (
               <button
                 onClick={() => toggleGroup(group.name)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-brand-grey-500 uppercase tracking-wider hover:text-brand-grey-300 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-brand-grey-400 uppercase tracking-wider hover:text-white hover:bg-brand-slate-800/50 rounded-lg transition-colors"
               >
                 <span>{group.name}</span>
                 {expandedGroups.has(group.name) ? (
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronDown className="h-4 w-4" />
                 ) : (
-                  <ChevronRight className="h-3 w-3" />
+                  <ChevronRight className="h-4 w-4" />
                 )}
               </button>
             ) : (
