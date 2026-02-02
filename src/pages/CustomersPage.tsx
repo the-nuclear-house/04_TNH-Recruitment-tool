@@ -414,6 +414,8 @@ export function CustomersPage() {
   // Company handlers
   const handleOpenAddCompany = (parentId?: string) => {
     setIsEditingCompany(false);
+    // When parentId is provided, we're creating a subsidiary
+    // When no parentId, we're creating a parent company
     setCompanyForm({
       name: '',
       trading_name: '',
@@ -421,7 +423,7 @@ export function CustomersPage() {
       industry: '',
       company_size: '',
       parent_company_id: parentId || '',
-      is_parent: false,
+      is_parent: !parentId, // If no parent, this IS a parent company
       address_line_1: '',
       address_line_2: '',
       city: '',
@@ -449,7 +451,7 @@ export function CustomersPage() {
       industry: selectedCompany.industry || '',
       company_size: selectedCompany.company_size || '',
       parent_company_id: selectedCompany.parent_company_id || '',
-      is_parent: selectedCompany.is_parent || false,
+      is_parent: !selectedCompany.parent_company_id, // Parent if no parent_company_id
       address_line_1: selectedCompany.address_line_1 || '',
       address_line_2: selectedCompany.address_line_2 || '',
       city: selectedCompany.city || '',
@@ -993,7 +995,7 @@ export function CustomersPage() {
   const tabs = [
     { id: 'contacts' as TabType, label: 'Contacts', icon: Users, count: contacts.length },
     { id: 'org-chart' as TabType, label: 'Org Chart', icon: Network },
-    { id: 'locations' as TabType, label: 'Locations & Subcompanies', icon: FolderTree, count: selectedCompany?.subsidiaries?.length || getSubsidiaries(selectedCompany?.id || '').length },
+    { id: 'locations' as TabType, label: 'Subsidiaries', icon: FolderTree, count: selectedCompany?.subsidiaries?.length || getSubsidiaries(selectedCompany?.id || '').length },
     { id: 'requirements' as TabType, label: 'Requirements', icon: Briefcase, count: requirements.length },
   ];
 
@@ -1235,18 +1237,16 @@ export function CustomersPage() {
 
               {/* Action Buttons - Company level */}
               <div className="flex gap-3">
-                {selectedCompany.is_parent ? (
-                  <div className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                    Parent company - contacts must be added to subsidiaries
-                  </div>
-                ) : (
+                {/* Only show Add Contact for subsidiaries (companies with a parent) */}
+                {selectedCompany.parent_company_id && (
                   <Button variant="secondary" leftIcon={<User className="h-4 w-4" />} onClick={handleOpenAddContact}>
                     Add Contact
                   </Button>
                 )}
+                {/* Only show Add Subsidiary for parent companies (no parent_company_id) */}
                 {!selectedCompany.parent_company_id && (
-                  <Button variant="secondary" leftIcon={<Building2 className="h-4 w-4" />} onClick={() => handleOpenAddCompany(selectedCompany.id)}>
-                    Add Location / Subcompany
+                  <Button variant="success" leftIcon={<Building2 className="h-4 w-4" />} onClick={() => handleOpenAddCompany(selectedCompany.id)}>
+                    Add Subsidiary
                   </Button>
                 )}
               </div>
@@ -1255,8 +1255,11 @@ export function CustomersPage() {
               <div className="border-b border-brand-grey-200">
                 <div className="flex gap-1">
                   {tabs.map(tab => {
-                    // Hide Locations tab for subcompanies
+                    // Hide Locations tab for subcompanies (subsidiaries don't have sub-subsidiaries)
                     if (tab.id === 'locations' && selectedCompany.parent_company_id) return null;
+                    
+                    // Hide Org Chart tab for parent companies (org charts are on subsidiaries where contacts live)
+                    if (tab.id === 'org-chart' && !selectedCompany.parent_company_id) return null;
 
                     const Icon = tab.icon;
                     return (
@@ -1308,11 +1311,11 @@ export function CustomersPage() {
                     {filteredContacts.length === 0 ? (
                       <Card className="p-8 text-center">
                         <User className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
-                        {selectedCompany.is_parent ? (
+                        {!selectedCompany.parent_company_id ? (
                           <>
-                            <p className="text-amber-600 font-medium">Parent Company</p>
-                            <p className="text-brand-grey-500 text-sm mt-1">
-                              Contacts must be added to subsidiary locations, not the parent company.
+                            <p className="text-brand-grey-500">No contacts from subsidiaries yet</p>
+                            <p className="text-brand-grey-400 text-sm mt-1">
+                              Add subsidiaries and their contacts to see them here.
                             </p>
                           </>
                         ) : (
@@ -1397,14 +1400,14 @@ export function CustomersPage() {
                         return (
                           <Card className="p-8 text-center">
                             <FolderTree className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
-                            <p className="text-brand-grey-500">No locations or subcompanies</p>
+                            <p className="text-brand-grey-500">No subsidiaries yet</p>
                             <Button
-                              variant="primary"
+                              variant="success"
                               size="sm"
                               className="mt-4"
                               onClick={() => handleOpenAddCompany(selectedCompany.id)}
                             >
-                              Add First Location
+                              Add First Subsidiary
                             </Button>
                           </Card>
                         );
@@ -1810,7 +1813,7 @@ export function CustomersPage() {
       <Modal
         isOpen={isCompanyModalOpen}
         onClose={() => setIsCompanyModalOpen(false)}
-        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Location / Subcompany' : 'Add Company')}
+        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Subsidiary' : 'Add Company')}
         size="xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -1887,12 +1890,17 @@ export function CustomersPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Input
-              label="Companies House #"
-              value={companyForm.companies_house_number}
-              onChange={(e) => setCompanyForm(prev => ({ ...prev, companies_house_number: e.target.value }))}
-              placeholder="12345678"
-            />
+            <div>
+              <Input
+                label="Companies House #"
+                value={companyForm.companies_house_number}
+                onChange={(e) => setCompanyForm(prev => ({ ...prev, companies_house_number: e.target.value }))}
+                placeholder="12345678"
+              />
+              {companyForm.parent_company_id && (
+                <p className="text-xs text-brand-grey-400 mt-1">Leave as parent's if the same</p>
+              )}
+            </div>
             <Select
               label="Industry"
               options={industryOptions}
@@ -1907,101 +1915,71 @@ export function CustomersPage() {
             />
           </div>
 
-          {parentCompanies.length > 0 && (
-            <Select
-              label="Parent Company (leave empty if this is a parent company)"
-              options={[
-                { value: '', label: 'None - This is a parent company' },
-                ...parentCompanies
-                  .filter(c => !isEditingCompany || c.id !== selectedCompany?.id) // Can't be parent of itself
-                  .map(c => ({ value: c.id, label: c.name }))
-              ]}
-              value={companyForm.parent_company_id}
-              onChange={(e) => setCompanyForm(prev => ({ ...prev, parent_company_id: e.target.value }))}
-            />
-          )}
-
-          {/* Parent Company Checkbox - only show when no parent selected */}
-          {!companyForm.parent_company_id && (
-            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <input
-                type="checkbox"
-                id="is_parent"
-                checked={companyForm.is_parent}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, is_parent: e.target.checked }))}
-                className="mt-1 h-4 w-4 text-brand-cyan border-brand-grey-300 rounded focus:ring-brand-cyan"
-              />
-              <div>
-                <label htmlFor="is_parent" className="block text-sm font-medium text-amber-800 cursor-pointer">
-                  This is a parent/holding company
-                </label>
-                <p className="text-xs text-amber-700 mt-1">
-                  Parent companies aggregate data from subsidiaries. Contacts cannot be added directly - they must be added to subsidiary locations.
-                </p>
+          {/* Only show address, contact info and status for subsidiaries */}
+          {companyForm.parent_company_id && (
+            <>
+              <div className="border-t border-brand-grey-200 pt-4">
+                <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Address</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Address Line 1"
+                    value={companyForm.address_line_1}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, address_line_1: e.target.value }))}
+                  />
+                  <Input
+                    label="Address Line 2"
+                    value={companyForm.address_line_2}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, address_line_2: e.target.value }))}
+                  />
+                  <Input
+                    label="City"
+                    value={companyForm.city}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, city: e.target.value }))}
+                  />
+                  <Input
+                    label="County"
+                    value={companyForm.county}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, county: e.target.value }))}
+                  />
+                  <Input
+                    label="Postcode"
+                    value={companyForm.postcode}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, postcode: e.target.value }))}
+                  />
+                </div>
               </div>
-            </div>
+
+              <div className="border-t border-brand-grey-200 pt-4">
+                <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Contact Information</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <Input
+                    label="Main Phone"
+                    value={companyForm.main_phone}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, main_phone: e.target.value }))}
+                  />
+                  <Input
+                    label="Main Email"
+                    type="email"
+                    value={companyForm.main_email}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, main_email: e.target.value }))}
+                  />
+                  <Input
+                    label="Website"
+                    value={companyForm.website}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, website: e.target.value }))}
+                    placeholder="https://"
+                  />
+                </div>
+              </div>
+
+              <Select
+                label="Status"
+                options={statusOptions}
+                value={companyForm.status}
+                onChange={(e) => setCompanyForm(prev => ({ ...prev, status: e.target.value }))}
+              />
+            </>
           )}
-
-          <div className="border-t border-brand-grey-200 pt-4">
-            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Address</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Address Line 1"
-                value={companyForm.address_line_1}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, address_line_1: e.target.value }))}
-              />
-              <Input
-                label="Address Line 2"
-                value={companyForm.address_line_2}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, address_line_2: e.target.value }))}
-              />
-              <Input
-                label="City"
-                value={companyForm.city}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, city: e.target.value }))}
-              />
-              <Input
-                label="County"
-                value={companyForm.county}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, county: e.target.value }))}
-              />
-              <Input
-                label="Postcode"
-                value={companyForm.postcode}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, postcode: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          <div className="border-t border-brand-grey-200 pt-4">
-            <h4 className="text-sm font-semibold text-brand-slate-900 mb-3">Contact Information</h4>
-            <div className="grid grid-cols-3 gap-4">
-              <Input
-                label="Main Phone"
-                value={companyForm.main_phone}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, main_phone: e.target.value }))}
-              />
-              <Input
-                label="Main Email"
-                type="email"
-                value={companyForm.main_email}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, main_email: e.target.value }))}
-              />
-              <Input
-                label="Website"
-                value={companyForm.website}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, website: e.target.value }))}
-                placeholder="https://"
-              />
-            </div>
-          </div>
-
-          <Select
-            label="Status"
-            options={statusOptions}
-            value={companyForm.status}
-            onChange={(e) => setCompanyForm(prev => ({ ...prev, status: e.target.value }))}
-          />
 
           <Textarea
             label="Notes"
