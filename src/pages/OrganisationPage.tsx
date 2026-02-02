@@ -11,12 +11,13 @@ import {
   Input,
   ConfirmDialog,
   Select,
+  EmptyState,
 } from '@/components/ui';
-import { Plus, Users, Edit, Trash2, Mail, Shield } from 'lucide-react';
+import { Plus, Users, Edit, Trash2, Mail, Shield, Building2, UserCog } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions, roleHierarchy, requiresManager } from '@/hooks/usePermissions';
-import { usersService } from '@/lib/services';
+import { usersService, consultantsService, type DbConsultant, type DbUser } from '@/lib/services';
 import { supabase } from '@/lib/supabase';
 import type { UserRole } from '@/types';
 
@@ -72,7 +73,12 @@ export function OrganisationPage() {
   const permissions = usePermissions();
   const toast = useToast();
   
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'corporate' | 'consultants'>('corporate');
+  
   const [users, setUsers] = useState<any[]>([]);
+  const [consultants, setConsultants] = useState<DbConsultant[]>([]);
+  const [allUsers, setAllUsers] = useState<DbUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Add/Edit user modal
@@ -109,11 +115,17 @@ export function OrganisationPage() {
 
   const loadUsers = async () => {
     try {
-      const data = await usersService.getAll();
-      setUsers(data);
+      setIsLoading(true);
+      const [usersData, consultantsData] = await Promise.all([
+        usersService.getAll(),
+        consultantsService.getAll(),
+      ]);
+      setUsers(usersData);
+      setAllUsers(usersData);
+      setConsultants(consultantsData);
     } catch (error) {
-      console.error('Error loading users:', error);
-      toast.error('Error', 'Failed to load users');
+      console.error('Error loading data:', error);
+      toast.error('Error', 'Failed to load organisation data');
     } finally {
       setIsLoading(false);
     }
@@ -300,9 +312,9 @@ export function OrganisationPage() {
     <div className="min-h-screen">
       <Header 
         title="Organisation"
-        subtitle="Manage team members and roles"
+        subtitle="Manage team members and consultants"
         actions={
-          permissions.isAdmin ? (
+          permissions.isAdmin && activeTab === 'corporate' ? (
             <Button 
               variant="success"
               leftIcon={<Plus className="h-4 w-4" />}
@@ -315,77 +327,105 @@ export function OrganisationPage() {
       />
       
       <div className="p-6 space-y-6">
-        {/* Team Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-brand-cyan/10 rounded-lg">
-                <Users className="h-5 w-5 text-brand-cyan" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{users.length}</p>
-                <p className="text-sm text-brand-grey-400">Total Members</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-cyan-100 rounded-lg">
-                <Users className="h-5 w-5 text-cyan-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-slate-900">
-                  {users.filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager'].includes(r))).length}
-                </p>
-                <p className="text-sm text-brand-grey-400">Recruitment</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Users className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-slate-900">
-                  {users.filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director'].includes(r))).length}
-                </p>
-                <p className="text-sm text-brand-grey-400">Business</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Shield className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-slate-900">
-                  {users.filter(u => u.roles?.some((r: string) => ['admin', 'superadmin'].includes(r))).length}
-                </p>
-                <p className="text-sm text-brand-grey-400">Admins</p>
-              </div>
-            </div>
-          </Card>
+        {/* Tabs */}
+        <div className="flex border-b border-brand-grey-200">
+          <button
+            onClick={() => setActiveTab('corporate')}
+            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'corporate'
+                ? 'border-brand-cyan text-brand-cyan'
+                : 'border-transparent text-brand-grey-500 hover:text-brand-slate-700'
+            }`}
+          >
+            <Building2 className="h-4 w-4" />
+            Corporate ({users.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('consultants')}
+            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'consultants'
+                ? 'border-brand-cyan text-brand-cyan'
+                : 'border-transparent text-brand-grey-500 hover:text-brand-slate-700'
+            }`}
+          >
+            <UserCog className="h-4 w-4" />
+            Consultants ({consultants.filter(c => c.status !== 'terminated').length})
+          </button>
         </div>
 
-        {/* Team Members List */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Team Members
-            </CardTitle>
-          </CardHeader>
-          
-          {isLoading ? (
-            <div className="text-center py-8 text-brand-grey-400">Loading team members...</div>
-          ) : users.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
-              <p className="text-brand-grey-400">No team members yet</p>
+        {activeTab === 'corporate' ? (
+          <>
+            {/* Team Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-brand-cyan/10 rounded-lg">
+                    <Users className="h-5 w-5 text-brand-cyan" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">{users.length}</p>
+                    <p className="text-sm text-brand-grey-400">Total Members</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-cyan-100 rounded-lg">
+                    <Users className="h-5 w-5 text-cyan-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">
+                      {users.filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager'].includes(r))).length}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">Recruitment</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Users className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">
+                      {users.filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director'].includes(r))).length}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">Business</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <Shield className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">
+                      {users.filter(u => u.roles?.some((r: string) => ['admin', 'superadmin'].includes(r))).length}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">Admins</p>
+                  </div>
+                </div>
+              </Card>
             </div>
-          ) : (
+
+            {/* Team Members List */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Team Members
+                </CardTitle>
+              </CardHeader>
+              
+              {isLoading ? (
+                <div className="text-center py-8 text-brand-grey-400">Loading team members...</div>
+              ) : users.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
+                  <p className="text-brand-grey-400">No team members yet</p>
+                </div>
+              ) : (
             <div className="space-y-2">
               {users.map((user) => (
                 <div 
@@ -575,6 +615,189 @@ export function OrganisationPage() {
             Users with subordinate roles must be assigned to a manager. Department heads are independent.
           </p>
         </Card>
+          </>
+        ) : (
+          /* Consultants Tab */
+          <>
+            {/* Consultants Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-brand-cyan/10 rounded-lg">
+                    <UserCog className="h-5 w-5 text-brand-cyan" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">
+                      {consultants.filter(c => c.status !== 'terminated').length}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">Active Consultants</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <UserCog className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">
+                      {consultants.filter(c => c.status === 'in_mission').length}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">In Mission</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <UserCog className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">
+                      {consultants.filter(c => c.status === 'bench').length}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">On Bench</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <UserCog className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-brand-slate-900">
+                      {consultants.filter(c => c.status === 'on_leave').length}
+                    </p>
+                    <p className="text-sm text-brand-grey-400">On Leave</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Consultants grouped by Account Manager */}
+            {(() => {
+              const activeConsultants = consultants.filter(c => c.status !== 'terminated');
+              const groupedByManager: Record<string, DbConsultant[]> = {};
+              const unassigned: DbConsultant[] = [];
+              
+              activeConsultants.forEach(consultant => {
+                if (consultant.account_manager_id) {
+                  if (!groupedByManager[consultant.account_manager_id]) {
+                    groupedByManager[consultant.account_manager_id] = [];
+                  }
+                  groupedByManager[consultant.account_manager_id].push(consultant);
+                } else {
+                  unassigned.push(consultant);
+                }
+              });
+
+              return (
+                <div className="space-y-6">
+                  {Object.entries(groupedByManager).map(([managerId, managerConsultants]) => {
+                    const manager = allUsers.find(u => u.id === managerId);
+                    return (
+                      <Card key={managerId}>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-3">
+                            <Avatar name={manager?.full_name || 'Unknown'} size="sm" />
+                            <div>
+                              <span>{manager?.full_name || 'Unknown Manager'}</span>
+                              <span className="text-sm font-normal text-brand-grey-400 ml-2">
+                                ({managerConsultants.length} consultant{managerConsultants.length !== 1 ? 's' : ''})
+                              </span>
+                            </div>
+                          </CardTitle>
+                        </CardHeader>
+                        <div className="divide-y divide-brand-grey-100">
+                          {managerConsultants.map(consultant => (
+                            <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
+                                <div>
+                                  <p className="font-medium text-brand-slate-900">
+                                    {consultant.first_name} {consultant.last_name}
+                                    {consultant.reference_id && (
+                                      <span className="text-xs text-brand-grey-400 ml-2">[{consultant.reference_id}]</span>
+                                    )}
+                                  </p>
+                                  <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Badge 
+                                  variant={
+                                    consultant.status === 'in_mission' ? 'green' :
+                                    consultant.status === 'bench' ? 'amber' :
+                                    consultant.status === 'on_leave' ? 'purple' : 'grey'
+                                  }
+                                >
+                                  {consultant.status === 'in_mission' ? 'In Mission' :
+                                   consultant.status === 'bench' ? 'On Bench' :
+                                   consultant.status === 'on_leave' ? 'On Leave' : consultant.status}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    );
+                  })}
+
+                  {unassigned.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-3 text-amber-600">
+                          <Users className="h-5 w-5" />
+                          <div>
+                            <span>Unassigned</span>
+                            <span className="text-sm font-normal text-brand-grey-400 ml-2">
+                              ({unassigned.length} consultant{unassigned.length !== 1 ? 's' : ''})
+                            </span>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <div className="divide-y divide-brand-grey-100">
+                        {unassigned.map(consultant => (
+                          <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
+                              <div>
+                                <p className="font-medium text-brand-slate-900">
+                                  {consultant.first_name} {consultant.last_name}
+                                </p>
+                                <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
+                              </div>
+                            </div>
+                            <Badge 
+                              variant={
+                                consultant.status === 'in_mission' ? 'green' :
+                                consultant.status === 'bench' ? 'amber' : 'grey'
+                              }
+                            >
+                              {consultant.status === 'in_mission' ? 'In Mission' :
+                               consultant.status === 'bench' ? 'On Bench' : consultant.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
+
+                  {activeConsultants.length === 0 && (
+                    <Card>
+                      <EmptyState
+                        icon={<UserCog className="h-12 w-12" />}
+                        title="No Consultants Yet"
+                        description="Consultants will appear here once candidates are converted through the contracts pipeline."
+                      />
+                    </Card>
+                  )}
+                </div>
+              );
+            })()}
+          </>
+        )}
       </div>
 
       {/* Add/Edit Modal */}

@@ -189,6 +189,7 @@ export function CustomersPage() {
     industry: '',
     company_size: '',
     parent_company_id: '',
+    is_parent: false,
     address_line_1: '',
     address_line_2: '',
     city: '',
@@ -420,6 +421,7 @@ export function CustomersPage() {
       industry: '',
       company_size: '',
       parent_company_id: parentId || '',
+      is_parent: false,
       address_line_1: '',
       address_line_2: '',
       city: '',
@@ -447,6 +449,7 @@ export function CustomersPage() {
       industry: selectedCompany.industry || '',
       company_size: selectedCompany.company_size || '',
       parent_company_id: selectedCompany.parent_company_id || '',
+      is_parent: selectedCompany.is_parent || false,
       address_line_1: selectedCompany.address_line_1 || '',
       address_line_2: selectedCompany.address_line_2 || '',
       city: selectedCompany.city || '',
@@ -1232,9 +1235,15 @@ export function CustomersPage() {
 
               {/* Action Buttons - Company level */}
               <div className="flex gap-3">
-                <Button variant="secondary" leftIcon={<User className="h-4 w-4" />} onClick={handleOpenAddContact}>
-                  Add Contact
-                </Button>
+                {selectedCompany.is_parent ? (
+                  <div className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                    Parent company - contacts must be added to subsidiaries
+                  </div>
+                ) : (
+                  <Button variant="secondary" leftIcon={<User className="h-4 w-4" />} onClick={handleOpenAddContact}>
+                    Add Contact
+                  </Button>
+                )}
                 {!selectedCompany.parent_company_id && (
                   <Button variant="secondary" leftIcon={<Building2 className="h-4 w-4" />} onClick={() => handleOpenAddCompany(selectedCompany.id)}>
                     Add Location / Subcompany
@@ -1299,10 +1308,21 @@ export function CustomersPage() {
                     {filteredContacts.length === 0 ? (
                       <Card className="p-8 text-center">
                         <User className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
-                        <p className="text-brand-grey-500">No contacts yet</p>
-                        <Button variant="primary" size="sm" className="mt-4" onClick={handleOpenAddContact}>
-                          Add First Contact
-                        </Button>
+                        {selectedCompany.is_parent ? (
+                          <>
+                            <p className="text-amber-600 font-medium">Parent Company</p>
+                            <p className="text-brand-grey-500 text-sm mt-1">
+                              Contacts must be added to subsidiary locations, not the parent company.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-brand-grey-500">No contacts yet</p>
+                            <Button variant="primary" size="sm" className="mt-4" onClick={handleOpenAddContact}>
+                              Add First Contact
+                            </Button>
+                          </>
+                        )}
                       </Card>
                     ) : (
                       <div className="grid grid-cols-2 gap-4">
@@ -1899,6 +1919,27 @@ export function CustomersPage() {
               value={companyForm.parent_company_id}
               onChange={(e) => setCompanyForm(prev => ({ ...prev, parent_company_id: e.target.value }))}
             />
+          )}
+
+          {/* Parent Company Checkbox - only show when no parent selected */}
+          {!companyForm.parent_company_id && (
+            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <input
+                type="checkbox"
+                id="is_parent"
+                checked={companyForm.is_parent}
+                onChange={(e) => setCompanyForm(prev => ({ ...prev, is_parent: e.target.checked }))}
+                className="mt-1 h-4 w-4 text-brand-cyan border-brand-grey-300 rounded focus:ring-brand-cyan"
+              />
+              <div>
+                <label htmlFor="is_parent" className="block text-sm font-medium text-amber-800 cursor-pointer">
+                  This is a parent/holding company
+                </label>
+                <p className="text-xs text-amber-700 mt-1">
+                  Parent companies aggregate data from subsidiaries. Contacts cannot be added directly - they must be added to subsidiary locations.
+                </p>
+              </div>
+            </div>
           )}
 
           <div className="border-t border-brand-grey-200 pt-4">

@@ -140,11 +140,14 @@ export function RequirementDetailPage() {
   // Add candidate modal
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<DbCandidate[]>([]);
+  const [selectedConsultants, setSelectedConsultants] = useState<DbConsultant[]>([]);
   const [applicationNotes, setApplicationNotes] = useState('');
   const [isAddingCandidate, setIsAddingCandidate] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState('');
   const [searchResults, setSearchResults] = useState<DbCandidate[]>([]);
+  const [consultantSearchResults, setConsultantSearchResults] = useState<DbConsultant[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchTab, setSearchTab] = useState<'candidates' | 'consultants'>('candidates');
   
   // Schedule customer assessment modal
   const [isScheduleAssessmentModalOpen, setIsScheduleAssessmentModalOpen] = useState(false);
@@ -269,39 +272,57 @@ export function RequirementDetailPage() {
     }
   };
 
-  // Search candidates with debounce
+  // Search candidates and consultants with debounce
   useEffect(() => {
     if (!candidateSearch || candidateSearch.length < 2) {
       setSearchResults([]);
+      setConsultantSearchResults([]);
       return;
     }
 
     const timeoutId = setTimeout(async () => {
       setIsSearching(true);
       try {
+        // Search candidates
         const allCandidates = await candidatesService.getAll();
         const linkedCandidateIds = applications.map(a => a.candidate_id);
         const selectedIds = selectedCandidates.map(c => c.id);
-        const filtered = allCandidates
+        const filteredCandidates = allCandidates
           .filter(c => !linkedCandidateIds.includes(c.id))
-          .filter(c => !selectedIds.includes(c.id)) // Exclude already selected
-          .filter(c => c.status !== 'converted_to_consultant') // Exclude converted candidates
+          .filter(c => !selectedIds.includes(c.id))
+          .filter(c => c.status !== 'converted_to_consultant')
           .filter(c => 
             `${c.first_name} ${c.last_name}`.toLowerCase().includes(candidateSearch.toLowerCase()) ||
             c.email.toLowerCase().includes(candidateSearch.toLowerCase()) ||
             c.reference_id?.toLowerCase().includes(candidateSearch.toLowerCase())
           )
-          .slice(0, 10); // Limit to 10 results
-        setSearchResults(filtered);
+          .slice(0, 10);
+        setSearchResults(filteredCandidates);
+
+        // Search consultants (bench or available for additional missions)
+        const allConsultants = await consultantsService.getAll();
+        const linkedConsultantIds = applications.filter(a => a.consultant_id).map(a => a.consultant_id);
+        const selectedConsultantIds = selectedConsultants.map(c => c.id);
+        const filteredConsultants = allConsultants
+          .filter(c => !linkedConsultantIds.includes(c.id))
+          .filter(c => !selectedConsultantIds.includes(c.id))
+          .filter(c => c.status !== 'terminated')
+          .filter(c => 
+            `${c.first_name} ${c.last_name}`.toLowerCase().includes(candidateSearch.toLowerCase()) ||
+            c.email.toLowerCase().includes(candidateSearch.toLowerCase()) ||
+            c.reference_id?.toLowerCase().includes(candidateSearch.toLowerCase())
+          )
+          .slice(0, 10);
+        setConsultantSearchResults(filteredConsultants);
       } catch (error) {
-        console.error('Error searching candidates:', error);
+        console.error('Error searching:', error);
       } finally {
         setIsSearching(false);
       }
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [candidateSearch, applications, selectedCandidates]);
+  }, [candidateSearch, applications, selectedCandidates, selectedConsultants]);
 
   const handleOpenEditModal = () => {
     if (!requirement) return;
@@ -394,7 +415,7 @@ export function RequirementDetailPage() {
   };
 
   const handleAddCandidate = async () => {
-    if (selectedCandidates.length === 0 || !user) return;
+    if (selectedCandidates.length === 0 && selectedConsultants.length === 0 || !user) return;
     
     setIsAddingCandidate(true);
     try {
@@ -408,24 +429,38 @@ export function RequirementDetailPage() {
         });
       }
       
+      // Add all selected consultants
+      for (const consultant of selectedConsultants) {
+        await applicationsService.create({
+          consultant_id: consultant.id,
+          requirement_id: id!,
+          notes: applicationNotes || undefined,
+          created_by: user.id,
+        });
+      }
+      
       // Reload all data including interview status
       await loadData();
       
       setIsAddCandidateModalOpen(false);
       setSelectedCandidates([]);
+      setSelectedConsultants([]);
       setApplicationNotes('');
       setCandidateSearch('');
       setSearchResults([]);
+      setConsultantSearchResults([]);
+      
+      const totalAdded = selectedCandidates.length + selectedConsultants.length;
       toast.success(
-        selectedCandidates.length === 1 ? 'Candidate Added' : 'Candidates Added', 
-        `${selectedCandidates.length} candidate${selectedCandidates.length > 1 ? 's have' : ' has'} been linked to this requirement`
+        totalAdded === 1 ? 'Resource Added' : 'Resources Added', 
+        `${totalAdded} ${totalAdded > 1 ? 'resources have' : 'resource has'} been linked to this requirement`
       );
     } catch (error: any) {
-      console.error('Error adding candidate:', error);
+      console.error('Error adding candidate/consultant:', error);
       if (error.code === '23505') {
-        toast.error('Already Linked', 'One or more candidates are already linked to this requirement');
+        toast.error('Already Linked', 'One or more resources are already linked to this requirement');
       } else {
-        toast.error('Error', 'Failed to add candidates');
+        toast.error('Error', 'Failed to add resources');
       }
     } finally {
       setIsAddingCandidate(false);
@@ -968,26 +1003,29 @@ export function RequirementDetailPage() {
         )}
       </div>
 
-      {/* Add Candidate Modal */}
+      {/* Add Candidate/Consultant Modal */}
       <Modal
         isOpen={isAddCandidateModalOpen}
         onClose={() => {
           setIsAddCandidateModalOpen(false);
           setSelectedCandidates([]);
+          setSelectedConsultants([]);
           setApplicationNotes('');
           setCandidateSearch('');
           setSearchResults([]);
+          setConsultantSearchResults([]);
+          setSearchTab('candidates');
         }}
-        title="Add Candidates to Requirement"
-        description={`Link candidates to ${requirement.customer}`}
-        size="md"
+        title="Add Resources to Requirement"
+        description={`Link candidates or consultants to ${requirement.customer}`}
+        size="lg"
       >
         <div className="space-y-4">
-          {/* Selected candidates display */}
-          {selectedCandidates.length > 0 && (
+          {/* Selected items display */}
+          {(selectedCandidates.length > 0 || selectedConsultants.length > 0) && (
             <div className="space-y-2">
               <label className="block text-sm font-medium text-brand-slate-700">
-                Selected ({selectedCandidates.length})
+                Selected ({selectedCandidates.length + selectedConsultants.length})
               </label>
               <div className="flex flex-wrap gap-2">
                 {selectedCandidates.map(candidate => (
@@ -998,8 +1036,26 @@ export function RequirementDetailPage() {
                     <span className="font-medium text-brand-slate-900">
                       {candidate.first_name} {candidate.last_name}
                     </span>
+                    <Badge variant="grey" className="text-xs">Candidate</Badge>
                     <button
                       onClick={() => setSelectedCandidates(prev => prev.filter(c => c.id !== candidate.id))}
+                      className="text-brand-grey-400 hover:text-red-500"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {selectedConsultants.map(consultant => (
+                  <div 
+                    key={consultant.id}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-green-100 border border-green-500 rounded-full text-sm"
+                  >
+                    <span className="font-medium text-brand-slate-900">
+                      {consultant.first_name} {consultant.last_name}
+                    </span>
+                    <Badge variant="green" className="text-xs">Consultant</Badge>
+                    <button
+                      onClick={() => setSelectedConsultants(prev => prev.filter(c => c.id !== consultant.id))}
                       className="text-brand-grey-400 hover:text-red-500"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -1010,7 +1066,31 @@ export function RequirementDetailPage() {
             </div>
           )}
 
-          {/* Search input - always visible */}
+          {/* Tab switcher */}
+          <div className="flex border-b border-brand-grey-200">
+            <button
+              onClick={() => setSearchTab('candidates')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                searchTab === 'candidates'
+                  ? 'border-brand-cyan text-brand-cyan'
+                  : 'border-transparent text-brand-grey-500 hover:text-brand-slate-700'
+              }`}
+            >
+              Candidates {searchResults.length > 0 && `(${searchResults.length})`}
+            </button>
+            <button
+              onClick={() => setSearchTab('consultants')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                searchTab === 'consultants'
+                  ? 'border-brand-cyan text-brand-cyan'
+                  : 'border-transparent text-brand-grey-500 hover:text-brand-slate-700'
+              }`}
+            >
+              Consultants {consultantSearchResults.length > 0 && `(${consultantSearchResults.length})`}
+            </button>
+          </div>
+
+          {/* Search input */}
           <Input
             placeholder="Type at least 2 characters to search..."
             value={candidateSearch}
@@ -1018,51 +1098,95 @@ export function RequirementDetailPage() {
             isSearch
           />
           
-          <div className="max-h-48 overflow-y-auto border border-brand-grey-200 rounded-lg">
+          <div className="max-h-64 overflow-y-auto border border-brand-grey-200 rounded-lg">
             {isSearching ? (
               <p className="text-center py-4 text-brand-grey-400 text-sm">Searching...</p>
             ) : candidateSearch.length < 2 ? (
               <p className="text-center py-4 text-brand-grey-400 text-sm">
-                Type to search candidates by name, email or ID
+                Type to search {searchTab} by name, email or ID
               </p>
-            ) : searchResults.length === 0 ? (
-              <p className="text-center py-4 text-brand-grey-400 text-sm">
-                No matching candidates found
-              </p>
-            ) : (
-              searchResults.map((candidate) => (
-                <div
-                  key={candidate.id}
-                  className="flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-brand-grey-100 last:border-b-0 hover:bg-brand-cyan/5"
-                  onClick={() => {
-                    setSelectedCandidates(prev => [...prev, candidate]);
-                    setCandidateSearch('');
-                    setSearchResults([]);
-                  }}
-                >
-                  <Avatar name={`${candidate.first_name} ${candidate.last_name}`} size="sm" />
-                  <div className="flex-1">
-                    <p className="font-medium text-brand-slate-900">
-                      {candidate.first_name} {candidate.last_name}
-                      {candidate.reference_id && (
-                        <span className="text-xs text-brand-grey-400 ml-2">[{candidate.reference_id}]</span>
-                      )}
-                    </p>
-                    <p className="text-sm text-brand-grey-400">{candidate.email}</p>
-                  </div>
-                  {candidate.skills && candidate.skills.length > 0 && (
-                    <div className="flex gap-1">
-                      {candidate.skills.slice(0, 2).map((skill) => (
-                        <Badge key={skill} variant="cyan" className="text-xs">{skill}</Badge>
-                      ))}
-                      {candidate.skills.length > 2 && (
-                        <Badge variant="grey" className="text-xs">+{candidate.skills.length - 2}</Badge>
-                      )}
+            ) : searchTab === 'candidates' ? (
+              searchResults.length === 0 ? (
+                <p className="text-center py-4 text-brand-grey-400 text-sm">
+                  No matching candidates found
+                </p>
+              ) : (
+                searchResults.map((candidate) => (
+                  <div
+                    key={candidate.id}
+                    className="flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-brand-grey-100 last:border-b-0 hover:bg-brand-cyan/5"
+                    onClick={() => {
+                      setSelectedCandidates(prev => [...prev, candidate]);
+                      setCandidateSearch('');
+                      setSearchResults([]);
+                      setConsultantSearchResults([]);
+                    }}
+                  >
+                    <Avatar name={`${candidate.first_name} ${candidate.last_name}`} size="sm" />
+                    <div className="flex-1">
+                      <p className="font-medium text-brand-slate-900">
+                        {candidate.first_name} {candidate.last_name}
+                        {candidate.reference_id && (
+                          <span className="text-xs text-brand-grey-400 ml-2">[{candidate.reference_id}]</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-brand-grey-400">{candidate.email}</p>
                     </div>
-                  )}
-                  <Plus className="h-4 w-4 text-brand-cyan" />
-                </div>
-              ))
+                    {candidate.skills && candidate.skills.length > 0 && (
+                      <div className="flex gap-1">
+                        {candidate.skills.slice(0, 2).map((skill) => (
+                          <Badge key={skill} variant="cyan" className="text-xs">{skill}</Badge>
+                        ))}
+                        {candidate.skills.length > 2 && (
+                          <Badge variant="grey" className="text-xs">+{candidate.skills.length - 2}</Badge>
+                        )}
+                      </div>
+                    )}
+                    <Plus className="h-4 w-4 text-brand-cyan" />
+                  </div>
+                ))
+              )
+            ) : (
+              consultantSearchResults.length === 0 ? (
+                <p className="text-center py-4 text-brand-grey-400 text-sm">
+                  No matching consultants found
+                </p>
+              ) : (
+                consultantSearchResults.map((consultant) => (
+                  <div
+                    key={consultant.id}
+                    className="flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-brand-grey-100 last:border-b-0 hover:bg-green-50"
+                    onClick={() => {
+                      setSelectedConsultants(prev => [...prev, consultant]);
+                      setCandidateSearch('');
+                      setSearchResults([]);
+                      setConsultantSearchResults([]);
+                    }}
+                  >
+                    <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="sm" />
+                    <div className="flex-1">
+                      <p className="font-medium text-brand-slate-900">
+                        {consultant.first_name} {consultant.last_name}
+                        {consultant.reference_id && (
+                          <span className="text-xs text-brand-grey-400 ml-2">[{consultant.reference_id}]</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-brand-grey-400">{consultant.email}</p>
+                    </div>
+                    <Badge variant={consultant.status === 'bench' ? 'amber' : 'green'} className="text-xs">
+                      {consultant.status === 'bench' ? 'On Bench' : 'In Mission'}
+                    </Badge>
+                    {consultant.skills && consultant.skills.length > 0 && (
+                      <div className="flex gap-1">
+                        {consultant.skills.slice(0, 2).map((skill) => (
+                          <Badge key={skill} variant="cyan" className="text-xs">{skill}</Badge>
+                        ))}
+                      </div>
+                    )}
+                    <Plus className="h-4 w-4 text-green-600" />
+                  </div>
+                ))
+              )
             )}
           </div>
 
@@ -1072,9 +1196,12 @@ export function RequirementDetailPage() {
               onClick={() => {
                 setIsAddCandidateModalOpen(false);
                 setSelectedCandidates([]);
+                setSelectedConsultants([]);
                 setApplicationNotes('');
                 setCandidateSearch('');
                 setSearchResults([]);
+                setConsultantSearchResults([]);
+                setSearchTab('candidates');
               }}
             >
               Cancel
@@ -1083,9 +1210,11 @@ export function RequirementDetailPage() {
               variant="primary"
               onClick={handleAddCandidate}
               isLoading={isAddingCandidate}
-              disabled={selectedCandidates.length === 0}
+              disabled={selectedCandidates.length === 0 && selectedConsultants.length === 0}
             >
-              Add {selectedCandidates.length > 0 ? `${selectedCandidates.length} Candidate${selectedCandidates.length > 1 ? 's' : ''}` : 'Candidates'}
+              Add {(selectedCandidates.length + selectedConsultants.length) > 0 
+                ? `${selectedCandidates.length + selectedConsultants.length} Resource${(selectedCandidates.length + selectedConsultants.length) > 1 ? 's' : ''}` 
+                : 'Resources'}
             </Button>
           </div>
         </div>

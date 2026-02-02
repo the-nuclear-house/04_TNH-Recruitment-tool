@@ -2127,7 +2127,7 @@ export interface DbOffer {
   candidate_nationality: string | null;
   id_document_url: string | null;
   right_to_work_document_url: string | null;
-  status: 'pending_approval' | 'approved' | 'rejected' | 'contract_sent' | 'contract_signed' | 'withdrawn';
+  status: 'pending_approval' | 'approved' | 'rejected' | 'contract_sent' | 'contract_signed' | 'it_access_created' | 'withdrawn';
   requested_by: string | null;
   approver_id: string | null;
   approved_at: string | null;
@@ -2136,6 +2136,9 @@ export interface DbOffer {
   contract_sent_by: string | null;
   contract_signed_at: string | null;
   contract_signed_confirmed_by: string | null;
+  it_access_created: boolean;
+  it_access_created_at: string | null;
+  it_access_created_by: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -2364,7 +2367,37 @@ export const offersService = {
 
     if (error) throw error;
     
-    // Also update candidate status to active_consultant
+    // Also update candidate status to contract_signed
+    if (data?.candidate_id) {
+      await supabase
+        .from('candidates')
+        .update({ 
+          status: 'contract_signed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.candidate_id);
+    }
+    
+    return data;
+  },
+
+  async markITAccessCreated(id: string, confirmedBy: string): Promise<DbOffer> {
+    const { data, error } = await supabase
+      .from('offers')
+      .update({
+        status: 'it_access_created',
+        it_access_created: true,
+        it_access_created_at: new Date().toISOString(),
+        it_access_created_by: confirmedBy,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    
+    // Update candidate status to active_consultant (ready for conversion)
     if (data?.candidate_id) {
       await supabase
         .from('candidates')
