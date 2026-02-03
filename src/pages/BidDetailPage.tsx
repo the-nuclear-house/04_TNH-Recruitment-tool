@@ -574,12 +574,12 @@ export function BidDetailPage() {
           <Card><CardHeader><CardTitle>Proposal Details</CardTitle></CardHeader>
             <div className="p-4 pt-0 space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <Input label="Due Date" type="date" value={proposalForm.due_date} onChange={(e) => setProposalForm(p => ({ ...p, due_date: e.target.value }))} />
-                <Input label="Value (£)" type="number" value={proposalForm.value} onChange={(e) => setProposalForm(p => ({ ...p, value: e.target.value }))} />
-                <Input label="Margin %" type="number" value={proposalForm.margin_percent} onChange={(e) => setProposalForm(p => ({ ...p, margin_percent: e.target.value }))} />
+                <Input label="Due Date" type="date" value={proposalForm.due_date} onChange={(e) => setProposalForm(p => ({ ...p, due_date: e.target.value }))} disabled={!isManager} />
+                <Input label="Value (£)" type="number" value={proposalForm.value} onChange={(e) => setProposalForm(p => ({ ...p, value: e.target.value }))} disabled={!isManager} />
+                <Input label="Margin %" type="number" value={proposalForm.margin_percent} onChange={(e) => setProposalForm(p => ({ ...p, margin_percent: e.target.value }))} disabled={!isManager} />
               </div>
-              <Textarea label="Notes" value={proposalForm.notes} onChange={(e) => setProposalForm(p => ({ ...p, notes: e.target.value }))} rows={2} />
-              <div className="flex justify-end"><Button variant="secondary" onClick={handleSaveProposal} isLoading={isSaving}><Save className="h-4 w-4 mr-2" />Save</Button></div>
+              <Textarea label="Notes" value={proposalForm.notes} onChange={(e) => setProposalForm(p => ({ ...p, notes: e.target.value }))} rows={2} disabled={!isManager} />
+              {isManager && <div className="flex justify-end"><Button variant="secondary" onClick={handleSaveProposal} isLoading={isSaving}><Save className="h-4 w-4 mr-2" />Save</Button></div>}
             </div>
           </Card>
 
@@ -598,7 +598,7 @@ export function BidDetailPage() {
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => handleDownloadDoc('offer')}><Download className="h-4 w-4" /></Button>
                     </div>
-                  ) : (
+                  ) : isManager ? (
                     <div
                       onClick={() => offerInputRef.current?.click()}
                       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('border-brand-cyan', 'bg-brand-cyan/5'); }}
@@ -628,6 +628,8 @@ export function BidDetailPage() {
                         <p className="text-xs text-brand-grey-300">PDF, DOC, or DOCX</p>
                       </div>
                     </div>
+                  ) : (
+                    <div className="p-4 bg-brand-grey-50 rounded-lg text-center text-brand-grey-400 text-sm">Not uploaded</div>
                   )}
                   <input ref={offerInputRef} type="file" accept=".pdf,.doc,.docx" onChange={(e) => setOfferDoc(e.target.files?.[0] || null)} className="hidden" />
                 </div>
@@ -644,7 +646,7 @@ export function BidDetailPage() {
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => handleDownloadDoc('financial')}><Download className="h-4 w-4" /></Button>
                     </div>
-                  ) : (
+                  ) : isManager ? (
                     <div
                       onClick={() => financialInputRef.current?.click()}
                       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('border-brand-cyan', 'bg-brand-cyan/5'); }}
@@ -674,11 +676,13 @@ export function BidDetailPage() {
                         <p className="text-xs text-brand-grey-300">XLSX or XLS</p>
                       </div>
                     </div>
+                  ) : (
+                    <div className="p-4 bg-brand-grey-50 rounded-lg text-center text-brand-grey-400 text-sm">Not uploaded</div>
                   )}
                   <input ref={financialInputRef} type="file" accept=".xlsx,.xls" onChange={(e) => setFinancialDoc(e.target.files?.[0] || null)} className="hidden" />
                 </div>
               </div>
-              {(offerDoc || financialDoc) && (
+              {isManager && (offerDoc || financialDoc) && (
                 <div className="flex justify-end">
                   <Button onClick={handleUploadDocs} isLoading={isUploading}><Upload className="h-4 w-4 mr-2" />Upload Documents</Button>
                 </div>
@@ -738,14 +742,23 @@ export function BidDetailPage() {
         {(stage === 'submitted' || stage === 'won' || stage === 'lost') && (
           <Card><CardHeader><CardTitle>Outcome</CardTitle></CardHeader>
             <div className="p-4 pt-0 space-y-4">
-              {!bid.bid_outcome && stage === 'submitted' ? (<>
-                <Select label="Outcome" options={[{ value: '', label: 'Select...' }, { value: 'won', label: 'Won' }, { value: 'lost', label: 'Lost' }, { value: 'no_decision', label: 'No Decision' }, { value: 'withdrawn', label: 'Withdrawn' }]} value={outcomeForm.outcome} onChange={(e) => setOutcomeForm(p => ({ ...p, outcome: e.target.value }))} />
-                {outcomeForm.outcome && (<>
-                  <Select label="Reason" options={[{ value: '', label: 'Select...' }, ...OUTCOME_REASONS]} value={outcomeForm.reason} onChange={(e) => setOutcomeForm(p => ({ ...p, reason: e.target.value }))} />
-                  <Textarea label="Lessons Learned" value={outcomeForm.lessons_learned} onChange={(e) => setOutcomeForm(p => ({ ...p, lessons_learned: e.target.value }))} rows={3} />
-                  <div className="flex justify-end"><Button onClick={handleRecordOutcome} isLoading={isSaving}>Record Outcome</Button></div>
-                </>)}
-              </>) : (
+              {!bid.bid_outcome && stage === 'submitted' ? (
+                isManager ? (
+                  <>
+                    <Select label="Outcome" options={[{ value: '', label: 'Select...' }, { value: 'won', label: 'Won' }, { value: 'lost', label: 'Lost' }, { value: 'no_decision', label: 'No Decision' }, { value: 'withdrawn', label: 'Withdrawn' }]} value={outcomeForm.outcome} onChange={(e) => setOutcomeForm(p => ({ ...p, outcome: e.target.value }))} />
+                    {outcomeForm.outcome && (<>
+                      <Select label="Reason" options={[{ value: '', label: 'Select...' }, ...OUTCOME_REASONS]} value={outcomeForm.reason} onChange={(e) => setOutcomeForm(p => ({ ...p, reason: e.target.value }))} />
+                      <Textarea label="Lessons Learned" value={outcomeForm.lessons_learned} onChange={(e) => setOutcomeForm(p => ({ ...p, lessons_learned: e.target.value }))} rows={3} />
+                      <div className="flex justify-end"><Button onClick={handleRecordOutcome} isLoading={isSaving}>Record Outcome</Button></div>
+                    </>)}
+                  </>
+                ) : (
+                  <div className="text-center py-6 text-brand-grey-400">
+                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>Awaiting outcome from manager</p>
+                  </div>
+                )
+              ) : (
                 <div className={`p-4 rounded-lg ${bid.bid_outcome === 'won' ? 'bg-green-50' : 'bg-red-50'}`}>
                   <p className={`text-lg font-semibold ${bid.bid_outcome === 'won' ? 'text-green-700' : 'text-red-700'}`}>
                     {bid.bid_outcome === 'won' ? <><Award className="h-5 w-5 inline mr-2" />Bid Won!</> : <><XCircle className="h-5 w-5 inline mr-2" />Bid {bid.bid_outcome}</>}
@@ -754,7 +767,7 @@ export function BidDetailPage() {
                   {bid.bid_lessons_learned && <p className="text-sm mt-2">Lessons: {bid.bid_lessons_learned}</p>}
                 </div>
               )}
-              {bid.bid_outcome === 'won' && !bid.project_id && (
+              {bid.bid_outcome === 'won' && !bid.project_id && isManager && (
                 <div className="flex justify-center pt-4">
                   <Button variant="success" size="lg" onClick={() => setIsCreateProjectModalOpen(true)}><Award className="h-5 w-5 mr-2" />Create Work Package Project</Button>
                 </div>
