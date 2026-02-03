@@ -747,10 +747,10 @@ export function MissionsPage() {
                                   setRequirementProject(project);
                                   setIsCreateRequirementModalOpen(true);
                                 }}
-                                className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-brand-cyan transition-colors"
+                                className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 rounded transition-colors"
                                 title="Add Requirement to Project"
                               >
-                                <Plus className="h-3.5 w-3.5" />
+                                +Req
                               </button>
                             </div>
                             {/* Project Timeline Bar */}
