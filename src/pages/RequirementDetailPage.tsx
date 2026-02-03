@@ -1554,12 +1554,14 @@ export function RequirementDetailPage() {
           onClose={() => {
             setIsCreateProjectModalOpen(false);
             setCreatedProjectId(null);
+            loadData(); // Reload to update button text
           }}
           onSuccess={(projectId) => {
             setCreatedProjectId(projectId);
             setIsCreateProjectModalOpen(false);
             // Now open the mission modal with the new project
             setIsCreateMissionModalOpen(true);
+            loadData(); // Reload to get updated requirement
           }}
           requirement={requirement}
           contact={contacts.find(c => c.id === requirement?.contact_id)}

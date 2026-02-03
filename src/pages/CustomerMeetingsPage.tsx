@@ -1480,6 +1480,7 @@ export function CustomerMeetingsPage() {
             setIsCreateProjectModalOpen(false);
             setAssessmentForMission(null);
             setCreatedProjectId(null);
+            loadData(); // Reload to update button text
           }}
           onSuccess={(projectId) => {
             setCreatedProjectId(projectId);

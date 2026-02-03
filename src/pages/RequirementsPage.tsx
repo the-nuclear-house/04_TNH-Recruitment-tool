@@ -515,14 +515,12 @@ export function RequirementsPage() {
             setIsCreateProjectModalOpen(false);
             setProjectRequirement(null);
             setCreatedProjectId(null);
+            loadData(); // Reload to update button text
           }}
           onSuccess={(projectId) => {
             // Project created, now open the mission modal
             setCreatedProjectId(projectId);
             setIsCreateProjectModalOpen(false);
-            
-            // Link the project to the requirement
-            requirementsService.update(projectRequirement.id, { project_id: projectId });
             
             // Open mission modal with the new project
             setMissionRequirement({

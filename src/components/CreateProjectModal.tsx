@@ -4,6 +4,7 @@ import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import {
   projectsService,
+  requirementsService,
   usersService,
   type DbRequirement,
   type DbCompany,
@@ -124,7 +125,14 @@ export function CreateProjectModal({
         created_by: user?.id,
       });
 
-      toast.success('Project Created', `Project "${formData.name}" has been created`);
+      // Update the requirement with the new project_id
+      if (requirement?.id) {
+        await requirementsService.update(requirement.id, {
+          project_id: project.id,
+        });
+      }
+
+      toast.success('Project Created', `Project "${formData.name}" has been created. Now create a mission.`);
       onClose();
       onSuccess?.(project.id);
     } catch (error: any) {
