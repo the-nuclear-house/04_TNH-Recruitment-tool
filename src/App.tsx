@@ -16,6 +16,7 @@ import {
   ConsultantProfilePage,
   MissionsPage,
   BidsPage,
+  BidDetailPage,
   TimesheetsPage,
   LeaveRequestsPage,
   TicketsPage,
@@ -65,6 +66,7 @@ function App() {
           <Route path="/requirements" element={<RequirementsPage />} />
           <Route path="/requirements/:id" element={<RequirementDetailPage />} />
           <Route path="/bids" element={<BidsPage />} />
+          <Route path="/bids/:id" element={<BidDetailPage />} />
           
           {/* Recruitment */}
           <Route path="/candidates" element={<CandidatesPage />} />

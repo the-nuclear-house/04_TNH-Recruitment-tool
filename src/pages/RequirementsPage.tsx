@@ -125,7 +125,7 @@ export function RequirementsPage() {
     try {
       setIsLoading(true);
       const [reqs, usrs, comps, conts, allAssessments] = await Promise.all([
-        requirementsService.getAll(),
+        requirementsService.getAllStaffingRequirements(), // Only staffing requirements, not bids
         usersService.getAll(),
         companiesService.getAll(),
         contactsService.getAll(),

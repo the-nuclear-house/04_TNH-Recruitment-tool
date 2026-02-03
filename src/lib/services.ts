@@ -629,6 +629,34 @@ export interface DbRequirement {
   project_id: string | null;
   is_bid: boolean;
   bid_status: 'qualifying' | 'proposal' | 'submitted' | 'won' | 'lost' | null;
+  // MEDDPICC scoring (1-5 scale)
+  meddpicc_metrics: number | null;
+  meddpicc_economic_buyer: number | null;
+  meddpicc_decision_criteria: number | null;
+  meddpicc_decision_process: number | null;
+  meddpicc_identify_pain: number | null;
+  meddpicc_paper_process: number | null;
+  meddpicc_champion: number | null;
+  meddpicc_competition: number | null;
+  meddpicc_notes: Record<string, string> | null;
+  // Go/No-Go decision
+  go_nogo_decision: 'go' | 'nogo' | null;
+  go_nogo_date: string | null;
+  go_nogo_decided_by: string | null;
+  // Proposal fields
+  proposal_due_date: string | null;
+  proposal_submitted_date: string | null;
+  proposal_value: number | null;
+  proposal_cost: number | null;
+  proposal_margin_percent: number | null;
+  proposal_notes: string | null;
+  proposal_documents: Array<{ name: string; url: string; uploaded_at: string }> | null;
+  // Outcome fields
+  bid_outcome: 'won' | 'lost' | 'no_decision' | 'withdrawn' | null;
+  bid_outcome_date: string | null;
+  bid_outcome_reason: string | null;
+  bid_outcome_notes: string | null;
+  bid_lessons_learned: string | null;
   // Winning candidate (set when assessment = GO)
   winning_candidate_id: string | null;
   won_at: string | null;
@@ -665,6 +693,34 @@ export interface CreateRequirementInput {
   project_id?: string;
   is_bid?: boolean;
   bid_status?: 'qualifying' | 'proposal' | 'submitted' | 'won' | 'lost';
+  // MEDDPICC scoring
+  meddpicc_metrics?: number;
+  meddpicc_economic_buyer?: number;
+  meddpicc_decision_criteria?: number;
+  meddpicc_decision_process?: number;
+  meddpicc_identify_pain?: number;
+  meddpicc_paper_process?: number;
+  meddpicc_champion?: number;
+  meddpicc_competition?: number;
+  meddpicc_notes?: Record<string, string>;
+  // Go/No-Go
+  go_nogo_decision?: 'go' | 'nogo';
+  go_nogo_date?: string;
+  go_nogo_decided_by?: string;
+  // Proposal
+  proposal_due_date?: string;
+  proposal_submitted_date?: string;
+  proposal_value?: number;
+  proposal_cost?: number;
+  proposal_margin_percent?: number;
+  proposal_notes?: string;
+  proposal_documents?: Array<{ name: string; url: string; uploaded_at: string }>;
+  // Outcome
+  bid_outcome?: 'won' | 'lost' | 'no_decision' | 'withdrawn';
+  bid_outcome_date?: string;
+  bid_outcome_reason?: string;
+  bid_outcome_notes?: string;
+  bid_lessons_learned?: string;
   // Winning candidate
   winning_candidate_id?: string;
 }
@@ -813,6 +869,41 @@ export const requirementsService = {
     return data || [];
   },
 
+  // Get all bids (is_bid = true)
+  async getAllBids(): Promise<DbRequirement[]> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*)
+      `)
+      .eq('is_bid', true)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get all staffing requirements (not bids)
+  async getAllStaffingRequirements(): Promise<DbRequirement[]> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*),
+        project:project_id(*)
+      `)
+      .eq('is_bid', false)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
   // Mark requirement as won with winning candidate
   async markAsWon(requirementId: string, candidateId: string): Promise<DbRequirement> {
     const { data, error } = await supabase
@@ -829,6 +920,54 @@ export const requirementsService = {
         company:company_id(*),
         contact:contact_id(*),
         winning_candidate:winning_candidate_id(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Mark bid as won (after outcome recorded)
+  async markBidAsWon(requirementId: string, outcomeReason?: string, lessonsLearned?: string): Promise<DbRequirement> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .update({
+        bid_status: 'won',
+        bid_outcome: 'won',
+        bid_outcome_date: new Date().toISOString().split('T')[0],
+        bid_outcome_reason: outcomeReason || null,
+        bid_lessons_learned: lessonsLearned || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', requirementId)
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Mark bid as lost
+  async markBidAsLost(requirementId: string, outcomeReason: string, lessonsLearned?: string): Promise<DbRequirement> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .update({
+        bid_status: 'lost',
+        bid_outcome: 'lost',
+        bid_outcome_date: new Date().toISOString().split('T')[0],
+        bid_outcome_reason: outcomeReason,
+        bid_lessons_learned: lessonsLearned || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', requirementId)
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*)
       `)
       .single();
 

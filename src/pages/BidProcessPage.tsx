@@ -26,7 +26,7 @@ const bidStatusConfig: Record<string, { label: string; color: string; bgColor: s
   lost: { label: 'Lost', color: 'text-red-700', bgColor: 'bg-red-100' },
 };
 
-export function BidsPage() {
+export function BidProcessPage() {
   const navigate = useNavigate();
   const toast = useToast();
   

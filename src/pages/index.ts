@@ -11,6 +11,7 @@ export { ContractsPage } from './ContractsPage';
 export { ConsultantsPage, ConsultantProfilePage } from './ConsultantsPage';
 export { MissionsPage } from './MissionsPage';
 export { BidsPage } from './BidsPage';
+export { BidDetailPage } from './BidDetailPage';
 export { TimesheetsPage } from './TimesheetsPage';
 export { LeaveRequestsPage } from './LeaveRequestsPage';
 export { TicketsPage } from './TicketsPage';
