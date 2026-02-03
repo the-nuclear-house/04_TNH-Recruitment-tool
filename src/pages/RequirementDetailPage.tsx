@@ -44,6 +44,7 @@ import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, consultantsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbConsultant } from '@/lib/services';
 import { CreateMissionModal } from '@/components/CreateMissionModal';
+import { CreateProjectModal } from '@/components/CreateProjectModal';
 
 const statusConfig: Record<string, { label: string; colour: string; bgColour: string }> = {
   active: { label: 'Active', colour: 'text-green-700', bgColour: 'bg-green-100' },
@@ -168,6 +169,10 @@ export function RequirementDetailPage() {
   const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
   const [existingMission, setExistingMission] = useState<any>(null);
   const [consultants, setConsultants] = useState<DbConsultant[]>([]);
+  
+  // Create Project modal (shown before Mission when no project exists)
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   
   // Check if user can schedule assessments (Business Manager, Business Director, Admin)
   const canScheduleAssessments = user?.roles?.some(r => ['admin', 'superadmin', 'business_director', 'business_manager'].includes(r)) ?? false;
@@ -731,7 +736,12 @@ export function RequirementDetailPage() {
                     leftIcon={<Rocket className="h-4 w-4" />}
                     onClick={() => {
                       if (isCandidateConsultant(requirement.winning_candidate_id)) {
-                        setIsCreateMissionModalOpen(true);
+                        // Check if requirement has a project - if not, create project first
+                        if (!requirement.project_id) {
+                          setIsCreateProjectModalOpen(true);
+                        } else {
+                          setIsCreateMissionModalOpen(true);
+                        }
                       } else {
                         toast.warning(
                           'Cannot Create Mission Yet',
@@ -838,7 +848,7 @@ export function RequirementDetailPage() {
           </Card>
         )}
 
-        {/* Linked Candidates */}
+        {/* Linked Candidates & Consultants */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Linked Candidates ({applications.length})</CardTitle>
@@ -872,16 +882,19 @@ export function RequirementDetailPage() {
           ) : (
             <div className="space-y-3">
               {applications.map((app) => {
-                // Skip if no candidate (consultant applications handled separately later)
-                if (!app.candidate_id || !app.candidate) return null;
+                // Handle both candidate and consultant applications
+                const isConsultantApp = !app.candidate_id && app.consultant_id;
+                const person = isConsultantApp ? app.consultant : app.candidate;
                 
-                const hasScheduledAssessment = scheduledAssessments[app.id];
-                const assessmentOutcome = candidateAssessmentOutcomes[app.candidate_id];
-                const isWinningCandidate = requirement.winning_candidate_id === app.candidate_id;
+                if (!person) return null;
                 
-                // Compute pipeline status for this candidate
-                const interviews = candidateInterviews[app.candidate_id] || [];
-                const pipelineStatus = computeCandidatePipelineStatus(interviews, app.candidate?.status);
+                const hasScheduledAssessment = !isConsultantApp && scheduledAssessments[app.id];
+                const assessmentOutcome = !isConsultantApp && app.candidate_id ? candidateAssessmentOutcomes[app.candidate_id] : null;
+                const isWinningCandidate = !isConsultantApp && requirement.winning_candidate_id === app.candidate_id;
+                
+                // Compute pipeline status for candidates only
+                const interviews = !isConsultantApp && app.candidate_id ? (candidateInterviews[app.candidate_id] || []) : [];
+                const pipelineStatus = !isConsultantApp ? computeCandidatePipelineStatus(interviews, app.candidate?.status) : null;
                 
                 return (
                 <div 
@@ -891,22 +904,27 @@ export function RequirementDetailPage() {
                       ? 'border-green-300 bg-green-50' 
                       : assessmentOutcome === 'nogo'
                         ? 'border-red-200 bg-red-50/50'
-                        : 'border-brand-grey-200 hover:border-brand-cyan'
+                        : isConsultantApp
+                          ? 'border-purple-200 bg-purple-50/30 hover:border-purple-300'
+                          : 'border-brand-grey-200 hover:border-brand-cyan'
                   }`}
                 >
                   <div 
                     className="flex items-center gap-3 flex-1 cursor-pointer"
-                    onClick={() => navigate(`/candidates/${app.candidate_id}`)}
+                    onClick={() => navigate(isConsultantApp ? `/consultants/${app.consultant_id}` : `/candidates/${app.candidate_id}`)}
                   >
                     <Avatar 
-                      name={`${app.candidate?.first_name} ${app.candidate?.last_name}`}
+                      name={`${person.first_name} ${person.last_name}`}
                       size="sm"
                     />
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-brand-slate-900">
-                          {app.candidate?.first_name} {app.candidate?.last_name}
+                          {person.first_name} {person.last_name}
                         </p>
+                        {isConsultantApp && (
+                          <Badge variant="purple">Consultant</Badge>
+                        )}
                         {isWinningCandidate && (
                           <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                             <Trophy className="h-3 w-3" />
@@ -914,34 +932,34 @@ export function RequirementDetailPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-brand-grey-400">{app.candidate?.email}</p>
+                      <p className="text-sm text-brand-grey-400">{person.email}</p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    {/* Assessment outcome badges - takes priority */}
-                    {assessmentOutcome === 'go' && !isWinningCandidate && (
+                    {/* Assessment outcome badges - takes priority (candidates only) */}
+                    {!isConsultantApp && assessmentOutcome === 'go' && !isWinningCandidate && (
                       <Badge variant="green">GO</Badge>
                     )}
-                    {assessmentOutcome === 'nogo' && (
+                    {!isConsultantApp && assessmentOutcome === 'nogo' && (
                       <span className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
                         <XCircle className="h-3 w-3" />
                         NOGO
                       </span>
                     )}
-                    {assessmentOutcome === 'pending' && (
+                    {!isConsultantApp && assessmentOutcome === 'pending' && (
                       <Badge variant="orange">Assessment Pending</Badge>
                     )}
                     
-                    {/* Pipeline status - show if no assessment outcome */}
-                    {!assessmentOutcome && !isWinningCandidate && (
+                    {/* Pipeline status - show if no assessment outcome (candidates only) */}
+                    {!isConsultantApp && !assessmentOutcome && !isWinningCandidate && pipelineStatus && (
                       <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${pipelineStatus.colour}`}>
                         {pipelineStatus.label}
                       </span>
                     )}
                     
                     {/* Converted to Consultant badge - only show if candidate was linked before being converted */}
-                    {isCandidateConsultant(app.candidate_id) && app.candidate?.status === 'converted_to_consultant' && (
+                    {!isConsultantApp && isCandidateConsultant(app.candidate_id) && app.candidate?.status === 'converted_to_consultant' && (
                       <Badge variant="purple">Converted to Consultant</Badge>
                     )}
                     
@@ -949,7 +967,7 @@ export function RequirementDetailPage() {
                       Added {formatDate(app.created_at)}
                     </span>
                     
-                    {/* Schedule Client Assessment - available for any candidate, disabled when requirement is won */}
+                    {/* Schedule Client Assessment - available for any candidate/consultant, disabled when requirement is won */}
                     {canScheduleAssessments && !hasScheduledAssessment && assessmentOutcome !== 'nogo' && !isWinningCandidate && requirement?.status !== 'won' && (
                       <Button
                         variant="secondary"
@@ -1529,10 +1547,32 @@ export function RequirementDetailPage() {
         isLoading={isDeleting}
       />
 
+      {/* Create Project Modal - shown when requirement has no project */}
+      {requirement && (
+        <CreateProjectModal
+          isOpen={isCreateProjectModalOpen}
+          onClose={() => {
+            setIsCreateProjectModalOpen(false);
+            setCreatedProjectId(null);
+          }}
+          onSuccess={(projectId) => {
+            setCreatedProjectId(projectId);
+            setIsCreateProjectModalOpen(false);
+            // Now open the mission modal with the new project
+            setIsCreateMissionModalOpen(true);
+          }}
+          requirement={requirement}
+          contact={contacts.find(c => c.id === requirement?.contact_id)}
+        />
+      )}
+
       {/* Create Mission Modal */}
       <CreateMissionModal
         isOpen={isCreateMissionModalOpen}
-        onClose={() => setIsCreateMissionModalOpen(false)}
+        onClose={() => {
+          setIsCreateMissionModalOpen(false);
+          setCreatedProjectId(null);
+        }}
         onSuccess={() => {
           loadData();
           navigate('/missions');
@@ -1541,7 +1581,7 @@ export function RequirementDetailPage() {
         company={requirement?.company}
         contact={contacts.find(c => c.id === requirement?.contact_id)}
         winningCandidateId={requirement?.winning_candidate_id}
-        projectId={requirement?.project_id || undefined}
+        projectId={requirement?.project_id || createdProjectId || undefined}
       />
     </div>
   );

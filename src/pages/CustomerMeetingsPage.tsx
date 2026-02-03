@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { CreateMissionModal } from '@/components/CreateMissionModal';
+import { CreateProjectModal } from '@/components/CreateProjectModal';
 import { 
   Card, 
   Badge, 
@@ -151,6 +152,10 @@ export function CustomerMeetingsPage() {
   const [isCreateMissionPromptOpen, setIsCreateMissionPromptOpen] = useState(false);
   const [assessmentForMission, setAssessmentForMission] = useState<DbCustomerAssessment | null>(null);
   const [isCreateMissionModalOpen, setIsCreateMissionModalOpen] = useState(false);
+  
+  // Project creation modal (shown before mission when no project exists)
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -765,7 +770,13 @@ export function CustomerMeetingsPage() {
                             const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
                             if (isCandidateConsultant(candidateId)) {
                               setAssessmentForMission(meeting as DbCustomerAssessment);
-                              setIsCreateMissionModalOpen(true);
+                              // Check if requirement has a project
+                              const requirementProjectId = (meeting as any).application?.requirement?.project_id;
+                              if (!requirementProjectId) {
+                                setIsCreateProjectModalOpen(true);
+                              } else {
+                                setIsCreateMissionModalOpen(true);
+                              }
                             } else {
                               toast.warning(
                                 'Cannot Create Mission Yet',
@@ -1415,7 +1426,13 @@ export function CustomerMeetingsPage() {
         }}
         onConfirm={() => {
           setIsCreateMissionPromptOpen(false);
-          setIsCreateMissionModalOpen(true);
+          // Check if requirement has a project
+          const requirementProjectId = assessmentForMission?.application?.requirement?.project_id;
+          if (!requirementProjectId) {
+            setIsCreateProjectModalOpen(true);
+          } else {
+            setIsCreateMissionModalOpen(true);
+          }
         }}
         title="Create Mission"
         message="Would you like to create a mission for this consultant now?"
@@ -1435,6 +1452,7 @@ export function CustomerMeetingsPage() {
           onSuccess={() => {
             setIsCreateMissionModalOpen(false);
             setAssessmentForMission(null);
+            setCreatedProjectId(null);
             loadData();
           }}
           requirement={assessmentForMission.requirement_id ? { id: assessmentForMission.requirement_id } as any : undefined}
@@ -1443,7 +1461,27 @@ export function CustomerMeetingsPage() {
             const contact = contacts.find(c => c.id === assessmentForMission.contact_id);
             return contact ? companies.find(co => co.id === contact.company_id) : undefined;
           })()}
-          projectId={assessmentForMission.application?.requirement?.project_id || undefined}
+          projectId={assessmentForMission.application?.requirement?.project_id || createdProjectId || undefined}
+        />
+      )}
+
+      {/* Create Project Modal - shown before Mission when no project exists */}
+      {assessmentForMission && (
+        <CreateProjectModal
+          isOpen={isCreateProjectModalOpen}
+          onClose={() => {
+            setIsCreateProjectModalOpen(false);
+            setAssessmentForMission(null);
+            setCreatedProjectId(null);
+          }}
+          onSuccess={(projectId) => {
+            setCreatedProjectId(projectId);
+            setIsCreateProjectModalOpen(false);
+            // Now open the mission modal with the new project
+            setIsCreateMissionModalOpen(true);
+          }}
+          requirement={assessmentForMission.application?.requirement as any}
+          contact={contacts.find(c => c.id === assessmentForMission.contact_id)}
         />
       )}
     </div>

@@ -17,7 +17,7 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
-import { Card, Button, Badge, EmptyState, Modal, Input, Select, Textarea, DeleteDialog } from '@/components/ui';
+import { Card, Button, Badge, EmptyState, Modal, Input, Select, Textarea, DeleteDialog, ConfirmDialog } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -154,6 +154,19 @@ export function MissionsPage() {
   // Delete mission
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Project editing
+  const [selectedProject, setSelectedProject] = useState<DbProject | null>(null);
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [projectForm, setProjectForm] = useState({
+    name: '',
+    start_date: '',
+    end_date: '',
+    status: 'active',
+    notes: '',
+  });
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [isCloseProjectDialogOpen, setIsCloseProjectDialogOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -381,6 +394,80 @@ export function MissionsPage() {
     // The actual save will happen when they click Save
   };
 
+  // Open project detail
+  const openProjectDetail = (project: DbProject) => {
+    setSelectedProject(project);
+    setProjectForm({
+      name: project.name,
+      start_date: project.start_date || '',
+      end_date: project.end_date || '',
+      status: project.status,
+      notes: project.notes || '',
+    });
+    setIsProjectModalOpen(true);
+  };
+
+  // Save project changes
+  const handleSaveProject = async () => {
+    if (!selectedProject) return;
+
+    setIsSavingProject(true);
+    try {
+      await projectsService.update(selectedProject.id, {
+        name: projectForm.name,
+        start_date: projectForm.start_date || undefined,
+        end_date: projectForm.end_date || undefined,
+        status: projectForm.status as 'active' | 'on_hold' | 'completed' | 'cancelled',
+        notes: projectForm.notes || undefined,
+      });
+      toast.success('Project Updated', 'Project details have been saved');
+      setIsProjectModalOpen(false);
+      setSelectedProject(null);
+      loadData();
+    } catch (error) {
+      console.error('Error saving project:', error);
+      toast.error('Error', 'Failed to save project changes');
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
+
+  // Close project (only if no active missions)
+  const handleCloseProject = async () => {
+    if (!selectedProject) return;
+
+    // Check for active missions
+    const projectMissions = missions.filter(m => m.project_id === selectedProject.id);
+    const activeMissions = projectMissions.filter(m => m.status === 'active');
+    
+    if (activeMissions.length > 0) {
+      toast.error(
+        'Cannot Close Project', 
+        `This project has ${activeMissions.length} active mission${activeMissions.length > 1 ? 's' : ''}. Close all missions first.`
+      );
+      setIsCloseProjectDialogOpen(false);
+      return;
+    }
+
+    setIsSavingProject(true);
+    try {
+      await projectsService.update(selectedProject.id, {
+        status: 'completed',
+        end_date: projectForm.end_date || new Date().toISOString().split('T')[0],
+      });
+      toast.success('Project Closed', 'The project has been marked as completed');
+      setIsCloseProjectDialogOpen(false);
+      setIsProjectModalOpen(false);
+      setSelectedProject(null);
+      loadData();
+    } catch (error) {
+      console.error('Error closing project:', error);
+      toast.error('Error', 'Failed to close project');
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
+
   const stats = {
     active: missions.filter(m => m.status === 'active').length,
     total: missions.length,
@@ -548,18 +635,27 @@ export function MissionsPage() {
                         <div key={project.id}>
                           {/* Project Header Row */}
                           <div 
-                            className="flex items-center border-b border-brand-grey-200 bg-slate-100/50 cursor-pointer hover:bg-slate-100 transition-colors"
-                            onClick={() => toggleProject(project.id)}
+                            className="flex items-center border-b border-brand-grey-200 bg-slate-100/50 hover:bg-slate-100 transition-colors"
                           >
                             <div className="w-64 flex-shrink-0 p-2 pl-8 flex items-center gap-2 border-r border-brand-grey-200">
-                              {isProjectExpanded ? (
-                                <ChevronDown className="h-3.5 w-3.5 text-brand-grey-400" />
-                              ) : (
-                                <ChevronUp className="h-3.5 w-3.5 text-brand-grey-400" />
-                              )}
-                              <FolderOpen className="h-3.5 w-3.5 text-slate-500" />
-                              <span className="font-medium text-slate-700 text-sm">{project.name}</span>
-                              <Badge variant="grey" className="text-xs">{projectMissions.length}</Badge>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleProject(project.id); }}
+                                className="p-0.5 hover:bg-slate-200 rounded"
+                              >
+                                {isProjectExpanded ? (
+                                  <ChevronDown className="h-3.5 w-3.5 text-brand-grey-400" />
+                                ) : (
+                                  <ChevronUp className="h-3.5 w-3.5 text-brand-grey-400" />
+                                )}
+                              </button>
+                              <div 
+                                className="flex items-center gap-2 flex-1 cursor-pointer"
+                                onClick={() => openProjectDetail(project)}
+                              >
+                                <FolderOpen className="h-3.5 w-3.5 text-slate-500" />
+                                <span className="font-medium text-slate-700 text-sm hover:text-brand-cyan transition-colors">{project.name}</span>
+                                <Badge variant="grey" className="text-xs">{projectMissions.length}</Badge>
+                              </div>
                             </div>
                             {/* Project Timeline Bar */}
                             <div className="flex-1 relative py-2">
@@ -990,6 +1086,130 @@ export function MissionsPage() {
         itemName={selectedMission?.name || 'this mission'}
         canHardDelete={permissions.isSuperAdmin}
         isLoading={isDeleting}
+      />
+
+      {/* Project Edit Modal */}
+      <Modal
+        isOpen={isProjectModalOpen}
+        onClose={() => {
+          setIsProjectModalOpen(false);
+          setSelectedProject(null);
+        }}
+        title="Project Details"
+        size="lg"
+      >
+        {selectedProject && (
+          <div className="space-y-6">
+            {/* Project Info */}
+            <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
+              <div>
+                <p className="text-xs text-brand-grey-400">Reference ID</p>
+                <p className="font-medium text-brand-slate-900">{selectedProject.reference_id || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-brand-grey-400">Status</p>
+                <Badge variant={selectedProject.status === 'active' ? 'green' : selectedProject.status === 'completed' ? 'grey' : 'orange'}>
+                  {selectedProject.status}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-brand-grey-400">Type</p>
+                <p className="font-medium text-brand-slate-900">{selectedProject.type === 'T&M' ? 'Time & Materials' : 'Fixed Price'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-brand-grey-400">Missions</p>
+                <p className="font-medium text-brand-slate-900">
+                  {missions.filter(m => m.project_id === selectedProject.id).length}
+                  <span className="text-brand-grey-400 text-sm ml-1">
+                    ({missions.filter(m => m.project_id === selectedProject.id && m.status === 'active').length} active)
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* Edit Form */}
+            <div className="space-y-4">
+              <Input
+                label="Project Name"
+                value={projectForm.name}
+                onChange={(e) => setProjectForm(prev => ({ ...prev, name: e.target.value }))}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Start Date"
+                  type="date"
+                  value={projectForm.start_date}
+                  onChange={(e) => setProjectForm(prev => ({ ...prev, start_date: e.target.value }))}
+                />
+                <Input
+                  label="End Date"
+                  type="date"
+                  value={projectForm.end_date}
+                  onChange={(e) => setProjectForm(prev => ({ ...prev, end_date: e.target.value }))}
+                />
+              </div>
+
+              <Select
+                label="Status"
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'on_hold', label: 'On Hold' },
+                  { value: 'completed', label: 'Completed' },
+                  { value: 'cancelled', label: 'Cancelled' },
+                ]}
+                value={projectForm.status}
+                onChange={(e) => setProjectForm(prev => ({ ...prev, status: e.target.value }))}
+              />
+
+              <Textarea
+                label="Notes"
+                value={projectForm.notes}
+                onChange={(e) => setProjectForm(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-between pt-4 border-t border-brand-grey-200">
+              <div>
+                {selectedProject.status === 'active' && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsCloseProjectDialogOpen(true)}
+                    leftIcon={<CheckCircle className="h-4 w-4" />}
+                  >
+                    Close Project
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={() => setIsProjectModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" onClick={handleSaveProject} isLoading={isSavingProject}>
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Close Project Confirmation */}
+      <ConfirmDialog
+        isOpen={isCloseProjectDialogOpen}
+        onClose={() => setIsCloseProjectDialogOpen(false)}
+        onConfirm={handleCloseProject}
+        title="Close Project"
+        message={
+          selectedProject 
+            ? `Are you sure you want to close "${selectedProject.name}"? All missions must be closed first.`
+            : ''
+        }
+        confirmText="Yes, Close Project"
+        variant="primary"
+        isLoading={isSavingProject}
       />
     </div>
   );

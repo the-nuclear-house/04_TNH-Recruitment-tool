@@ -370,19 +370,24 @@ export function RequirementsPage() {
                           </div>
                         )}
                         
-                        {/* Allocated Candidates */}
+                        {/* Allocated Candidates & Consultants */}
                         {stats.allocated > 0 && (
                           <div className="mt-3 pt-3 border-t border-brand-grey-100">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-brand-grey-500 font-medium">Candidates:</span>
                               {stats.applications.slice(0, 4).map((app) => {
-                                const assessment = stats.assessments.find(a => 
+                                const isConsultantApp = !app.candidate_id && app.consultant_id;
+                                const person = isConsultantApp ? app.consultant : app.candidate;
+                                
+                                if (!person) return null;
+                                
+                                const assessment = !isConsultantApp ? stats.assessments.find(a => 
                                   a.candidate_id === app.candidate_id || 
                                   a.application?.candidate?.id === app.candidate_id
-                                );
+                                ) : null;
                                 const isNogo = assessment?.outcome === 'nogo';
                                 const isGo = assessment?.outcome === 'go';
-                                const isWinner = requirement.winning_candidate_id === app.candidate_id;
+                                const isWinner = !isConsultantApp && requirement.winning_candidate_id === app.candidate_id;
                                 
                                 return (
                                   <div 
@@ -390,17 +395,19 @@ export function RequirementsPage() {
                                     className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
                                       isWinner 
                                         ? 'bg-green-100 text-green-700 border border-green-300' 
-                                        : isNogo 
-                                          ? 'bg-red-50 text-red-600 line-through' 
-                                          : isGo
-                                            ? 'bg-green-50 text-green-600'
-                                            : 'bg-brand-grey-100 text-brand-grey-600'
+                                        : isConsultantApp
+                                          ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                          : isNogo 
+                                            ? 'bg-red-50 text-red-600 line-through' 
+                                            : isGo
+                                              ? 'bg-green-50 text-green-600'
+                                              : 'bg-brand-grey-100 text-brand-grey-600'
                                     }`}
                                   >
                                     {isWinner && <Trophy className="h-3 w-3" />}
-                                    {isNogo && <UserX className="h-3 w-3" />}
-                                    {isGo && !isWinner && <UserCheck className="h-3 w-3" />}
-                                    {app.candidate?.first_name} {app.candidate?.last_name?.charAt(0)}.
+                                    {!isConsultantApp && isNogo && <UserX className="h-3 w-3" />}
+                                    {!isConsultantApp && isGo && !isWinner && <UserCheck className="h-3 w-3" />}
+                                    {person.first_name} {person.last_name?.charAt(0)}.
                                   </div>
                                 );
                               })}
