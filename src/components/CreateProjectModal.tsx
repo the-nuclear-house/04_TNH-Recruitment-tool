@@ -78,6 +78,7 @@ export function CreateProjectModal({
         type: requirement.project_type || 'T&M',
         description: requirement.description || '',
         account_manager_id: requirement.manager_id || user?.id || '',
+        technical_director_id: requirement.technical_director_id || '',
       }));
     }
   }, [isOpen, requirement, company, user?.id]);
@@ -111,6 +112,11 @@ export function CreateProjectModal({
 
     if (!formData.start_date) {
       toast.error('Validation Error', 'Please select a start date');
+      return;
+    }
+
+    if (!formData.technical_director_id) {
+      toast.error('Validation Error', 'Please select a Technical Director');
       return;
     }
 
@@ -167,9 +173,9 @@ export function CreateProjectModal({
       .map(u => ({ value: u.id, label: u.full_name })),
   ];
 
-  // Technical Director options
+  // Technical Director options (mandatory)
   const technicalDirectorOptions = [
-    { value: '', label: 'Select Technical Director (optional)' },
+    { value: '', label: 'Select Technical Director...' },
     ...users
       .filter(u => u.roles?.some((r: string) => ['technical_director', 'admin', 'superadmin'].includes(r)))
       .map(u => ({ value: u.id, label: u.full_name })),
@@ -268,7 +274,7 @@ export function CreateProjectModal({
             onChange={(e) => setFormData(prev => ({ ...prev, account_manager_id: e.target.value }))}
           />
           <Select
-            label="Technical Director"
+            label="Technical Director *"
             options={technicalDirectorOptions}
             value={formData.technical_director_id}
             onChange={(e) => setFormData(prev => ({ ...prev, technical_director_id: e.target.value }))}
