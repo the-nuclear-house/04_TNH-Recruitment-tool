@@ -1637,6 +1637,19 @@ export function CustomersPage() {
               const closed = won + lost;
               const conversionRate = closed > 0 ? Math.round((won / closed) * 100) : null;
               
+              // WP (Work Package / Fixed Price) bids won
+              const wpBidsWon = contactRequirements.filter(r => 
+                (r.status === 'filled' || r.status === 'won') && 
+                r.project_type === 'Fixed_Price' && 
+                r.is_bid
+              ).length;
+              
+              // T&M requirements won
+              const tmWon = contactRequirements.filter(r => 
+                (r.status === 'filled' || r.status === 'won') && 
+                r.project_type === 'T&M'
+              ).length;
+              
               return (
                 <div className="flex items-center gap-4 py-3 px-4 bg-brand-grey-50 rounded-lg">
                   <div className="flex items-center gap-6 flex-1">
@@ -1653,6 +1666,18 @@ export function CustomersPage() {
                       <p className="text-lg font-semibold text-green-600">{won}</p>
                       <p className="text-xs text-brand-grey-500">Won</p>
                     </div>
+                    {wpBidsWon > 0 && (
+                      <div className="text-center" title="Fixed Price / Work Package bids won">
+                        <p className="text-lg font-semibold text-blue-600">{wpBidsWon}</p>
+                        <p className="text-xs text-brand-grey-500">WP Bids</p>
+                      </div>
+                    )}
+                    {tmWon > 0 && (
+                      <div className="text-center" title="Time & Materials requirements won">
+                        <p className="text-lg font-semibold text-cyan-600">{tmWon}</p>
+                        <p className="text-xs text-brand-grey-500">T&M Won</p>
+                      </div>
+                    )}
                     <div className="text-center">
                       <p className="text-lg font-semibold text-red-500">{lost}</p>
                       <p className="text-xs text-brand-grey-500">Lost</p>

@@ -18,7 +18,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
-import { Card, Button, Badge, EmptyState, Modal, Input, Select, Textarea, DeleteDialog, ConfirmDialog } from '@/components/ui';
+import { Card, Button, Badge, EmptyState, Modal, Input, Select, Textarea, DeleteDialog, ConfirmDialog, SearchableSelect } from '@/components/ui';
 import { CreateRequirementModal } from '@/components/CreateRequirementModal';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
@@ -167,6 +167,7 @@ export function MissionsPage() {
     end_date: '',
     status: 'active',
     notes: '',
+    customer_contact_id: '',
   });
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isCloseProjectDialogOpen, setIsCloseProjectDialogOpen] = useState(false);
@@ -459,6 +460,7 @@ export function MissionsPage() {
       end_date: project.end_date || '',
       status: project.status,
       notes: project.notes || '',
+      customer_contact_id: project.customer_contact_id || '',
     });
     setIsProjectModalOpen(true);
   };
@@ -466,6 +468,11 @@ export function MissionsPage() {
   // Save project changes
   const handleSaveProject = async () => {
     if (!selectedProject) return;
+
+    if (!projectForm.customer_contact_id) {
+      toast.error('Validation Error', 'Please select a customer contact');
+      return;
+    }
 
     setIsSavingProject(true);
     try {
@@ -475,6 +482,7 @@ export function MissionsPage() {
         end_date: projectForm.end_date || undefined,
         status: projectForm.status as 'active' | 'on_hold' | 'completed' | 'cancelled',
         notes: projectForm.notes || undefined,
+        customer_contact_id: projectForm.customer_contact_id,
       });
       toast.success('Project Updated', 'Project details have been saved');
       setIsProjectModalOpen(false);
@@ -1205,6 +1213,17 @@ export function MissionsPage() {
                   </span>
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-brand-grey-400">Customer Contact</p>
+                <p className="font-medium text-brand-slate-900">
+                  {selectedProject.customer_contact?.first_name} {selectedProject.customer_contact?.last_name}
+                  {selectedProject.customer_contact?.company?.name && (
+                    <span className="text-brand-grey-500 font-normal ml-1">
+                      ({selectedProject.customer_contact.company.name})
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
 
             {/* Edit Form */}
@@ -1214,6 +1233,43 @@ export function MissionsPage() {
                 value={projectForm.name}
                 onChange={(e) => setProjectForm(prev => ({ ...prev, name: e.target.value }))}
               />
+
+              {/* Customer Contact - Reassign */}
+              <SearchableSelect
+                label="Customer Contact"
+                placeholder="Search for a contact to reassign..."
+                options={contacts.map(c => {
+                  const companyName = c.company?.name || companies.find(co => co.id === c.company_id)?.name || '';
+                  return {
+                    value: c.id,
+                    label: `${c.first_name} ${c.last_name}`,
+                    sublabel: `${c.role ? c.role + ' - ' : ''}${companyName}`,
+                  };
+                })}
+                value={projectForm.customer_contact_id}
+                onChange={(val) => setProjectForm(prev => ({ ...prev, customer_contact_id: val }))}
+              />
+              
+              {/* Warning if reassigning to different company */}
+              {(() => {
+                const originalCompanyId = selectedProject?.customer_contact?.company_id;
+                const newContact = contacts.find(c => c.id === projectForm.customer_contact_id);
+                const newCompanyId = newContact?.company_id;
+                const isReassigning = originalCompanyId && newCompanyId && originalCompanyId !== newCompanyId;
+                const missionCount = missions.filter(m => m.project_id === selectedProject?.id).length;
+                
+                if (isReassigning) {
+                  return (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                      <strong>Note:</strong> You are reassigning this project to a different company.
+                      {missionCount > 0 && (
+                        <> The {missionCount} existing mission{missionCount > 1 ? 's' : ''} will keep their original customer attribution for KPI tracking. Only new missions will be attributed to the new customer.</>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <div className="grid grid-cols-2 gap-4">
                 <Input

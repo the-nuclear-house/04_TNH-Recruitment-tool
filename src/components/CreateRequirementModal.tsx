@@ -355,6 +355,15 @@ export function CreateRequirementModal({
                 <span className="text-slate-900">{displayCompany.name}</span>
               </div>
             )}
+            {displayContact && (
+              <div className="flex items-center gap-2 text-sm mt-1">
+                <span className="font-medium text-slate-700">Contact:</span>
+                <span className="text-slate-900">
+                  {displayContact.first_name} {displayContact.last_name}
+                  {displayContact.role && <span className="text-slate-500 ml-1">({displayContact.role})</span>}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
