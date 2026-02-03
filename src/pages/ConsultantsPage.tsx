@@ -47,7 +47,7 @@ import {
   Select,
   Textarea,
 } from '@/components/ui';
-import { ConfirmDialog } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -74,7 +74,7 @@ import {
   type BonusPaymentData,
   type EmployeeExitData,
 } from '@/lib/services';
-import type { BadgeVariant } from '@/components/ui/Badge';
+import type { BadgeVariant } from '@/components/ui';
 
 const statusConfig: Record<string, { label: string; colour: BadgeVariant }> = {
   bench: { label: 'On Bench', colour: 'amber' },

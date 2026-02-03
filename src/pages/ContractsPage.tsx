@@ -26,7 +26,7 @@ import {
   Modal,
   Textarea,
 } from '@/components/ui';
-import { ConfirmDialog } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';

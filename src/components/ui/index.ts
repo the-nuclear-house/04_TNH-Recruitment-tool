@@ -1,13 +1,48 @@
-export { Button } from './Button';
-export { Input } from './Input';
-export { Select } from './Select';
-export { SearchableSelect } from './SearchableSelect';
-export { Textarea } from './Textarea';
-export { Badge, getStatusVariant } from './Badge';
-export { Avatar, AvatarGroup } from './Avatar';
-export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './Card';
-export { Modal, ConfirmDialog, DeleteDialog } from './Modal';
-export { ToastContainer } from './Toast';
-export { EmptyState } from './EmptyState';
-export { Spinner, LoadingState, LoadingOverlay, Skeleton, TableSkeleton, CardSkeleton } from './Loading';
-export { Score, StarRating, StarRatingDisplay, ScoreBar } from './Score';
+// Re-export all UI components from consolidated file
+export {
+  // Avatar
+  Avatar,
+  AvatarGroup,
+  // Badge
+  Badge,
+  getStatusVariant,
+  type BadgeVariant,
+  // Button
+  Button,
+  // Card
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  // EmptyState
+  EmptyState,
+  // Input
+  Input,
+  // Select
+  Select,
+  // Textarea
+  Textarea,
+  // Loading
+  Spinner,
+  LoadingState,
+  LoadingOverlay,
+  Skeleton,
+  TableSkeleton,
+  CardSkeleton,
+  // Toast
+  ToastContainer,
+  // Modal
+  Modal,
+  ConfirmDialog,
+  DeleteDialog,
+  // SearchableSelect
+  SearchableSelect,
+  type SearchableOption,
+  // Score
+  Score,
+  StarRatingDisplay,
+  StarRating,
+  ScoreBar,
+} from './components';

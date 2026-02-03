@@ -169,6 +169,7 @@ export function CustomersPage() {
   const [selectedCompany, setSelectedCompany] = useState<DbCompany | null>(null);
   const [selectedContact, setSelectedContact] = useState<DbContact | null>(null);
   const [contacts, setContacts] = useState<DbContact[]>([]);
+  const [allContacts, setAllContacts] = useState<DbContact[]>([]); // All contacts for search
   const [meetings, setMeetings] = useState<DbCustomerMeeting[]>([]);
   const [requirements, setRequirements] = useState<DbRequirement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -282,8 +283,12 @@ export function CustomersPage() {
 
   const loadCompanies = async () => {
     try {
-      const data = await companiesService.getAll();
-      setCompanies(data);
+      const [companiesData, contactsData] = await Promise.all([
+        companiesService.getAll(),
+        contactsService.getAll(),
+      ]);
+      setCompanies(companiesData);
+      setAllContacts(contactsData);
     } catch (error) {
       console.error('Error loading companies:', error);
       toast.error('Error', 'Failed to load companies');
@@ -309,6 +314,35 @@ export function CustomersPage() {
     } catch (error: any) {
       console.error('Error loading company details:', error);
       toast.error('Error', error.message || 'Failed to load company details');
+    }
+  };
+
+  // Load company and immediately open contact details (for search results)
+  const loadCompanyAndContact = async (contact: DbContact) => {
+    if (!contact.company_id) return;
+    
+    try {
+      const [company, companyContacts, companyMeetings] = await Promise.all([
+        companiesService.getById(contact.company_id),
+        contactsService.getByCompany(contact.company_id),
+        customerMeetingsService.getByCompany(contact.company_id),
+      ]);
+      setSelectedCompany(company);
+      setContacts(companyContacts);
+      setMeetings(companyMeetings);
+      setSidebarSearch(''); // Clear search after selection
+      
+      // Load requirements
+      await loadRequirements(company);
+      
+      // Open the contact detail
+      const fullContact = companyContacts.find(c => c.id === contact.id);
+      if (fullContact) {
+        loadContactDetails(fullContact);
+      }
+    } catch (error: any) {
+      console.error('Error loading company and contact:', error);
+      toast.error('Error', error.message || 'Failed to load contact');
     }
   };
 
@@ -378,6 +412,19 @@ export function CustomersPage() {
       c.city?.toLowerCase().includes(query)
     );
   }, [companies, sidebarSearch]);
+
+  // Search contacts across ALL companies (not just selected)
+  const searchMatchingContacts = useMemo(() => {
+    if (!sidebarSearch || sidebarSearch.length < 2) return [];
+    const query = sidebarSearch.toLowerCase();
+    return allContacts.filter(c =>
+      c.first_name?.toLowerCase().includes(query) ||
+      c.last_name?.toLowerCase().includes(query) ||
+      `${c.first_name} ${c.last_name}`.toLowerCase().includes(query) ||
+      c.job_title?.toLowerCase().includes(query) ||
+      c.email?.toLowerCase().includes(query)
+    );
+  }, [allContacts, sidebarSearch]);
 
   // Separate parent companies and get subsidiaries
   const parentCompanies = useMemo(() =>
@@ -1049,7 +1096,7 @@ export function CustomersPage() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-grey-400" />
                   <input
                     type="text"
-                    placeholder="Search companies..."
+                    placeholder="Search companies or contacts..."
                     value={sidebarSearch}
                     onChange={(e) => setSidebarSearch(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 rounded-lg border border-brand-grey-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan/30 focus:border-brand-cyan"
@@ -1061,12 +1108,60 @@ export function CustomersPage() {
               <div className="flex-1 overflow-y-auto p-2">
                 {isLoading ? (
                   <div className="text-center py-8 text-brand-grey-400">Loading...</div>
-                ) : parentCompanies.length === 0 ? (
+                ) : parentCompanies.length === 0 && searchMatchingContacts.length === 0 ? (
                   <div className="text-center py-8">
                     <Building2 className="h-10 w-10 mx-auto text-brand-grey-300 mb-2" />
-                    <p className="text-sm text-brand-grey-400">No companies yet</p>
+                    <p className="text-sm text-brand-grey-400">
+                      {sidebarSearch ? 'No results found' : 'No companies yet'}
+                    </p>
                   </div>
                 ) : (
+              <>
+                {/* Contact Search Results */}
+                {searchMatchingContacts.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-medium text-brand-grey-400 px-3 py-2 uppercase tracking-wide">
+                      Contacts ({searchMatchingContacts.length})
+                    </p>
+                    <div className="space-y-1">
+                      {searchMatchingContacts.slice(0, 10).map(contact => {
+                        const company = companies.find(c => c.id === contact.company_id);
+                        return (
+                          <button
+                            key={contact.id}
+                            onClick={() => loadCompanyAndContact(contact)}
+                            className="w-full text-left p-3 rounded-lg transition-colors flex items-center gap-3 hover:bg-brand-grey-100"
+                          >
+                            <User className="h-5 w-5 flex-shrink-0 text-brand-cyan" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate text-sm">
+                                {contact.first_name} {contact.last_name}
+                              </p>
+                              <p className="text-xs text-brand-grey-400 truncate">
+                                {contact.job_title && `${contact.job_title} • `}
+                                {company?.name || 'Unknown Company'}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {searchMatchingContacts.length > 10 && (
+                        <p className="text-xs text-brand-grey-400 px-3 py-1">
+                          +{searchMatchingContacts.length - 10} more contacts...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Companies */}
+                {parentCompanies.length > 0 && (
+                  <>
+                    {searchMatchingContacts.length > 0 && (
+                      <p className="text-xs font-medium text-brand-grey-400 px-3 py-2 uppercase tracking-wide">
+                        Companies ({parentCompanies.length})
+                      </p>
+                    )}
               <div className="space-y-1">
                 {parentCompanies.map(company => {
                   const subsidiaries = getSubsidiaries(company.id);
@@ -1138,6 +1233,9 @@ export function CustomersPage() {
                   );
                 })}
               </div>
+                  </>
+                )}
+              </>
             )}
           </div>
             </>
