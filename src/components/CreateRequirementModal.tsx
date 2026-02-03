@@ -270,9 +270,9 @@ export function CreateRequirementModal({
       return;
     }
 
-    // Get business director (manager's reports_to)
+    // Get business director (manager's reports_to, or manager themselves if they are a director)
     const manager = users.find(u => u.id === formData.manager_id);
-    const businessDirectorId = manager?.reports_to || undefined;
+    const businessDirectorId = manager?.reports_to || formData.manager_id || undefined;
 
     setIsSubmitting(true);
     try {

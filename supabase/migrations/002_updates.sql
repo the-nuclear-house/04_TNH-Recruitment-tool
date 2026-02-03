@@ -439,3 +439,10 @@ COMMENT ON COLUMN requirements.risk_customer_fp_experience IS 'Risk: Customer fi
 
 -- Create storage bucket for bid documents (run in Supabase dashboard or via API)
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('bid-documents', 'bid-documents', false);
+
+-- Risk Assessment individual notes
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_technical_complexity_notes TEXT;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_resource_availability_notes TEXT;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_timeline_feasibility_notes TEXT;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_scope_clarity_notes TEXT;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_customer_fp_experience_notes TEXT;

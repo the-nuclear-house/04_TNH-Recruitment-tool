@@ -71,7 +71,7 @@ export function BidDetailPage() {
   const [meddpiccScores, setMeddpiccScores] = useState<Record<string, number | null>>({});
   const [meddpiccNotes, setMeddpiccNotes] = useState<Record<string, string>>({});
   const [riskScores, setRiskScores] = useState<Record<string, number | null>>({});
-  const [riskNotes, setRiskNotes] = useState('');
+  const [riskNotes, setRiskNotes] = useState<Record<string, string>>({});
   const [estimatedFte, setEstimatedFte] = useState('');
   const [estimatedRevenue, setEstimatedRevenue] = useState('');
   const [approvalNotes, setApprovalNotes] = useState('');
@@ -117,7 +117,13 @@ export function BidDetailPage() {
         timeline_feasibility: data.risk_timeline_feasibility, scope_clarity: data.risk_scope_clarity,
         customer_fp_experience: data.risk_customer_fp_experience,
       });
-      setRiskNotes(data.risk_notes || '');
+      setRiskNotes({
+        technical_complexity: data.risk_technical_complexity_notes || '',
+        resource_availability: data.risk_resource_availability_notes || '',
+        timeline_feasibility: data.risk_timeline_feasibility_notes || '',
+        scope_clarity: data.risk_scope_clarity_notes || '',
+        customer_fp_experience: data.risk_customer_fp_experience_notes || '',
+      });
       setEstimatedFte(data.bid_estimated_fte?.toString() || '');
       setEstimatedRevenue(data.bid_estimated_revenue?.toString() || '');
       setProposalForm({
@@ -162,7 +168,12 @@ export function BidDetailPage() {
         meddpicc_notes: meddpiccNotes,
         risk_technical_complexity: riskScores.technical_complexity || undefined, risk_resource_availability: riskScores.resource_availability || undefined,
         risk_timeline_feasibility: riskScores.timeline_feasibility || undefined, risk_scope_clarity: riskScores.scope_clarity || undefined,
-        risk_customer_fp_experience: riskScores.customer_fp_experience || undefined, risk_notes: riskNotes || undefined,
+        risk_customer_fp_experience: riskScores.customer_fp_experience || undefined,
+        risk_technical_complexity_notes: riskNotes.technical_complexity || undefined,
+        risk_resource_availability_notes: riskNotes.resource_availability || undefined,
+        risk_timeline_feasibility_notes: riskNotes.timeline_feasibility || undefined,
+        risk_scope_clarity_notes: riskNotes.scope_clarity || undefined,
+        risk_customer_fp_experience_notes: riskNotes.customer_fp_experience || undefined,
         bid_estimated_fte: estimatedFte ? parseFloat(estimatedFte) : undefined,
         bid_estimated_revenue: estimatedRevenue ? parseFloat(estimatedRevenue) : undefined,
       });
@@ -416,11 +427,11 @@ export function BidDetailPage() {
             <div className="p-4 pt-0 space-y-2">
               {RISK_CRITERIA.map(c => (
                 <div key={c.key} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5"><p className="font-medium text-sm">{c.label}</p><p className="text-xs text-brand-grey-400">{c.description}</p></div>
-                  <div className="col-span-3"><Select options={RISK_SCORE_OPTIONS} value={riskScores[c.key]?.toString() || ''} onChange={(e) => setRiskScores(p => ({ ...p, [c.key]: e.target.value ? parseInt(e.target.value) : null }))} disabled={!isManager} /></div>
+                  <div className="col-span-3"><p className="font-medium text-sm">{c.label}</p><p className="text-xs text-brand-grey-400">{c.description}</p></div>
+                  <div className="col-span-2"><Select options={RISK_SCORE_OPTIONS} value={riskScores[c.key]?.toString() || ''} onChange={(e) => setRiskScores(p => ({ ...p, [c.key]: e.target.value ? parseInt(e.target.value) : null }))} disabled={!isManager} /></div>
+                  <div className="col-span-7"><Input placeholder="Notes..." value={riskNotes[c.key] || ''} onChange={(e) => setRiskNotes(p => ({ ...p, [c.key]: e.target.value }))} disabled={!isManager} /></div>
                 </div>
               ))}
-              <Textarea label="Risk Notes" value={riskNotes} onChange={(e) => setRiskNotes(e.target.value)} rows={2} disabled={!isManager} />
             </div>
           </Card>
 

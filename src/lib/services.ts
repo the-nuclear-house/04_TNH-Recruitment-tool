@@ -642,6 +642,11 @@ export interface DbRequirement {
   risk_scope_clarity: number | null;
   risk_customer_fp_experience: number | null;
   risk_notes: string | null;
+  risk_technical_complexity_notes: string | null;
+  risk_resource_availability_notes: string | null;
+  risk_timeline_feasibility_notes: string | null;
+  risk_scope_clarity_notes: string | null;
+  risk_customer_fp_experience_notes: string | null;
   // MEDDPICC scoring (1-5 scale)
   meddpicc_metrics: number | null;
   meddpicc_economic_buyer: number | null;
@@ -748,6 +753,11 @@ export interface CreateRequirementInput {
   risk_scope_clarity?: number;
   risk_customer_fp_experience?: number;
   risk_notes?: string;
+  risk_technical_complexity_notes?: string;
+  risk_resource_availability_notes?: string;
+  risk_timeline_feasibility_notes?: string;
+  risk_scope_clarity_notes?: string;
+  risk_customer_fp_experience_notes?: string;
   // MEDDPICC scoring
   meddpicc_metrics?: number;
   meddpicc_economic_buyer?: number;
