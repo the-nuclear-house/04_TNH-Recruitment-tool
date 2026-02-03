@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, User, CheckCircle, XCircle, FileText, Award, Clock, Save, Upload, Download, Users, Shield } from 'lucide-react';
+import { ArrowLeft, Building2, User, CheckCircle, XCircle, FileText, Award, Clock, Save, Upload, Download, Users, Shield, Trash2 } from 'lucide-react';
 import { Header } from '@/components/layout';
-import { Card, CardHeader, CardTitle, Button, Badge, Input, Select, Textarea } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Button, Badge, Input, Select, Textarea, DeleteDialog } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
 import { requirementsService, companiesService, type DbRequirement } from '@/lib/services';
 import { CreateProjectModal } from '@/components/CreateProjectModal';
@@ -82,6 +83,13 @@ export function BidDetailPage() {
   
   const [outcomeForm, setOutcomeForm] = useState({ outcome: '' as string, reason: '', notes: '', lessons_learned: '' });
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  
+  // Delete
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const { isAdmin, isSuperAdmin } = usePermissions();
+  const canDelete = isAdmin || isSuperAdmin;
 
   const isTD = user?.id === bid?.technical_director_id;
   const isBD = user?.id === bid?.business_director_id;
@@ -301,6 +309,27 @@ export function BidDetailPage() {
     } catch (error) { console.error(error); }
   };
 
+  const handleDelete = async (hardDelete: boolean) => {
+    if (!bid) return;
+    setIsDeleting(true);
+    try {
+      if (hardDelete) {
+        await requirementsService.hardDelete(bid.id);
+        toast.success('Deleted', 'Bid permanently deleted');
+      } else {
+        await requirementsService.delete(bid.id);
+        toast.success('Archived', 'Bid archived');
+      }
+      navigate('/bids');
+    } catch (error) {
+      console.error(error);
+      toast.error('Error', 'Failed to delete bid');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
   if (isLoading) return <div className="min-h-screen"><Header title="Bid Details" /><div className="p-6"><Card><div className="text-center py-8 text-brand-grey-400">Loading...</div></Card></div></div>;
   if (!bid) return null;
 
@@ -319,9 +348,16 @@ export function BidDetailPage() {
       <Header title={bid.title || 'Untitled Bid'} subtitle={`${bid.reference_id} • ${bid.company?.name}`} />
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <Button variant="secondary" leftIcon={<ArrowLeft className="h-4 w-4" />} onClick={() => navigate('/bids')}>Back</Button>
-          {bid.bid_status === 'won' && <Badge variant="green" className="text-base px-3 py-1"><CheckCircle className="h-4 w-4 mr-1" />Won</Badge>}
-          {bid.bid_status === 'lost' && <Badge variant="red" className="text-base px-3 py-1"><XCircle className="h-4 w-4 mr-1" />Lost</Badge>}
+          <div className="flex items-center gap-3">
+            <Button variant="secondary" leftIcon={<ArrowLeft className="h-4 w-4" />} onClick={() => navigate('/bids')}>Back</Button>
+            {canDelete && (
+              <Button variant="danger" leftIcon={<Trash2 className="h-4 w-4" />} onClick={() => setIsDeleteDialogOpen(true)}>Delete</Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {bid.bid_status === 'won' && <Badge variant="green" className="text-base px-3 py-1"><CheckCircle className="h-4 w-4 mr-1" />Won</Badge>}
+            {bid.bid_status === 'lost' && <Badge variant="red" className="text-base px-3 py-1"><XCircle className="h-4 w-4 mr-1" />Lost</Badge>}
+          </div>
         </div>
 
         {/* Progress */}
@@ -524,6 +560,15 @@ export function BidDetailPage() {
         )}
       </div>
       <CreateProjectModal isOpen={isCreateProjectModalOpen} onClose={() => setIsCreateProjectModalOpen(false)} onSuccess={handleProjectCreated} requirement={bid} company={bid.company} contact={bid.contact} />
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onDelete={handleDelete}
+        itemName={bid.title || 'Untitled Bid'}
+        itemType="Bid"
+        canHardDelete={isSuperAdmin}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
