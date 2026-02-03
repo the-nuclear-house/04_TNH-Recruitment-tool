@@ -209,6 +209,7 @@ export function ConsultantsPage() {
   
   const [consultants, setConsultants] = useState<DbConsultant[]>([]);
   const [meetings, setMeetings] = useState<DbConsultantMeeting[]>([]);
+  const [allMissions, setAllMissions] = useState<DbMission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('active');
@@ -242,12 +243,14 @@ export function ConsultantsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [consultantsData, meetingsData] = await Promise.all([
+      const [consultantsData, meetingsData, missionsData] = await Promise.all([
         consultantsService.getAll(),
         consultantMeetingsService.getAll(),
+        missionsService.getAll(),
       ]);
       setConsultants(consultantsData);
       setMeetings(meetingsData);
+      setAllMissions(missionsData);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error', 'Failed to load consultants');
@@ -279,6 +282,38 @@ export function ConsultantsPage() {
   const getMeetingsForConsultant = (consultantId: string) => {
     return meetings.filter(m => m.consultant_id === consultantId);
   };
+
+  // Get missions for a consultant
+  const getMissionsForConsultant = (consultantId: string) => {
+    return allMissions
+      .filter(m => m.consultant_id === consultantId && m.status !== 'cancelled')
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  };
+
+  // Check if a consultant is on bench TODAY based on mission dates
+  const isOnBenchToday = (consultantId: string, consultantStatus: string): boolean => {
+    if (consultantStatus === 'terminated' || consultantStatus === 'on_leave') return false;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const consultantMissions = getMissionsForConsultant(consultantId);
+    
+    // Check if any active/completed mission covers today
+    const hasActiveMissionToday = consultantMissions.some(m => {
+      if (m.status === 'cancelled' || m.status === 'on_hold') return false;
+      const startDate = m.start_date;
+      const endDate = m.end_date || '9999-12-31'; // If no end date, assume ongoing
+      return startDate <= today && endDate >= today;
+    });
+    
+    return !hasActiveMissionToday;
+  };
+
+  // Calculate bench count based on today's date
+  const benchCountToday = useMemo(() => {
+    return consultants.filter(c => 
+      c.status !== 'terminated' && isOnBenchToday(c.id, c.status)
+    ).length;
+  }, [consultants, allMissions]);
 
   // Upcoming meetings
   const upcomingMeetings = useMemo(() => {
@@ -353,12 +388,12 @@ export function ConsultantsPage() {
     }
   };
 
-  // Stats
+  // Stats - bench count based on TODAY's mission coverage
   const stats = {
     total: consultants.length,
     active: consultants.filter(c => c.status !== 'terminated').length,
-    bench: consultants.filter(c => c.status === 'bench').length,
-    inMission: consultants.filter(c => c.status === 'in_mission').length,
+    bench: benchCountToday, // Now calculated based on today's date
+    inMission: consultants.filter(c => c.status !== 'terminated').length - benchCountToday - consultants.filter(c => c.status === 'on_leave').length,
     onLeave: consultants.filter(c => c.status === 'on_leave').length,
     terminated: consultants.filter(c => c.status === 'terminated').length,
   };
@@ -581,29 +616,96 @@ export function ConsultantsPage() {
                   {/* Consultant Rows */}
                   {filteredConsultants.map(consultant => {
                     const consultantMeetings = getMeetingsForConsultant(consultant.id);
+                    const consultantMissions = getMissionsForConsultant(consultant.id);
                     const isTerminated = consultant.status === 'terminated';
                     
                     // For terminated consultants, use terminated_at as end date
-                    // If terminated_at is not set, use end_date, otherwise default to a recent date for visual cutoff
                     const terminatedDate = consultant.terminated_at && consultant.terminated_at.length > 0 
                       ? consultant.terminated_at 
                       : null;
-                    const endDate = consultant.end_date && consultant.end_date.length > 0 
+                    const consultantEndDate = consultant.end_date && consultant.end_date.length > 0 
                       ? consultant.end_date 
                       : null;
                     
                     // For terminated consultants without a termination date, default to today to show the bar ending
                     const effectiveEndDate = isTerminated 
-                      ? (terminatedDate || endDate || new Date().toISOString().split('T')[0])
-                      : endDate;
-                    
-                    const barStyle = getBarStyle(consultant.start_date, effectiveEndDate, weeks);
-                    const statusInfo = statusConfig[consultant.status] || statusConfig.bench;
+                      ? (terminatedDate || consultantEndDate || new Date().toISOString().split('T')[0])
+                      : consultantEndDate;
                     
                     // Get termination marker position - only show if we have a specific date
-                    const terminationPosition = isTerminated && (terminatedDate || endDate)
-                      ? getMeetingPosition(terminatedDate || endDate!, weeks) 
+                    const terminationPosition = isTerminated && (terminatedDate || consultantEndDate)
+                      ? getMeetingPosition(terminatedDate || consultantEndDate!, weeks) 
                       : null;
+
+                    // Calculate timeline boundaries
+                    const timelineStartDate = weeks[0];
+                    const timelineEndDate = new Date(weeks[weeks.length - 1]);
+                    timelineEndDate.setDate(timelineEndDate.getDate() + 6);
+                    const totalDays = (timelineEndDate.getTime() - timelineStartDate.getTime()) / (1000 * 60 * 60 * 24);
+
+                    // Employment period (from consultant start to end/today)
+                    const employmentStart = new Date(consultant.start_date);
+                    const employmentEnd = effectiveEndDate ? new Date(effectiveEndDate) : new Date('2099-12-31');
+
+                    // Build segments: missions (green) and bench periods (amber)
+                    const segments: { start: Date; end: Date; type: 'mission' | 'bench' | 'leave' }[] = [];
+                    
+                    // Sort missions by start date
+                    const sortedMissions = [...consultantMissions]
+                      .filter(m => m.status !== 'cancelled')
+                      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+                    // If on leave, show entire period as leave
+                    if (consultant.status === 'on_leave') {
+                      segments.push({
+                        start: employmentStart > timelineStartDate ? employmentStart : timelineStartDate,
+                        end: employmentEnd < timelineEndDate ? employmentEnd : timelineEndDate,
+                        type: 'leave'
+                      });
+                    } else {
+                      // Calculate bench and mission segments within the visible timeline
+                      let currentDate = employmentStart > timelineStartDate ? employmentStart : timelineStartDate;
+                      const visibleEnd = employmentEnd < timelineEndDate ? employmentEnd : timelineEndDate;
+
+                      sortedMissions.forEach(mission => {
+                        const missionStart = new Date(mission.start_date);
+                        const missionEnd = mission.end_date ? new Date(mission.end_date) : new Date('2099-12-31');
+
+                        // If there's a gap before this mission, it's bench time
+                        if (missionStart > currentDate && currentDate < visibleEnd) {
+                          const benchEnd = missionStart < visibleEnd ? missionStart : visibleEnd;
+                          if (benchEnd > currentDate) {
+                            segments.push({
+                              start: new Date(currentDate),
+                              end: benchEnd,
+                              type: 'bench'
+                            });
+                          }
+                        }
+
+                        // Add mission segment if it overlaps with visible range
+                        const visibleMissionStart = missionStart > currentDate ? missionStart : currentDate;
+                        const visibleMissionEnd = missionEnd < visibleEnd ? missionEnd : visibleEnd;
+                        
+                        if (visibleMissionStart < visibleMissionEnd && visibleMissionStart < visibleEnd) {
+                          segments.push({
+                            start: visibleMissionStart > timelineStartDate ? visibleMissionStart : timelineStartDate,
+                            end: visibleMissionEnd,
+                            type: 'mission'
+                          });
+                          currentDate = missionEnd > currentDate ? missionEnd : currentDate;
+                        }
+                      });
+
+                      // If there's remaining time after all missions, it's bench
+                      if (currentDate < visibleEnd) {
+                        segments.push({
+                          start: new Date(currentDate),
+                          end: visibleEnd,
+                          type: 'bench'
+                        });
+                      }
+                    }
                     
                     return (
                       <div 
@@ -633,23 +735,41 @@ export function ConsultantsPage() {
                         
                         {/* Timeline */}
                         <div className="flex-1 relative py-2">
-                          {/* Employment bar - thin line */}
-                          {barStyle && (
-                            <div
-                              className={`absolute top-1/2 -translate-y-1/2 h-2 rounded-full ${
-                                isTerminated ? 'bg-red-200' :
-                                consultant.status === 'in_mission' ? 'bg-green-300' :
-                                consultant.status === 'on_leave' ? 'bg-blue-300' :
-                                'bg-amber-300'
-                              }`}
-                              style={{ left: barStyle.left, width: barStyle.width, minWidth: '4px' }}
-                            />
-                          )}
+                          {/* Mission and Bench segments */}
+                          {segments.map((segment, idx) => {
+                            const segStart = segment.start.getTime();
+                            const segEnd = segment.end.getTime();
+                            const tlStart = timelineStartDate.getTime();
+                            
+                            // Calculate position and width as percentages
+                            const left = Math.max(0, ((segStart - tlStart) / (totalDays * 24 * 60 * 60 * 1000)) * 100);
+                            const width = Math.min(100 - left, ((segEnd - segStart) / (totalDays * 24 * 60 * 60 * 1000)) * 100);
+                            
+                            if (width <= 0) return null;
+                            
+                            return (
+                              <div
+                                key={idx}
+                                className={`absolute top-1/2 -translate-y-1/2 h-5 rounded ${
+                                  isTerminated ? 'bg-red-200' :
+                                  segment.type === 'mission' ? 'bg-green-500' :
+                                  segment.type === 'leave' ? 'bg-blue-400' :
+                                  'bg-amber-400'
+                                }`}
+                                style={{ 
+                                  left: `${left}%`, 
+                                  width: `${width}%`, 
+                                  minWidth: '2px' 
+                                }}
+                                title={segment.type === 'mission' ? 'On Mission' : segment.type === 'leave' ? 'On Leave' : 'On Bench'}
+                              />
+                            );
+                          })}
                           
                           {/* Termination marker */}
                           {isTerminated && terminationPosition && (
                             <div
-                              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white shadow-md border-2 border-white"
+                              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white shadow-md border-2 border-white z-10"
                               style={{ left: terminationPosition }}
                               title={`Exit date: ${formatDate(consultant.terminated_at || consultant.end_date || '')}`}
                             >
@@ -698,15 +818,15 @@ export function ConsultantsPage() {
             <div className="flex flex-wrap items-center gap-6 text-sm text-brand-grey-500">
               <span className="font-medium">Legend:</span>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-2 rounded bg-green-300" />
-                <span>In Mission</span>
+                <div className="w-8 h-5 rounded bg-green-500" />
+                <span>On Mission</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-2 rounded bg-amber-300" />
+                <div className="w-8 h-5 rounded bg-amber-400" />
                 <span>On Bench</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-2 rounded bg-blue-300" />
+                <div className="w-8 h-5 rounded bg-blue-400" />
                 <span>On Leave</span>
               </div>
               <span className="mx-2">|</span>
