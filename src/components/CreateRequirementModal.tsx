@@ -464,16 +464,25 @@ export function CreateRequirementModal({
                 { value: 'Fixed_Price', label: 'Fixed Price / Work Package' },
               ]}
               value={formData.project_type}
-              onChange={(e) => handleFormChange('project_type', e.target.value)}
+              onChange={(e) => {
+                handleFormChange('project_type', e.target.value);
+                // Clear project selection if type changes and current project doesn't match
+                const currentProject = contactProjects.find(p => p.id === formData.project_id);
+                if (currentProject && currentProject.type !== e.target.value) {
+                  handleFormChange('project_id', '');
+                }
+              }}
             />
             <Select
               label="Existing Project"
               options={[
                 { value: '', label: 'New Project (will be created on win)' },
-                ...contactProjects.map(p => ({
-                  value: p.id,
-                  label: `${p.name} (${p.type})`,
-                })),
+                ...contactProjects
+                  .filter(p => p.type === formData.project_type)
+                  .map(p => ({
+                    value: p.id,
+                    label: p.name,
+                  })),
               ]}
               value={formData.project_id}
               onChange={(e) => handleFormChange('project_id', e.target.value)}
