@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, User, CheckCircle, XCircle, FileText, Award, Clock, Save, Upload, Download, Users, Shield, Trash2 } from 'lucide-react';
 import { Header } from '@/components/layout';
@@ -8,7 +8,7 @@ import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
-import { requirementsService, companiesService, type DbRequirement } from '@/lib/services';
+import { requirementsService, companiesService, bidDocumentService, type DbRequirement } from '@/lib/services';
 import { CreateProjectModal } from '@/components/CreateProjectModal';
 
 const MEDDPICC_CRITERIA = [
@@ -76,10 +76,14 @@ export function BidDetailPage() {
   const [estimatedRevenue, setEstimatedRevenue] = useState('');
   const [approvalNotes, setApprovalNotes] = useState('');
   
-  const [proposalForm, setProposalForm] = useState({ due_date: '', value: '', cost: '', margin_percent: '', notes: '' });
+  const [proposalForm, setProposalForm] = useState({ due_date: '', value: '', margin_percent: '', notes: '' });
   const [offerDoc, setOfferDoc] = useState<File | null>(null);
   const [financialDoc, setFinancialDoc] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // File input refs
+  const offerInputRef = useRef<HTMLInputElement>(null);
+  const financialInputRef = useRef<HTMLInputElement>(null);
   
   const [outcomeForm, setOutcomeForm] = useState({ outcome: '' as string, reason: '', notes: '', lessons_learned: '' });
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
@@ -128,7 +132,7 @@ export function BidDetailPage() {
       setEstimatedRevenue(data.bid_estimated_revenue?.toString() || '');
       setProposalForm({
         due_date: data.proposal_due_date || '', value: data.proposal_value?.toString() || '',
-        cost: data.proposal_cost?.toString() || '', margin_percent: data.proposal_margin_percent?.toString() || '',
+        margin_percent: data.proposal_margin_percent?.toString() || '',
         notes: data.proposal_notes || '',
       });
       setOutcomeForm({
@@ -313,7 +317,6 @@ export function BidDetailPage() {
       await requirementsService.update(bid.id, {
         proposal_due_date: proposalForm.due_date || undefined,
         proposal_value: proposalForm.value ? parseFloat(proposalForm.value) : undefined,
-        proposal_cost: proposalForm.cost ? parseFloat(proposalForm.cost) : undefined,
         proposal_margin_percent: proposalForm.margin_percent ? parseFloat(proposalForm.margin_percent) : undefined,
         proposal_notes: proposalForm.notes || undefined,
         offer_submitted_at: new Date().toISOString(),
@@ -332,7 +335,6 @@ export function BidDetailPage() {
       await requirementsService.update(bid.id, {
         proposal_due_date: proposalForm.due_date || undefined,
         proposal_value: proposalForm.value ? parseFloat(proposalForm.value) : undefined,
-        proposal_cost: proposalForm.cost ? parseFloat(proposalForm.cost) : undefined,
         proposal_margin_percent: proposalForm.margin_percent ? parseFloat(proposalForm.margin_percent) : undefined,
         proposal_notes: proposalForm.notes || undefined,
       });
@@ -348,20 +350,14 @@ export function BidDetailPage() {
     try {
       const updates: any = {};
       if (offerDoc) {
-        const fn = `${bid.id}/offer_${Date.now()}_${offerDoc.name}`;
-        const { error } = await supabase.storage.from('bid-documents').upload(fn, offerDoc);
-        if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from('bid-documents').getPublicUrl(fn);
-        updates.proposal_offer_document_url = publicUrl;
-        updates.proposal_offer_document_name = offerDoc.name;
+        const result = await bidDocumentService.uploadDocument(offerDoc, bid.id, 'offer');
+        updates.proposal_offer_document_url = result.path;
+        updates.proposal_offer_document_name = result.name;
       }
       if (financialDoc) {
-        const fn = `${bid.id}/financial_${Date.now()}_${financialDoc.name}`;
-        const { error } = await supabase.storage.from('bid-documents').upload(fn, financialDoc);
-        if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from('bid-documents').getPublicUrl(fn);
-        updates.proposal_financial_calc_url = publicUrl;
-        updates.proposal_financial_calc_name = financialDoc.name;
+        const result = await bidDocumentService.uploadDocument(financialDoc, bid.id, 'financial');
+        updates.proposal_financial_calc_url = result.path;
+        updates.proposal_financial_calc_name = result.name;
       }
       await requirementsService.update(bid.id, updates);
       toast.success('Uploaded', 'Documents uploaded');
@@ -369,6 +365,19 @@ export function BidDetailPage() {
       await loadBid();
     } catch (error) { console.error(error); toast.error('Error', 'Upload failed'); }
     finally { setIsUploading(false); }
+  };
+
+  const handleDownloadDoc = async (type: 'offer' | 'financial') => {
+    if (!bid) return;
+    try {
+      const path = type === 'offer' ? bid.proposal_offer_document_url : bid.proposal_financial_calc_url;
+      if (!path) return;
+      const url = await bidDocumentService.getSignedUrl(path);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error(error);
+      toast.error('Error', 'Failed to download document');
+    }
   };
 
   const handleRecordOutcome = async () => {
@@ -567,9 +576,8 @@ export function BidDetailPage() {
               <div className="grid grid-cols-3 gap-4">
                 <Input label="Due Date" type="date" value={proposalForm.due_date} onChange={(e) => setProposalForm(p => ({ ...p, due_date: e.target.value }))} />
                 <Input label="Value (£)" type="number" value={proposalForm.value} onChange={(e) => setProposalForm(p => ({ ...p, value: e.target.value }))} />
-                <Input label="Cost (£)" type="number" value={proposalForm.cost} onChange={(e) => setProposalForm(p => ({ ...p, cost: e.target.value }))} />
+                <Input label="Margin %" type="number" value={proposalForm.margin_percent} onChange={(e) => setProposalForm(p => ({ ...p, margin_percent: e.target.value }))} />
               </div>
-              <Input label="Margin %" type="number" value={proposalForm.margin_percent} onChange={(e) => setProposalForm(p => ({ ...p, margin_percent: e.target.value }))} className="w-1/3" />
               <Textarea label="Notes" value={proposalForm.notes} onChange={(e) => setProposalForm(p => ({ ...p, notes: e.target.value }))} rows={2} />
               <div className="flex justify-end"><Button variant="secondary" onClick={handleSaveProposal} isLoading={isSaving}><Save className="h-4 w-4 mr-2" />Save</Button></div>
             </div>
@@ -577,27 +585,104 @@ export function BidDetailPage() {
 
           <Card><CardHeader><CardTitle>Documents</CardTitle></CardHeader>
             <div className="p-4 pt-0 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
+                {/* Offer Document */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Offer Document (PDF/Word)</label>
                   {bid.proposal_offer_document_url ? (
-                    <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
-                      <FileText className="h-5 w-5 text-green-600" /><span className="text-sm flex-1 truncate">{bid.proposal_offer_document_name}</span>
-                      <a href={bid.proposal_offer_document_url} target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4" /></a>
+                    <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
+                      <FileText className="h-8 w-8 text-green-600" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-green-800 truncate">{bid.proposal_offer_document_name}</p>
+                        <p className="text-xs text-green-600">Uploaded</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleDownloadDoc('offer')}><Download className="h-4 w-4" /></Button>
                     </div>
-                  ) : <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setOfferDoc(e.target.files?.[0] || null)} className="text-sm" />}
+                  ) : (
+                    <div
+                      onClick={() => offerInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('border-brand-cyan', 'bg-brand-cyan/5'); }}
+                      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('border-brand-cyan', 'bg-brand-cyan/5'); }}
+                      onDrop={(e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        e.currentTarget.classList.remove('border-brand-cyan', 'bg-brand-cyan/5');
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && (file.name.endsWith('.pdf') || file.name.endsWith('.doc') || file.name.endsWith('.docx'))) {
+                          setOfferDoc(file);
+                        } else {
+                          toast.error('Invalid File', 'Please upload a PDF, DOC, or DOCX file');
+                        }
+                      }}
+                      className="flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors cursor-pointer"
+                    >
+                      <Upload className="h-8 w-8 text-brand-grey-400" />
+                      <div className="flex-1">
+                        {offerDoc ? (
+                          <p className="text-sm font-medium text-brand-cyan">{offerDoc.name}</p>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium text-brand-slate-700">Upload Offer Document</p>
+                            <p className="text-xs text-brand-grey-400">Drag & drop or click to browse</p>
+                          </>
+                        )}
+                        <p className="text-xs text-brand-grey-300">PDF, DOC, or DOCX</p>
+                      </div>
+                    </div>
+                  )}
+                  <input ref={offerInputRef} type="file" accept=".pdf,.doc,.docx" onChange={(e) => setOfferDoc(e.target.files?.[0] || null)} className="hidden" />
                 </div>
+
+                {/* Financial Calculation */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Financial Calculation (Excel)</label>
                   {bid.proposal_financial_calc_url ? (
-                    <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
-                      <FileText className="h-5 w-5 text-green-600" /><span className="text-sm flex-1 truncate">{bid.proposal_financial_calc_name}</span>
-                      <a href={bid.proposal_financial_calc_url} target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4" /></a>
+                    <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
+                      <FileText className="h-8 w-8 text-green-600" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-green-800 truncate">{bid.proposal_financial_calc_name}</p>
+                        <p className="text-xs text-green-600">Uploaded</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleDownloadDoc('financial')}><Download className="h-4 w-4" /></Button>
                     </div>
-                  ) : <input type="file" accept=".xlsx,.xls" onChange={(e) => setFinancialDoc(e.target.files?.[0] || null)} className="text-sm" />}
+                  ) : (
+                    <div
+                      onClick={() => financialInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('border-brand-cyan', 'bg-brand-cyan/5'); }}
+                      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('border-brand-cyan', 'bg-brand-cyan/5'); }}
+                      onDrop={(e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        e.currentTarget.classList.remove('border-brand-cyan', 'bg-brand-cyan/5');
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+                          setFinancialDoc(file);
+                        } else {
+                          toast.error('Invalid File', 'Please upload an Excel file');
+                        }
+                      }}
+                      className="flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-brand-grey-200 hover:border-brand-cyan hover:bg-brand-cyan/5 transition-colors cursor-pointer"
+                    >
+                      <Upload className="h-8 w-8 text-brand-grey-400" />
+                      <div className="flex-1">
+                        {financialDoc ? (
+                          <p className="text-sm font-medium text-brand-cyan">{financialDoc.name}</p>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium text-brand-slate-700">Upload Financial Calc</p>
+                            <p className="text-xs text-brand-grey-400">Drag & drop or click to browse</p>
+                          </>
+                        )}
+                        <p className="text-xs text-brand-grey-300">XLSX or XLS</p>
+                      </div>
+                    </div>
+                  )}
+                  <input ref={financialInputRef} type="file" accept=".xlsx,.xls" onChange={(e) => setFinancialDoc(e.target.files?.[0] || null)} className="hidden" />
                 </div>
               </div>
-              {(offerDoc || financialDoc) && <div className="flex justify-end"><Button onClick={handleUploadDocs} isLoading={isUploading}><Upload className="h-4 w-4 mr-2" />Upload</Button></div>}
+              {(offerDoc || financialDoc) && (
+                <div className="flex justify-end">
+                  <Button onClick={handleUploadDocs} isLoading={isUploading}><Upload className="h-4 w-4 mr-2" />Upload Documents</Button>
+                </div>
+              )}
             </div>
           </Card>
 

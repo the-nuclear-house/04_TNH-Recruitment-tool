@@ -4475,3 +4475,40 @@ export const documentUploadService = {
     if (error) throw error;
   }
 };
+
+// Bid document upload service
+export const bidDocumentService = {
+  async uploadDocument(file: File, bidId: string, type: 'offer' | 'financial'): Promise<{ path: string; name: string }> {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${bidId}-${type}-${Date.now()}.${fileExt}`;
+    const filePath = `bids/${bidId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('candidate-files')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+
+    return { path: filePath, name: file.name };
+  },
+
+  async getSignedUrl(filePath: string): Promise<string> {
+    const { data, error } = await supabase.storage
+      .from('candidate-files')
+      .createSignedUrl(filePath, 3600);
+
+    if (error) throw error;
+    return data.signedUrl;
+  },
+
+  async deleteDocument(filePath: string): Promise<void> {
+    const { error } = await supabase.storage
+      .from('candidate-files')
+      .remove([filePath]);
+
+    if (error) throw error;
+  }
+};
