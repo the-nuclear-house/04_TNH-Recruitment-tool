@@ -525,46 +525,39 @@ export function BidDetailPage() {
             </div>
           )}
 
-          <Card><CardHeader><CardTitle>Go/No-Go Approval</CardTitle></CardHeader>
-            <div className="p-4 pt-0 space-y-4">
-              {!bid.gonogo_submitted_at ? (
-                <div className="text-center py-6 text-brand-grey-400">
-                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>Not yet submitted for approval</p>
-                  <p className="text-sm">Complete MEDDPICC and Risk Assessment, then click "Submit for Approval"</p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-sm text-brand-grey-500">Submitted for approval on {formatDate(bid.gonogo_submitted_at)}</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className={`p-4 rounded-lg ${bid.gonogo_td_approved ? 'bg-green-50' : bid.gonogo_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                      <p className="text-sm font-medium">Technical Director</p>
-                      <p className="text-xs text-brand-grey-500">{bid.technical_director?.full_name || 'Not assigned'}</p>
-                      {bid.gonogo_td_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                      {bid.gonogo_td_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                      {goNogoPendingTD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
-                    </div>
-                    <div className={`p-4 rounded-lg ${bid.gonogo_bd_approved ? 'bg-green-50' : bid.gonogo_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                      <p className="text-sm font-medium">Business Director</p>
-                      <p className="text-xs text-brand-grey-500">{bid.business_director?.full_name || 'Not assigned'}</p>
-                      {bid.gonogo_bd_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                      {bid.gonogo_bd_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                      {goNogoPendingBD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
-                    </div>
+          {/* Go/No-Go Approval - ONLY shows after submission */}
+          {bid.gonogo_submitted_at && (
+            <Card><CardHeader><CardTitle>Go/No-Go Approval</CardTitle></CardHeader>
+              <div className="p-4 pt-0 space-y-4">
+                <p className="text-sm text-brand-grey-500">Submitted for approval on {formatDate(bid.gonogo_submitted_at)}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className={`p-4 rounded-lg ${bid.gonogo_td_approved ? 'bg-green-50' : bid.gonogo_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                    <p className="text-sm font-medium">Technical Director</p>
+                    <p className="text-xs text-brand-grey-500">{bid.technical_director?.full_name || 'Not assigned'}</p>
+                    {bid.gonogo_td_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                    {bid.gonogo_td_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                    {goNogoPendingTD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
                   </div>
-                </>
-              )}
-              {isApprover && bid.gonogo_submitted_at && bid.go_nogo_decision === null && ((isTD && goNogoPendingTD) || (isBD && goNogoPendingBD)) && (
-                <div className="border-t pt-4 space-y-3">
-                  <Textarea label="Notes (optional)" value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2} />
-                  <div className="flex justify-end gap-3">
-                    <Button variant="danger" onClick={() => handleGoNoGoApproval(false)} isLoading={isSaving}><XCircle className="h-4 w-4 mr-2" />No-Go</Button>
-                    <Button variant="success" onClick={() => handleGoNoGoApproval(true)} isLoading={isSaving}><CheckCircle className="h-4 w-4 mr-2" />Go</Button>
+                  <div className={`p-4 rounded-lg ${bid.gonogo_bd_approved ? 'bg-green-50' : bid.gonogo_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                    <p className="text-sm font-medium">Business Director</p>
+                    <p className="text-xs text-brand-grey-500">{bid.business_director?.full_name || 'Not assigned'}</p>
+                    {bid.gonogo_bd_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                    {bid.gonogo_bd_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                    {goNogoPendingBD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
                   </div>
                 </div>
-              )}
-            </div>
-          </Card>
+                {isApprover && bid.go_nogo_decision === null && ((isTD && goNogoPendingTD) || (isBD && goNogoPendingBD)) && (
+                  <div className="border-t pt-4 space-y-3">
+                    <Textarea label="Notes (optional)" value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2} />
+                    <div className="flex justify-end gap-3">
+                      <Button variant="danger" onClick={() => handleGoNoGoApproval(false)} isLoading={isSaving}><XCircle className="h-4 w-4 mr-2" />No-Go</Button>
+                      <Button variant="success" onClick={() => handleGoNoGoApproval(true)} isLoading={isSaving}><CheckCircle className="h-4 w-4 mr-2" />Go</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
         </>)}
 
         {/* PROPOSAL */}
@@ -621,45 +614,39 @@ export function BidDetailPage() {
             </div>
           )}
 
-          {/* Offer Approval Section */}
-          <Card><CardHeader><CardTitle>Offer Approval</CardTitle></CardHeader>
-            <div className="p-4 pt-0 space-y-4">
-              {!bid.offer_submitted_at ? (
-                <div className="text-center py-6 text-brand-grey-400">
-                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>Not yet submitted for offer review</p>
-                  <p className="text-sm">Upload documents and complete proposal details, then click "Submit for Offer Review"</p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-sm text-brand-grey-500">Submitted for offer review on {formatDate(bid.offer_submitted_at)}</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className={`p-4 rounded-lg ${bid.offer_td_approved ? 'bg-green-50' : bid.offer_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                      <p className="text-sm font-medium">Technical Director</p>
-                      {bid.offer_td_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                      {bid.offer_td_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                      {offerPendingTD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
-                    </div>
-                    <div className={`p-4 rounded-lg ${bid.offer_bd_approved ? 'bg-green-50' : bid.offer_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                      <p className="text-sm font-medium">Business Director</p>
-                      {bid.offer_bd_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                      {bid.offer_bd_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                      {offerPendingBD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
-                    </div>
+          {/* Offer Approval Section - ONLY shows after submission */}
+          {bid.offer_submitted_at && (
+            <Card><CardHeader><CardTitle>Offer Approval</CardTitle></CardHeader>
+              <div className="p-4 pt-0 space-y-4">
+                <p className="text-sm text-brand-grey-500">Submitted for offer review on {formatDate(bid.offer_submitted_at)}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className={`p-4 rounded-lg ${bid.offer_td_approved ? 'bg-green-50' : bid.offer_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                    <p className="text-sm font-medium">Technical Director</p>
+                    <p className="text-xs text-brand-grey-500">{bid.technical_director?.full_name || 'Not assigned'}</p>
+                    {bid.offer_td_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                    {bid.offer_td_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                    {offerPendingTD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
                   </div>
-                </>
-              )}
-              {isApprover && bid.offer_submitted_at && ((isTD && offerPendingTD) || (isBD && offerPendingBD)) && (
-                <div className="border-t pt-4 space-y-3">
-                  <Textarea label="Notes (optional)" value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2} />
-                  <div className="flex justify-end gap-3">
-                    <Button variant="danger" onClick={() => handleOfferApproval(false)} isLoading={isSaving}><XCircle className="h-4 w-4 mr-2" />Reject</Button>
-                    <Button variant="success" onClick={() => handleOfferApproval(true)} isLoading={isSaving}><CheckCircle className="h-4 w-4 mr-2" />Approve</Button>
+                  <div className={`p-4 rounded-lg ${bid.offer_bd_approved ? 'bg-green-50' : bid.offer_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                    <p className="text-sm font-medium">Business Director</p>
+                    <p className="text-xs text-brand-grey-500">{bid.business_director?.full_name || 'Not assigned'}</p>
+                    {bid.offer_bd_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                    {bid.offer_bd_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                    {offerPendingBD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
                   </div>
                 </div>
-              )}
-            </div>
-          </Card>
+                {isApprover && ((isTD && offerPendingTD) || (isBD && offerPendingBD)) && (
+                  <div className="border-t pt-4 space-y-3">
+                    <Textarea label="Notes (optional)" value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2} />
+                    <div className="flex justify-end gap-3">
+                      <Button variant="danger" onClick={() => handleOfferApproval(false)} isLoading={isSaving}><XCircle className="h-4 w-4 mr-2" />Reject</Button>
+                      <Button variant="success" onClick={() => handleOfferApproval(true)} isLoading={isSaving}><CheckCircle className="h-4 w-4 mr-2" />Approve</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
         </>)}
 
         {/* SUBMITTED / OUTCOME */}

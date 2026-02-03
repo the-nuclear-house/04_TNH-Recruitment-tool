@@ -24,6 +24,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { 
   approvalRequestsService,
   offersService,
+  requirementsService,
   type DbApprovalRequest,
   type DbOffer,
   type DbRequirement,
@@ -320,6 +321,8 @@ export function DashboardPage() {
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<DbApprovalRequest[]>([]);
   const [pendingOffers, setPendingOffers] = useState<DbOffer[]>([]);
+  const [pendingBidGoNoGo, setPendingBidGoNoGo] = useState<DbRequirement[]>([]);
+  const [pendingBidOfferReview, setPendingBidOfferReview] = useState<DbRequirement[]>([]);
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
   
   // Approval detail modal
@@ -389,7 +392,7 @@ export function DashboardPage() {
         return;
       }
       
-      const isDirectorView = permissions.isBusinessDirector || permissions.isAdmin;
+      const isDirectorView = permissions.isBusinessDirector || permissions.isTechnicalDirector || permissions.isAdmin;
       const targetManagerId = selectedManagerId || (isDirectorView ? null : user?.id);
       
       // Load requirements
@@ -440,12 +443,15 @@ export function DashboardPage() {
           .contains('roles', ['business_manager']);
         setManagers(usersData || []);
         
-        const [approvals, offers] = await Promise.all([
+        const [approvals, offers, bidApprovals] = await Promise.all([
           approvalRequestsService.getPendingForDirector(),
           offersService.getPendingApprovals(user!.id),
+          requirementsService.getAllPendingBidApprovals(user!.id),
         ]);
         setPendingApprovals(approvals);
         setPendingOffers(offers);
+        setPendingBidGoNoGo(bidApprovals.goNoGo);
+        setPendingBidOfferReview(bidApprovals.offer);
       }
       
     } catch (error) {
@@ -754,8 +760,8 @@ export function DashboardPage() {
     }
   };
 
-  const isDirectorView = (permissions.isBusinessDirector || permissions.isAdmin) && !selectedManagerId;
-  const totalPendingApprovals = pendingApprovals.length + pendingOffers.length;
+  const isDirectorView = (permissions.isBusinessDirector || permissions.isTechnicalDirector || permissions.isAdmin) && !selectedManagerId;
+  const totalPendingApprovals = pendingApprovals.length + pendingOffers.length + pendingBidGoNoGo.length + pendingBidOfferReview.length;
 
   const handlePrevSemester = () => {
     const currentIndex = semesterOptions.findIndex(s => s.value === selectedSemester);
@@ -1159,6 +1165,44 @@ export function DashboardPage() {
                       <Button variant="secondary" size="sm">
                         View Details
                       </Button>
+                    </div>
+                  ))}
+                  {/* Bid Go/No-Go Approvals */}
+                  {pendingBidGoNoGo.map(bid => (
+                    <div 
+                      key={bid.id} 
+                      className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors"
+                      onClick={() => navigate(`/bids/${bid.id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-orange-100">
+                          <Target className="h-4 w-4 text-orange-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-brand-slate-900">Bid Go/No-Go: {bid.title}</p>
+                          <p className="text-xs text-brand-grey-500">{bid.company?.name} • {bid.manager?.full_name}</p>
+                        </div>
+                      </div>
+                      <Badge variant="amber">Review</Badge>
+                    </div>
+                  ))}
+                  {/* Bid Offer Review Approvals */}
+                  {pendingBidOfferReview.map(bid => (
+                    <div 
+                      key={bid.id} 
+                      className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors"
+                      onClick={() => navigate(`/bids/${bid.id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-100">
+                          <FileText className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-brand-slate-900">Bid Offer Review: {bid.title}</p>
+                          <p className="text-xs text-brand-grey-500">{bid.company?.name} • £{bid.proposal_value?.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <Badge variant="cyan">Review</Badge>
                     </div>
                   ))}
                 </div>

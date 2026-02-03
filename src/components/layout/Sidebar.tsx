@@ -50,10 +50,12 @@ export function Sidebar() {
   );
 
   // Permission checks
-  const canViewCustomers = user?.roles?.some(r => [
+  const canViewFullSales = user?.roles?.some(r => [
     'superadmin', 'admin', 
     'business_director', 'business_manager'
   ].includes(r)) ?? false;
+
+  const isTechnicalDirector = user?.roles?.some(r => ['technical_director'].includes(r)) ?? false;
 
   const isHR = user?.roles?.some(r => ['hr', 'hr_manager', 'admin', 'superadmin'].includes(r)) ?? false;
   
@@ -64,16 +66,27 @@ export function Sidebar() {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   ];
 
+  // Build SALES items based on role
+  const salesItems: NavItem[] = [];
+  if (canViewFullSales) {
+    salesItems.push(
+      { name: 'Customers', href: '/customers', icon: Building },
+      { name: 'Customer Meetings', href: '/customer-meetings', icon: UserCheck },
+      { name: 'Requirements', href: '/requirements', icon: Briefcase },
+      { name: 'Bid Process', href: '/bids', icon: Gavel },
+    );
+  } else if (isTechnicalDirector) {
+    // TD only sees Bids
+    salesItems.push(
+      { name: 'Bid Process', href: '/bids', icon: Gavel },
+    );
+  }
+
   // Build navigation groups based on permissions
   const navGroups: NavGroup[] = [
     {
       name: 'SALES',
-      items: [
-        { name: 'Customers', href: '/customers', icon: Building },
-        { name: 'Customer Meetings', href: '/customer-meetings', icon: UserCheck },
-        { name: 'Requirements', href: '/requirements', icon: Briefcase },
-        { name: 'Bid Process', href: '/bids', icon: Gavel },
-      ].filter(() => canViewCustomers),
+      items: salesItems,
     },
     {
       name: 'RECRUITMENT',
@@ -89,7 +102,7 @@ export function Sidebar() {
         { name: 'Consultants', href: '/consultants', icon: UserCog },
         { name: 'Missions', href: '/missions', icon: Rocket },
         { name: 'Timesheets', href: '/timesheets', icon: Clock },
-      ].filter(() => canViewCustomers || isHR),
+      ].filter(() => canViewFullSales || isHR),
     },
     {
       name: 'HR',
