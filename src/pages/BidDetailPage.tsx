@@ -183,6 +183,55 @@ export function BidDetailPage() {
     finally { setIsSaving(false); }
   };
 
+  const handleSubmitForApproval = async () => {
+    if (!bid || !user) return;
+    
+    // Validate that assessment is complete
+    if (!meddpiccScore || meddpiccScore < 1) {
+      toast.error('Incomplete', 'Please complete the MEDDPICC assessment');
+      return;
+    }
+    if (!riskScore || riskScore < 1) {
+      toast.error('Incomplete', 'Please complete the Risk assessment');
+      return;
+    }
+    if (!bid.technical_director_id) {
+      toast.error('Missing', 'Technical Director not assigned');
+      return;
+    }
+    if (!bid.business_director_id) {
+      toast.error('Missing', 'Business Director not assigned');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      // Save current data first
+      await requirementsService.update(bid.id, {
+        meddpicc_metrics: meddpiccScores.metrics || undefined, meddpicc_economic_buyer: meddpiccScores.economic_buyer || undefined,
+        meddpicc_decision_criteria: meddpiccScores.decision_criteria || undefined, meddpicc_decision_process: meddpiccScores.decision_process || undefined,
+        meddpicc_identify_pain: meddpiccScores.identify_pain || undefined, meddpicc_paper_process: meddpiccScores.paper_process || undefined,
+        meddpicc_champion: meddpiccScores.champion || undefined, meddpicc_competition: meddpiccScores.competition || undefined,
+        meddpicc_notes: meddpiccNotes,
+        risk_technical_complexity: riskScores.technical_complexity || undefined, risk_resource_availability: riskScores.resource_availability || undefined,
+        risk_timeline_feasibility: riskScores.timeline_feasibility || undefined, risk_scope_clarity: riskScores.scope_clarity || undefined,
+        risk_customer_fp_experience: riskScores.customer_fp_experience || undefined,
+        risk_technical_complexity_notes: riskNotes.technical_complexity || undefined,
+        risk_resource_availability_notes: riskNotes.resource_availability || undefined,
+        risk_timeline_feasibility_notes: riskNotes.timeline_feasibility || undefined,
+        risk_scope_clarity_notes: riskNotes.scope_clarity || undefined,
+        risk_customer_fp_experience_notes: riskNotes.customer_fp_experience || undefined,
+        bid_estimated_fte: estimatedFte ? parseFloat(estimatedFte) : undefined,
+        bid_estimated_revenue: estimatedRevenue ? parseFloat(estimatedRevenue) : undefined,
+        gonogo_submitted_at: new Date().toISOString(),
+        gonogo_submitted_by: user.id,
+      });
+      toast.success('Submitted', 'Bid submitted for Go/No-Go approval');
+      await loadBid();
+    } catch (error) { console.error(error); toast.error('Error', 'Failed to submit'); }
+    finally { setIsSaving(false); }
+  };
+
   const handleGoNoGoApproval = async (approved: boolean) => {
     if (!bid || !user) return;
     setIsSaving(true);
@@ -435,27 +484,47 @@ export function BidDetailPage() {
             </div>
           </Card>
 
-          {isManager && <div className="flex justify-end"><Button onClick={handleSaveQualifying} isLoading={isSaving}><Save className="h-4 w-4 mr-2" />Save</Button></div>}
+          {isManager && (
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={handleSaveQualifying} isLoading={isSaving}><Save className="h-4 w-4 mr-2" />Save Draft</Button>
+              {!bid.gonogo_submitted_at && (
+                <Button onClick={handleSubmitForApproval} isLoading={isSaving} disabled={!meddpiccScore || !riskScore}>
+                  <CheckCircle className="h-4 w-4 mr-2" />Submit for Approval
+                </Button>
+              )}
+            </div>
+          )}
 
           <Card><CardHeader><CardTitle>Go/No-Go Approval</CardTitle></CardHeader>
             <div className="p-4 pt-0 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className={`p-4 rounded-lg ${bid.gonogo_td_approved ? 'bg-green-50' : bid.gonogo_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                  <p className="text-sm font-medium">Technical Director</p>
-                  <p className="text-xs text-brand-grey-500">{bid.technical_director?.full_name || 'Not assigned'}</p>
-                  {bid.gonogo_td_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                  {bid.gonogo_td_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                  {goNogoPendingTD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
+              {!bid.gonogo_submitted_at ? (
+                <div className="text-center py-6 text-brand-grey-400">
+                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>Not yet submitted for approval</p>
+                  <p className="text-sm">Complete MEDDPICC and Risk Assessment, then click "Submit for Approval"</p>
                 </div>
-                <div className={`p-4 rounded-lg ${bid.gonogo_bd_approved ? 'bg-green-50' : bid.gonogo_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                  <p className="text-sm font-medium">Business Director</p>
-                  <p className="text-xs text-brand-grey-500">{bid.business_director?.full_name || 'Not assigned'}</p>
-                  {bid.gonogo_bd_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                  {bid.gonogo_bd_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                  {goNogoPendingBD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
-                </div>
-              </div>
-              {isApprover && bid.go_nogo_decision === null && ((isTD && goNogoPendingTD) || (isBD && goNogoPendingBD)) && (
+              ) : (
+                <>
+                  <p className="text-sm text-brand-grey-500">Submitted for approval on {formatDate(bid.gonogo_submitted_at)}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className={`p-4 rounded-lg ${bid.gonogo_td_approved ? 'bg-green-50' : bid.gonogo_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                      <p className="text-sm font-medium">Technical Director</p>
+                      <p className="text-xs text-brand-grey-500">{bid.technical_director?.full_name || 'Not assigned'}</p>
+                      {bid.gonogo_td_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                      {bid.gonogo_td_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                      {goNogoPendingTD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
+                    </div>
+                    <div className={`p-4 rounded-lg ${bid.gonogo_bd_approved ? 'bg-green-50' : bid.gonogo_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                      <p className="text-sm font-medium">Business Director</p>
+                      <p className="text-xs text-brand-grey-500">{bid.business_director?.full_name || 'Not assigned'}</p>
+                      {bid.gonogo_bd_approved && <p className="text-green-700 font-medium mt-2"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                      {bid.gonogo_bd_rejected && <p className="text-red-700 font-medium mt-2"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                      {goNogoPendingBD && <p className="text-amber-700 font-medium mt-2"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
+                    </div>
+                  </div>
+                </>
+              )}
+              {isApprover && bid.gonogo_submitted_at && bid.go_nogo_decision === null && ((isTD && goNogoPendingTD) || (isBD && goNogoPendingBD)) && (
                 <div className="border-t pt-4 space-y-3">
                   <Textarea label="Notes (optional)" value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2} />
                   <div className="flex justify-end gap-3">

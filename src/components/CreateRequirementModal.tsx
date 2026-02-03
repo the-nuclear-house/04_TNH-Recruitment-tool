@@ -324,22 +324,22 @@ export function CreateRequirementModal({
     };
   });
 
-  // Format manager options
+  // Format manager options - only business roles, not recruiters
   const managerOptions = [
     // Current user first as "Myself"
     ...(user ? [{ value: user.id, label: `${user.full_name || user.email} (Myself)` }] : []),
-    // Other managers/recruiters
+    // Other business managers/directors
     ...users
-      .filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager', 'business_manager', 'business_director', 'admin', 'superadmin'].includes(r)))
+      .filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director', 'admin', 'superadmin'].includes(r)))
       .filter(u => u.id !== user?.id)
       .map(u => ({ value: u.id, label: u.full_name })),
   ];
 
-  // Technical Director options (users with technical_director role)
+  // Technical Director options (users with technical_director or business_director role)
   const technicalDirectorOptions = [
     { value: '', label: 'Select Technical Director...' },
     ...users
-      .filter(u => u.roles?.some((r: string) => ['technical_director', 'admin', 'superadmin'].includes(r)))
+      .filter(u => u.roles?.some((r: string) => ['technical_director', 'business_director', 'admin', 'superadmin'].includes(r)))
       .map(u => ({ value: u.id, label: u.full_name })),
   ];
 

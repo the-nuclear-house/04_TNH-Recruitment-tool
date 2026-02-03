@@ -446,3 +446,10 @@ ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_resource_availability_not
 ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_timeline_feasibility_notes TEXT;
 ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_scope_clarity_notes TEXT;
 ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_customer_fp_experience_notes TEXT;
+
+-- Add reports_to column to users if not exists
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS reports_to UUID REFERENCES public.users(id);
+
+-- Track if bid is submitted for Go/No-Go approval
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_submitted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_submitted_by UUID REFERENCES public.users(id);

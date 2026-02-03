@@ -657,6 +657,9 @@ export interface DbRequirement {
   meddpicc_champion: number | null;
   meddpicc_competition: number | null;
   meddpicc_notes: Record<string, string> | null;
+  // Go/No-Go submission
+  gonogo_submitted_at: string | null;
+  gonogo_submitted_by: string | null;
   // Go/No-Go approvals
   gonogo_td_approved: boolean;
   gonogo_td_approved_at: string | null;
@@ -768,6 +771,9 @@ export interface CreateRequirementInput {
   meddpicc_champion?: number;
   meddpicc_competition?: number;
   meddpicc_notes?: Record<string, string>;
+  // Go/No-Go submission
+  gonogo_submitted_at?: string;
+  gonogo_submitted_by?: string;
   // Go/No-Go approvals
   gonogo_td_approved?: boolean;
   gonogo_td_approved_at?: string;
