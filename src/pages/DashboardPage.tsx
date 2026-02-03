@@ -330,10 +330,11 @@ export function DashboardPage() {
   const [selectedOfferForApproval, setSelectedOfferForApproval] = useState<DbOffer | null>(null);
   const [isApprovalDetailOpen, setIsApprovalDetailOpen] = useState(false);
 
-  // Determine if recruiter view (recruiter or recruiter_manager, not business/admin roles)
+  // Determine if recruiter view (recruiter or recruiter_manager, not business/admin/technical roles)
   const isRecruiterView = (permissions.isRecruiter || permissions.isRecruiterManager) && 
     !permissions.isBusinessManager && 
     !permissions.isBusinessDirector && 
+    !permissions.isTechnicalDirector &&
     !permissions.isAdmin;
 
   const semesterOptions = useMemo(() => getSemesterOptions(), []);
@@ -1075,7 +1076,8 @@ export function DashboardPage() {
     );
   }
 
-  if (!stats) return null;
+  // For Technical Directors without stats, still show the pending approvals
+  if (!stats && !isDirectorView) return null;
 
   return (
     <div className="min-h-screen">
@@ -1234,27 +1236,30 @@ export function DashboardPage() {
               </Card>
             )}
 
-            {/* Top 3 Big Numbers */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <BigNumberCard 
-                title="Total Missions" 
-                value={stats.totalMissions} 
-                icon={Briefcase} 
-                colour="cyan" 
-              />
-              <BigNumberCard 
-                title="Total Consultants" 
-                value={stats.totalConsultants} 
-                icon={Users} 
-                colour="green" 
-              />
-              <BigNumberCard 
-                title="On Bench" 
-                value={stats.benchConsultants} 
-                icon={Clock} 
-                colour="amber" 
-              />
-            </div>
+            {/* Stats-dependent content - only show if stats available */}
+            {stats && (
+              <>
+                {/* Top 3 Big Numbers */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <BigNumberCard 
+                    title="Total Missions" 
+                    value={stats.totalMissions} 
+                    icon={Briefcase} 
+                    colour="cyan" 
+                  />
+                  <BigNumberCard 
+                    title="Total Consultants" 
+                    value={stats.totalConsultants} 
+                    icon={Users} 
+                    colour="green" 
+                  />
+                  <BigNumberCard 
+                    title="On Bench" 
+                    value={stats.benchConsultants} 
+                    icon={Clock} 
+                    colour="amber" 
+                  />
+                </div>
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1369,6 +1374,8 @@ export function DashboardPage() {
                 </div>
               </Card>
             </div>
+              </>
+            )}
           </>
         )}
       </div>
