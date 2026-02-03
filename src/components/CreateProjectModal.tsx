@@ -79,8 +79,19 @@ export function CreateProjectModal({
   // Use fresh company data if available, otherwise fall back to prop
   const actualCompany = freshCompany || company;
   
+  // Debug: log the financial scoring value
+  console.log('Financial scoring check:', {
+    freshCompany: freshCompany?.financial_scoring,
+    company: company?.financial_scoring,
+    actualCompany: actualCompany?.financial_scoring,
+    hasProperty: actualCompany ? 'financial_scoring' in actualCompany : false,
+  });
+  
   // Check if financial scoring is missing (null, undefined, or empty string)
-  const missingFinancialScoring = !actualCompany?.financial_scoring || actualCompany.financial_scoring.trim() === '';
+  // Only check if the property exists on the object (migration might not have run)
+  const hasFinancialScoringColumn = actualCompany && 'financial_scoring' in actualCompany;
+  const missingFinancialScoring = hasFinancialScoringColumn && 
+    (!actualCompany?.financial_scoring || actualCompany.financial_scoring.trim() === '');
 
   // Pre-fill form when requirement data is available
   useEffect(() => {
