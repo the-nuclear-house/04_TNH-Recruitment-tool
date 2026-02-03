@@ -373,3 +373,69 @@ COMMENT ON COLUMN requirements.meddpicc_paper_process IS 'MEDDPICC: Procurement/
 COMMENT ON COLUMN requirements.meddpicc_champion IS 'MEDDPICC: Internal advocate strength (1-5)';
 COMMENT ON COLUMN requirements.meddpicc_competition IS 'MEDDPICC: Competitive position understanding (1-5)';
 COMMENT ON COLUMN requirements.bid_status IS 'Bid stage: qualifying, proposal, submitted, won, lost';
+
+-- ============================================
+-- BID APPROVAL WORKFLOW AND RISK ASSESSMENT
+-- ============================================
+
+-- Technical Director for requirement (mandatory for bids)
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS technical_director_id UUID REFERENCES public.users(id);
+
+-- Bid estimates
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS bid_estimated_fte DECIMAL(5,2);
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS bid_estimated_revenue DECIMAL(12,2);
+
+-- Risk Assessment scores (1-5 scale, higher = lower risk)
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_technical_complexity INTEGER CHECK (risk_technical_complexity BETWEEN 1 AND 5);
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_resource_availability INTEGER CHECK (risk_resource_availability BETWEEN 1 AND 5);
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_timeline_feasibility INTEGER CHECK (risk_timeline_feasibility BETWEEN 1 AND 5);
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_scope_clarity INTEGER CHECK (risk_scope_clarity BETWEEN 1 AND 5);
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_customer_fp_experience INTEGER CHECK (risk_customer_fp_experience BETWEEN 1 AND 5);
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS risk_notes TEXT;
+
+-- Go/No-Go Approvals (TD and BD must both approve for Go)
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_td_approved BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_td_approved_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_td_rejected BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_td_rejected_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_td_notes TEXT;
+
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_bd_approved BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_bd_approved_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_bd_rejected BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_bd_rejected_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_bd_notes TEXT;
+
+-- Business Director (manager's reports_to)
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS business_director_id UUID REFERENCES public.users(id);
+
+-- Offer Review Approvals
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_td_approved BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_td_approved_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_td_rejected BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_td_rejected_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_td_notes TEXT;
+
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_bd_approved BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_bd_approved_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_bd_rejected BOOLEAN DEFAULT FALSE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_bd_rejected_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_bd_notes TEXT;
+
+-- Proposal Documents (stored in Supabase storage, URLs here)
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS proposal_offer_document_url TEXT;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS proposal_offer_document_name TEXT;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS proposal_financial_calc_url TEXT;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS proposal_financial_calc_name TEXT;
+
+-- Comments
+COMMENT ON COLUMN requirements.technical_director_id IS 'Technical Director who approves Go/No-Go and Offer';
+COMMENT ON COLUMN requirements.business_director_id IS 'Business Director (manager reports_to) who approves Go/No-Go and Offer';
+COMMENT ON COLUMN requirements.risk_technical_complexity IS 'Risk: Technical complexity (1=high risk, 5=low risk)';
+COMMENT ON COLUMN requirements.risk_resource_availability IS 'Risk: Resource availability (1=high risk, 5=low risk)';
+COMMENT ON COLUMN requirements.risk_timeline_feasibility IS 'Risk: Timeline feasibility (1=high risk, 5=low risk)';
+COMMENT ON COLUMN requirements.risk_scope_clarity IS 'Risk: Scope clarity (1=high risk, 5=low risk)';
+COMMENT ON COLUMN requirements.risk_customer_fp_experience IS 'Risk: Customer fixed price experience (1=high risk, 5=low risk)';
+
+-- Create storage bucket for bid documents (run in Supabase dashboard or via API)
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('bid-documents', 'bid-documents', false);

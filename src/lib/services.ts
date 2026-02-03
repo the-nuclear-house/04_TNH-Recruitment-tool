@@ -629,6 +629,19 @@ export interface DbRequirement {
   project_id: string | null;
   is_bid: boolean;
   bid_status: 'qualifying' | 'proposal' | 'submitted' | 'won' | 'lost' | null;
+  // Directors for approval
+  technical_director_id: string | null;
+  business_director_id: string | null;
+  // Bid estimates
+  bid_estimated_fte: number | null;
+  bid_estimated_revenue: number | null;
+  // Risk Assessment (1-5 scale, higher = lower risk)
+  risk_technical_complexity: number | null;
+  risk_resource_availability: number | null;
+  risk_timeline_feasibility: number | null;
+  risk_scope_clarity: number | null;
+  risk_customer_fp_experience: number | null;
+  risk_notes: string | null;
   // MEDDPICC scoring (1-5 scale)
   meddpicc_metrics: number | null;
   meddpicc_economic_buyer: number | null;
@@ -639,10 +652,32 @@ export interface DbRequirement {
   meddpicc_champion: number | null;
   meddpicc_competition: number | null;
   meddpicc_notes: Record<string, string> | null;
-  // Go/No-Go decision
+  // Go/No-Go approvals
+  gonogo_td_approved: boolean;
+  gonogo_td_approved_at: string | null;
+  gonogo_td_rejected: boolean;
+  gonogo_td_rejected_at: string | null;
+  gonogo_td_notes: string | null;
+  gonogo_bd_approved: boolean;
+  gonogo_bd_approved_at: string | null;
+  gonogo_bd_rejected: boolean;
+  gonogo_bd_rejected_at: string | null;
+  gonogo_bd_notes: string | null;
+  // Go/No-Go decision (derived from approvals)
   go_nogo_decision: 'go' | 'nogo' | null;
   go_nogo_date: string | null;
   go_nogo_decided_by: string | null;
+  // Offer Review approvals
+  offer_td_approved: boolean;
+  offer_td_approved_at: string | null;
+  offer_td_rejected: boolean;
+  offer_td_rejected_at: string | null;
+  offer_td_notes: string | null;
+  offer_bd_approved: boolean;
+  offer_bd_approved_at: string | null;
+  offer_bd_rejected: boolean;
+  offer_bd_rejected_at: string | null;
+  offer_bd_notes: string | null;
   // Proposal fields
   proposal_due_date: string | null;
   proposal_submitted_date: string | null;
@@ -651,6 +686,10 @@ export interface DbRequirement {
   proposal_margin_percent: number | null;
   proposal_notes: string | null;
   proposal_documents: Array<{ name: string; url: string; uploaded_at: string }> | null;
+  proposal_offer_document_url: string | null;
+  proposal_offer_document_name: string | null;
+  proposal_financial_calc_url: string | null;
+  proposal_financial_calc_name: string | null;
   // Outcome fields
   bid_outcome: 'won' | 'lost' | 'no_decision' | 'withdrawn' | null;
   bid_outcome_date: string | null;
@@ -668,6 +707,9 @@ export interface DbRequirement {
   contact?: DbContact;
   project?: DbProject;
   winning_candidate?: DbCandidate;
+  technical_director?: DbUser;
+  business_director?: DbUser;
+  manager?: DbUser;
 }
 
 export interface CreateRequirementInput {
@@ -693,6 +735,19 @@ export interface CreateRequirementInput {
   project_id?: string;
   is_bid?: boolean;
   bid_status?: 'qualifying' | 'proposal' | 'submitted' | 'won' | 'lost';
+  // Directors
+  technical_director_id?: string;
+  business_director_id?: string;
+  // Bid estimates
+  bid_estimated_fte?: number;
+  bid_estimated_revenue?: number;
+  // Risk Assessment
+  risk_technical_complexity?: number;
+  risk_resource_availability?: number;
+  risk_timeline_feasibility?: number;
+  risk_scope_clarity?: number;
+  risk_customer_fp_experience?: number;
+  risk_notes?: string;
   // MEDDPICC scoring
   meddpicc_metrics?: number;
   meddpicc_economic_buyer?: number;
@@ -703,10 +758,32 @@ export interface CreateRequirementInput {
   meddpicc_champion?: number;
   meddpicc_competition?: number;
   meddpicc_notes?: Record<string, string>;
-  // Go/No-Go
+  // Go/No-Go approvals
+  gonogo_td_approved?: boolean;
+  gonogo_td_approved_at?: string;
+  gonogo_td_rejected?: boolean;
+  gonogo_td_rejected_at?: string;
+  gonogo_td_notes?: string;
+  gonogo_bd_approved?: boolean;
+  gonogo_bd_approved_at?: string;
+  gonogo_bd_rejected?: boolean;
+  gonogo_bd_rejected_at?: string;
+  gonogo_bd_notes?: string;
+  // Go/No-Go decision
   go_nogo_decision?: 'go' | 'nogo';
   go_nogo_date?: string;
   go_nogo_decided_by?: string;
+  // Offer Review approvals
+  offer_td_approved?: boolean;
+  offer_td_approved_at?: string;
+  offer_td_rejected?: boolean;
+  offer_td_rejected_at?: string;
+  offer_td_notes?: string;
+  offer_bd_approved?: boolean;
+  offer_bd_approved_at?: string;
+  offer_bd_rejected?: boolean;
+  offer_bd_rejected_at?: string;
+  offer_bd_notes?: string;
   // Proposal
   proposal_due_date?: string;
   proposal_submitted_date?: string;
@@ -715,6 +792,10 @@ export interface CreateRequirementInput {
   proposal_margin_percent?: number;
   proposal_notes?: string;
   proposal_documents?: Array<{ name: string; url: string; uploaded_at: string }>;
+  proposal_offer_document_url?: string;
+  proposal_offer_document_name?: string;
+  proposal_financial_calc_url?: string;
+  proposal_financial_calc_name?: string;
   // Outcome
   bid_outcome?: 'won' | 'lost' | 'no_decision' | 'withdrawn';
   bid_outcome_date?: string;
@@ -735,7 +816,10 @@ export const requirementsService = {
         company:company_id(*),
         contact:contact_id(*),
         project:project_id(*),
-        winning_candidate:winning_candidate_id(*)
+        winning_candidate:winning_candidate_id(*),
+        technical_director:technical_director_id(*),
+        business_director:business_director_id(*),
+        manager:manager_id(*)
       `)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -753,7 +837,10 @@ export const requirementsService = {
         company:company_id(*),
         contact:contact_id(*),
         project:project_id(*),
-        winning_candidate:winning_candidate_id(*)
+        winning_candidate:winning_candidate_id(*),
+        technical_director:technical_director_id(*),
+        business_director:business_director_id(*),
+        manager:manager_id(*)
       `)
       .eq('id', id)
       .single();
@@ -876,7 +963,10 @@ export const requirementsService = {
       .select(`
         *,
         company:company_id(*),
-        contact:contact_id(*)
+        contact:contact_id(*),
+        technical_director:technical_director_id(*),
+        business_director:business_director_id(*),
+        manager:manager_id(*)
       `)
       .eq('is_bid', true)
       .is('deleted_at', null)
@@ -894,7 +984,8 @@ export const requirementsService = {
         *,
         company:company_id(*),
         contact:contact_id(*),
-        project:project_id(*)
+        project:project_id(*),
+        manager:manager_id(*)
       `)
       .eq('is_bid', false)
       .is('deleted_at', null)
@@ -973,6 +1064,77 @@ export const requirementsService = {
 
     if (error) throw error;
     return data;
+  },
+
+  // Get pending Go/No-Go approvals for a user (TD or BD)
+  async getPendingGoNoGoApprovals(userId: string): Promise<DbRequirement[]> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*),
+        technical_director:technical_director_id(*),
+        business_director:business_director_id(*),
+        manager:manager_id(*)
+      `)
+      .eq('is_bid', true)
+      .eq('bid_status', 'qualifying')
+      .is('deleted_at', null)
+      .or(`technical_director_id.eq.${userId},business_director_id.eq.${userId}`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    
+    // Filter to only show where user hasn't already approved/rejected
+    return (data || []).filter(bid => {
+      const isTD = bid.technical_director_id === userId;
+      const isBD = bid.business_director_id === userId;
+      
+      if (isTD && !bid.gonogo_td_approved && !bid.gonogo_td_rejected) return true;
+      if (isBD && !bid.gonogo_bd_approved && !bid.gonogo_bd_rejected) return true;
+      return false;
+    });
+  },
+
+  // Get pending Offer approvals for a user (TD or BD)
+  async getPendingOfferApprovals(userId: string): Promise<DbRequirement[]> {
+    const { data, error } = await supabase
+      .from('requirements')
+      .select(`
+        *,
+        company:company_id(*),
+        contact:contact_id(*),
+        technical_director:technical_director_id(*),
+        business_director:business_director_id(*),
+        manager:manager_id(*)
+      `)
+      .eq('is_bid', true)
+      .eq('bid_status', 'proposal')
+      .is('deleted_at', null)
+      .or(`technical_director_id.eq.${userId},business_director_id.eq.${userId}`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    
+    // Filter to only show where user hasn't already approved/rejected
+    return (data || []).filter(bid => {
+      const isTD = bid.technical_director_id === userId;
+      const isBD = bid.business_director_id === userId;
+      
+      if (isTD && !bid.offer_td_approved && !bid.offer_td_rejected) return true;
+      if (isBD && !bid.offer_bd_approved && !bid.offer_bd_rejected) return true;
+      return false;
+    });
+  },
+
+  // Get all pending bid approvals for a user
+  async getAllPendingBidApprovals(userId: string): Promise<{ goNoGo: DbRequirement[]; offer: DbRequirement[] }> {
+    const [goNoGo, offer] = await Promise.all([
+      this.getPendingGoNoGoApprovals(userId),
+      this.getPendingOfferApprovals(userId),
+    ]);
+    return { goNoGo, offer };
   },
 };
 
@@ -1156,6 +1318,7 @@ export interface DbUser {
   roles: string[];  // Changed from role to roles array
   avatar_url: string | null;
   is_active: boolean;
+  reports_to: string | null; // Manager's user ID
   created_at: string;
   updated_at: string;
 }

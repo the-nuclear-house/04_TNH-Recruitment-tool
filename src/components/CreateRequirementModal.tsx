@@ -102,6 +102,7 @@ export function CreateRequirementModal({
     clearance_required: 'none',
     engineering_discipline: 'software',
     manager_id: '',
+    technical_director_id: '',
     project_type: 'T&M' as 'T&M' | 'Fixed_Price',
     project_id: '',
   });
@@ -194,6 +195,7 @@ export function CreateRequirementModal({
         clearance_required: 'none',
         engineering_discipline: 'software',
         manager_id: user?.id || '',
+        technical_director_id: '',
         project_type: propProject?.type as 'T&M' | 'Fixed_Price' || 'T&M',
         project_id: propProject?.id || '',
       });
@@ -262,6 +264,16 @@ export function CreateRequirementModal({
     // Determine if this is a bid (Fixed Price with no existing project)
     const isBid = formData.project_type === 'Fixed_Price' && !formData.project_id;
 
+    // Validate Technical Director for bids
+    if (isBid && !formData.technical_director_id) {
+      toast.error('Validation Error', 'Technical Director is required for Fixed Price bids');
+      return;
+    }
+
+    // Get business director (manager's reports_to)
+    const manager = users.find(u => u.id === formData.manager_id);
+    const businessDirectorId = manager?.reports_to || undefined;
+
     setIsSubmitting(true);
     try {
       await requirementsService.create({
@@ -277,6 +289,8 @@ export function CreateRequirementModal({
         clearance_required: formData.clearance_required,
         engineering_discipline: formData.engineering_discipline,
         manager_id: formData.manager_id || undefined,
+        technical_director_id: formData.technical_director_id || undefined,
+        business_director_id: businessDirectorId,
         skills: skills.length > 0 ? skills : undefined,
         created_by: user?.id,
         // Project workflow fields
@@ -320,6 +334,17 @@ export function CreateRequirementModal({
       .filter(u => u.id !== user?.id)
       .map(u => ({ value: u.id, label: u.full_name })),
   ];
+
+  // Technical Director options (users with technical_director role)
+  const technicalDirectorOptions = [
+    { value: '', label: 'Select Technical Director...' },
+    ...users
+      .filter(u => u.roles?.some((r: string) => ['technical_director', 'admin', 'superadmin'].includes(r)))
+      .map(u => ({ value: u.id, label: u.full_name })),
+  ];
+
+  // Determine if this is a bid (for form display)
+  const isBid = formData.project_type === 'Fixed_Price' && !formData.project_id;
 
   // Determine selected company for display
   const selectedContact = contacts.find(c => c.id === formData.contact_id);
@@ -546,6 +571,17 @@ export function CreateRequirementModal({
             options={managerOptions}
             value={formData.manager_id}
             onChange={(e) => handleFormChange('manager_id', e.target.value)}
+          />
+        </div>
+
+        {/* Technical Director (mandatory for bids) */}
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label={isBid ? "Technical Director *" : "Technical Director"}
+            options={technicalDirectorOptions}
+            value={formData.technical_director_id}
+            onChange={(e) => handleFormChange('technical_director_id', e.target.value)}
+            error={isBid && !formData.technical_director_id ? 'Required for Fixed Price bids' : undefined}
           />
         </div>
 
