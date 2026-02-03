@@ -453,3 +453,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS reports_to UUID REFERENCES pub
 -- Track if bid is submitted for Go/No-Go approval
 ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_submitted_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gonogo_submitted_by UUID REFERENCES public.users(id);
+
+-- Track if bid is submitted for Offer approval
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_submitted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE requirements ADD COLUMN IF NOT EXISTS offer_submitted_by UUID REFERENCES public.users(id);

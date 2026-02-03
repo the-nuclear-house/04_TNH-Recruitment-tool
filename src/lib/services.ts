@@ -686,6 +686,9 @@ export interface DbRequirement {
   offer_bd_rejected: boolean;
   offer_bd_rejected_at: string | null;
   offer_bd_notes: string | null;
+  // Offer submission
+  offer_submitted_at: string | null;
+  offer_submitted_by: string | null;
   // Proposal fields
   proposal_due_date: string | null;
   proposal_submitted_date: string | null;
@@ -800,6 +803,9 @@ export interface CreateRequirementInput {
   offer_bd_rejected?: boolean;
   offer_bd_rejected_at?: string;
   offer_bd_notes?: string;
+  // Offer submission
+  offer_submitted_at?: string;
+  offer_submitted_by?: string;
   // Proposal
   proposal_due_date?: string;
   proposal_submitted_date?: string;

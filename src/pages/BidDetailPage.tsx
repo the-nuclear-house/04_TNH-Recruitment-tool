@@ -294,6 +294,37 @@ export function BidDetailPage() {
     finally { setIsSaving(false); }
   };
 
+  const handleSubmitForOfferReview = async () => {
+    if (!bid || !user) return;
+    
+    // Validate
+    if (!proposalForm.value) {
+      toast.error('Incomplete', 'Please enter the proposal value');
+      return;
+    }
+    if (!bid.proposal_offer_document_url) {
+      toast.error('Missing', 'Please upload the offer document');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      // Save proposal data and mark as submitted
+      await requirementsService.update(bid.id, {
+        proposal_due_date: proposalForm.due_date || undefined,
+        proposal_value: proposalForm.value ? parseFloat(proposalForm.value) : undefined,
+        proposal_cost: proposalForm.cost ? parseFloat(proposalForm.cost) : undefined,
+        proposal_margin_percent: proposalForm.margin_percent ? parseFloat(proposalForm.margin_percent) : undefined,
+        proposal_notes: proposalForm.notes || undefined,
+        offer_submitted_at: new Date().toISOString(),
+        offer_submitted_by: user.id,
+      });
+      toast.success('Submitted', 'Offer submitted for review');
+      await loadBid();
+    } catch (error) { console.error(error); toast.error('Error', 'Failed to submit'); }
+    finally { setIsSaving(false); }
+  };
+
   const handleSaveProposal = async () => {
     if (!bid) return;
     setIsSaving(true);
@@ -401,7 +432,6 @@ export function BidDetailPage() {
   const goNogoPendingBD = !bid.gonogo_bd_approved && !bid.gonogo_bd_rejected;
   const offerPendingTD = !bid.offer_td_approved && !bid.offer_td_rejected;
   const offerPendingBD = !bid.offer_bd_approved && !bid.offer_bd_rejected;
-  const canRequestOfferApproval = stage === 'proposal' && proposalForm.value && bid.proposal_offer_document_url;
 
   return (
     <div className="min-h-screen">
@@ -578,35 +608,58 @@ export function BidDetailPage() {
             </div>
           </Card>
 
-          {canRequestOfferApproval && (
-            <Card><CardHeader><CardTitle>Offer Approval</CardTitle></CardHeader>
-              <div className="p-4 pt-0 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className={`p-4 rounded-lg ${bid.offer_td_approved ? 'bg-green-50' : bid.offer_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                    <p className="text-sm font-medium">Technical Director</p>
-                    {bid.offer_td_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                    {bid.offer_td_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                    {offerPendingTD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
-                  </div>
-                  <div className={`p-4 rounded-lg ${bid.offer_bd_approved ? 'bg-green-50' : bid.offer_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
-                    <p className="text-sm font-medium">Business Director</p>
-                    {bid.offer_bd_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
-                    {bid.offer_bd_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
-                    {offerPendingBD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
-                  </div>
+          {/* Submit for Offer Review button */}
+          {isManager && !bid.offer_submitted_at && (
+            <div className="flex justify-end">
+              <Button 
+                onClick={handleSubmitForOfferReview} 
+                isLoading={isSaving} 
+                disabled={!proposalForm.value || !bid.proposal_offer_document_url}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />Submit for Offer Review
+              </Button>
+            </div>
+          )}
+
+          {/* Offer Approval Section */}
+          <Card><CardHeader><CardTitle>Offer Approval</CardTitle></CardHeader>
+            <div className="p-4 pt-0 space-y-4">
+              {!bid.offer_submitted_at ? (
+                <div className="text-center py-6 text-brand-grey-400">
+                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>Not yet submitted for offer review</p>
+                  <p className="text-sm">Upload documents and complete proposal details, then click "Submit for Offer Review"</p>
                 </div>
-                {isApprover && ((isTD && offerPendingTD) || (isBD && offerPendingBD)) && (
-                  <div className="border-t pt-4 space-y-3">
-                    <Textarea label="Notes (optional)" value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2} />
-                    <div className="flex justify-end gap-3">
-                      <Button variant="danger" onClick={() => handleOfferApproval(false)} isLoading={isSaving}><XCircle className="h-4 w-4 mr-2" />Reject</Button>
-                      <Button variant="success" onClick={() => handleOfferApproval(true)} isLoading={isSaving}><CheckCircle className="h-4 w-4 mr-2" />Approve</Button>
+              ) : (
+                <>
+                  <p className="text-sm text-brand-grey-500">Submitted for offer review on {formatDate(bid.offer_submitted_at)}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className={`p-4 rounded-lg ${bid.offer_td_approved ? 'bg-green-50' : bid.offer_td_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                      <p className="text-sm font-medium">Technical Director</p>
+                      {bid.offer_td_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                      {bid.offer_td_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                      {offerPendingTD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
+                    </div>
+                    <div className={`p-4 rounded-lg ${bid.offer_bd_approved ? 'bg-green-50' : bid.offer_bd_rejected ? 'bg-red-50' : 'bg-amber-50'}`}>
+                      <p className="text-sm font-medium">Business Director</p>
+                      {bid.offer_bd_approved && <p className="text-green-700 font-medium mt-1"><CheckCircle className="h-4 w-4 inline mr-1" />Approved</p>}
+                      {bid.offer_bd_rejected && <p className="text-red-700 font-medium mt-1"><XCircle className="h-4 w-4 inline mr-1" />Rejected</p>}
+                      {offerPendingBD && <p className="text-amber-700 font-medium mt-1"><Clock className="h-4 w-4 inline mr-1" />Pending</p>}
                     </div>
                   </div>
-                )}
-              </div>
-            </Card>
-          )}
+                </>
+              )}
+              {isApprover && bid.offer_submitted_at && ((isTD && offerPendingTD) || (isBD && offerPendingBD)) && (
+                <div className="border-t pt-4 space-y-3">
+                  <Textarea label="Notes (optional)" value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2} />
+                  <div className="flex justify-end gap-3">
+                    <Button variant="danger" onClick={() => handleOfferApproval(false)} isLoading={isSaving}><XCircle className="h-4 w-4 mr-2" />Reject</Button>
+                    <Button variant="success" onClick={() => handleOfferApproval(true)} isLoading={isSaving}><CheckCircle className="h-4 w-4 mr-2" />Approve</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
         </>)}
 
         {/* SUBMITTED / OUTCOME */}
