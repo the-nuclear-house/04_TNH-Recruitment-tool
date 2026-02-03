@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { Modal, Button, Input, Select, Textarea, SearchableSelect } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -50,26 +51,41 @@ export function CreateProjectModal({
     notes: '',
   });
 
-  // Load users for dropdowns
+  // Fresh company data (to ensure financial_scoring is up to date)
+  const [freshCompany, setFreshCompany] = useState<DbCompany | null>(null);
+
+  // Load users and fresh company data for dropdowns
   useEffect(() => {
-    const loadUsers = async () => {
+    const loadData = async () => {
       try {
         const usersData = await usersService.getAll();
         setUsers(usersData);
+        
+        // Load fresh company data to get latest financial_scoring
+        if (company?.id) {
+          const companyData = await companiesService.getById(company.id);
+          setFreshCompany(companyData);
+        }
       } catch (error) {
-        console.error('Error loading users:', error);
+        console.error('Error loading data:', error);
       }
     };
 
     if (isOpen) {
-      loadUsers();
+      loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, company?.id]);
+
+  // Use fresh company data if available, otherwise fall back to prop
+  const actualCompany = freshCompany || company;
+  
+  // Check if financial scoring is missing (null, undefined, or empty string)
+  const missingFinancialScoring = !actualCompany?.financial_scoring || actualCompany.financial_scoring.trim() === '';
 
   // Pre-fill form when requirement data is available
   useEffect(() => {
     if (isOpen && requirement) {
-      const projectName = `${company?.name || requirement.customer || 'Project'} - ${requirement.title || 'Untitled'}`;
+      const projectName = `${actualCompany?.name || requirement.customer || 'Project'} - ${requirement.title || 'Untitled'}`;
       setFormData(prev => ({
         ...prev,
         name: projectName,
@@ -79,7 +95,7 @@ export function CreateProjectModal({
         technical_director_id: requirement.technical_director_id || '',
       }));
     }
-  }, [isOpen, requirement, company, user?.id]);
+  }, [isOpen, requirement, actualCompany, user?.id]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -94,6 +110,8 @@ export function CreateProjectModal({
         technical_director_id: '',
         notes: '',
       });
+      setFreshCompany(null);
+      setValidationErrors({});
     }
   }, [isOpen]);
 
@@ -104,6 +122,7 @@ export function CreateProjectModal({
     if (!formData.start_date) errors.start_date = true;
     if (!formData.technical_director_id) errors.technical_director_id = true;
     if (!contact?.id) errors.contact = true;
+    if (missingFinancialScoring) errors.financial_scoring = true;
 
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -137,8 +156,8 @@ export function CreateProjectModal({
       }
 
       // Auto-activate company if it's a prospect (first project)
-      if (company && company.status === 'prospect') {
-        await companiesService.update(company.id, { status: 'active' });
+      if (actualCompany && actualCompany.status === 'prospect') {
+        await companiesService.update(actualCompany.id, { status: 'active' });
       }
 
       toast.success('Project Created', `Project "${formData.name}" has been created. Now create a mission.`);
@@ -177,11 +196,25 @@ export function CreateProjectModal({
       size="lg"
     >
       <div className={`space-y-6 ${shake ? 'animate-shake' : ''}`}>
+        {/* Financial Scoring Warning */}
+        {missingFinancialScoring && (
+          <div className={`p-4 rounded-lg flex items-start gap-3 ${validationErrors.financial_scoring ? 'bg-red-50 border-2 border-red-500' : 'bg-amber-50 border border-amber-200'}`}>
+            <AlertCircle className={`h-5 w-5 flex-shrink-0 mt-0.5 ${validationErrors.financial_scoring ? 'text-red-600' : 'text-amber-600'}`} />
+            <div>
+              <p className={`font-medium ${validationErrors.financial_scoring ? 'text-red-800' : 'text-amber-800'}`}>Financial Scoring Required</p>
+              <p className={`text-sm mt-1 ${validationErrors.financial_scoring ? 'text-red-700' : 'text-amber-700'}`}>
+                You need to add a financial scoring to {actualCompany?.name || 'this customer'} before creating a project. 
+                Please go to the customer profile and add a financial scoring first.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Read-only info from requirement */}
         <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
           <div>
             <p className="text-xs text-brand-grey-400 mb-1">Customer</p>
-            <p className="text-sm font-medium text-brand-slate-900">{company?.name || requirement?.customer || 'N/A'}</p>
+            <p className="text-sm font-medium text-brand-slate-900">{actualCompany?.name || requirement?.customer || 'N/A'}</p>
           </div>
           <div>
             <p className="text-xs text-brand-grey-400 mb-1">Contact</p>
