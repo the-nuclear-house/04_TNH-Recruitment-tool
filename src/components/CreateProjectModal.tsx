@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle } from 'lucide-react';
 import { Modal, Button, Input, Select, Textarea, SearchableSelect } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -35,11 +34,10 @@ export function CreateProjectModal({
   const toast = useToast();
   const { user } = useAuthStore();
 
-  // Check if financial scoring is missing
-  const missingFinancialScoring = !company?.financial_scoring;
-
   const [isLoading, setIsLoading] = useState(false);
   const [users, setUsers] = useState<DbUser[]>([]);
+  const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
+  const [shake, setShake] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -100,38 +98,27 @@ export function CreateProjectModal({
   }, [isOpen]);
 
   const handleSubmit = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Validation Error', 'Please enter a project name');
+    const errors: Record<string, boolean> = {};
+    
+    if (!formData.name.trim()) errors.name = true;
+    if (!formData.start_date) errors.start_date = true;
+    if (!formData.technical_director_id) errors.technical_director_id = true;
+    if (!contact?.id) errors.contact = true;
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
       return;
     }
 
-    if (!contact?.id) {
-      toast.error('Validation Error', 'No contact associated with this requirement');
-      return;
-    }
-
-    if (!formData.start_date) {
-      toast.error('Validation Error', 'Please select a start date');
-      return;
-    }
-
-    if (!formData.technical_director_id) {
-      toast.error('Validation Error', 'Please select a Technical Director');
-      return;
-    }
-
-    // Check for financial scoring
-    if (missingFinancialScoring) {
-      toast.error('Financial Scoring Required', 'Please add a financial scoring to the customer before creating a project');
-      return;
-    }
-
+    setValidationErrors({});
     setIsLoading(true);
     try {
       const project = await projectsService.create({
         name: formData.name,
         description: formData.description || undefined,
-        customer_contact_id: contact.id,
+        customer_contact_id: contact!.id,
         type: formData.type,
         start_date: formData.start_date,
         end_date: formData.end_date || undefined,
@@ -189,21 +176,7 @@ export function CreateProjectModal({
       description="Create a new project for this won requirement"
       size="lg"
     >
-      <div className="space-y-6">
-        {/* Financial Scoring Warning */}
-        {missingFinancialScoring && (
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-amber-800">Financial Scoring Required</p>
-              <p className="text-sm text-amber-700 mt-1">
-                You need to add a financial scoring to {company?.name || 'this customer'} before creating a project. 
-                Please go to the customer profile and add a financial scoring first.
-              </p>
-            </div>
-          </div>
-        )}
-
+      <div className={`space-y-6 ${shake ? 'animate-shake' : ''}`}>
         {/* Read-only info from requirement */}
         <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
           <div>
@@ -234,8 +207,9 @@ export function CreateProjectModal({
         <Input
           label="Project Name *"
           value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          onChange={(e) => { setFormData(prev => ({ ...prev, name: e.target.value })); setValidationErrors(prev => ({ ...prev, name: false })); }}
           placeholder="e.g., Rolls Royce - SMR Safety Analysis"
+          error={validationErrors.name ? 'Project name is required' : undefined}
         />
 
         {/* Project Type - pre-filled but editable */}
@@ -255,7 +229,8 @@ export function CreateProjectModal({
             label="Start Date *"
             type="date"
             value={formData.start_date}
-            onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+            onChange={(e) => { setFormData(prev => ({ ...prev, start_date: e.target.value })); setValidationErrors(prev => ({ ...prev, start_date: false })); }}
+            error={validationErrors.start_date ? 'Start date is required' : undefined}
           />
           <Input
             label="End Date"
@@ -277,7 +252,8 @@ export function CreateProjectModal({
             label="Technical Director *"
             options={technicalDirectorOptions}
             value={formData.technical_director_id}
-            onChange={(e) => setFormData(prev => ({ ...prev, technical_director_id: e.target.value }))}
+            onChange={(e) => { setFormData(prev => ({ ...prev, technical_director_id: e.target.value })); setValidationErrors(prev => ({ ...prev, technical_director_id: false })); }}
+            error={validationErrors.technical_director_id ? 'Technical Director is required' : undefined}
           />
         </div>
 
