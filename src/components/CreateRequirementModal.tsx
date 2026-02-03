@@ -31,6 +31,8 @@ interface CreateRequirementModalProps {
   // Pre-populated context (when creating from CustomersPage)
   company?: DbCompany;
   contact?: DbContact;
+  // Pre-populated project (when creating from MissionsPage project)
+  project?: DbProject;
   // All contacts (for RequirementsPage where we select from all)
   allContacts?: DbContact[];
   allCompanies?: DbCompany[];
@@ -71,11 +73,15 @@ export function CreateRequirementModal({
   onSuccess,
   company: propCompany,
   contact: propContact,
+  project: propProject,
   allContacts: propAllContacts,
   allCompanies: propAllCompanies,
 }: CreateRequirementModalProps) {
   const toast = useToast();
   const { user } = useAuthStore();
+
+  // When project is provided, we lock everything
+  const isProjectLocked = !!propProject;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [users, setUsers] = useState<DbUser[]>([]);
@@ -147,9 +153,24 @@ export function CreateRequirementModal({
     }
   }, [user?.id]);
 
-  // If contact is provided, set it and load location
+  // If project is provided, set everything from it
   useEffect(() => {
-    if (propContact && isOpen) {
+    if (propProject && isOpen) {
+      const projectContact = propProject.customer_contact;
+      const projectCompany = projectContact?.company;
+      setFormData(prev => ({
+        ...prev,
+        contact_id: projectContact?.id || '',
+        location: projectCompany?.city || prev.location,
+        project_type: propProject.type as 'T&M' | 'Fixed_Price',
+        project_id: propProject.id,
+      }));
+    }
+  }, [propProject, isOpen]);
+
+  // If contact is provided (but not project), set it and load location
+  useEffect(() => {
+    if (propContact && !propProject && isOpen) {
       setFormData(prev => ({
         ...prev,
         contact_id: propContact.id,
@@ -158,29 +179,29 @@ export function CreateRequirementModal({
       // Load projects for this contact
       loadContactProjects(propContact.id);
     }
-  }, [propContact, propCompany, isOpen]);
+  }, [propContact, propCompany, propProject, isOpen]);
 
   // Reset form when modal closes
   useEffect(() => {
     if (!isOpen) {
       setFormData({
         title: '',
-        contact_id: propContact?.id || '',
-        location: propCompany?.city || '',
+        contact_id: propContact?.id || propProject?.customer_contact?.id || '',
+        location: propCompany?.city || propProject?.customer_contact?.company?.city || '',
         max_day_rate: '',
         description: '',
         status: 'active',
         clearance_required: 'none',
         engineering_discipline: 'software',
         manager_id: user?.id || '',
-        project_type: 'T&M',
-        project_id: '',
+        project_type: propProject?.type as 'T&M' | 'Fixed_Price' || 'T&M',
+        project_id: propProject?.id || '',
       });
       setSkills([]);
       setSkillInput('');
       setContactProjects([]);
     }
-  }, [isOpen, propContact, propCompany, user?.id]);
+  }, [isOpen, propContact, propCompany, propProject, user?.id]);
 
   const loadContactProjects = async (contactId: string) => {
     try {
@@ -302,21 +323,41 @@ export function CreateRequirementModal({
 
   // Determine selected company for display
   const selectedContact = contacts.find(c => c.id === formData.contact_id);
-  const displayCompany = propCompany || selectedContact?.company || companies.find(c => c.id === selectedContact?.company_id);
+  const displayCompany = propCompany || propProject?.customer_contact?.company || selectedContact?.company || companies.find(c => c.id === selectedContact?.company_id);
+  const displayContact = propContact || propProject?.customer_contact;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="New Requirement"
-      description={propContact
-        ? `Create a new requirement for ${propContact.first_name} ${propContact.last_name}`
-        : propCompany
-          ? `Create a new requirement for ${propCompany.name}`
-          : 'Create a new customer requirement'}
+      title={isProjectLocked ? "New Requirement for Project" : "New Requirement"}
+      description={isProjectLocked
+        ? `Create a staffing requirement for project "${propProject?.name}"`
+        : propContact
+          ? `Create a new requirement for ${propContact.first_name} ${propContact.last_name}`
+          : propCompany
+            ? `Create a new requirement for ${propCompany.name}`
+            : 'Create a new customer requirement'}
       size="xl"
     >
       <div className="space-y-4">
+        {/* Project info banner when creating from project */}
+        {isProjectLocked && propProject && (
+          <div className="p-3 bg-slate-100 border border-slate-200 rounded-lg">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium text-slate-700">Project:</span>
+              <span className="text-slate-900">{propProject.name}</span>
+              <Badge variant="grey">{propProject.type === 'T&M' ? 'Time & Materials' : 'Fixed Price'}</Badge>
+            </div>
+            {displayCompany && (
+              <div className="flex items-center gap-2 text-sm mt-1">
+                <span className="font-medium text-slate-700">Customer:</span>
+                <span className="text-slate-900">{displayCompany.name}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <Input
           label="Title *"
           value={formData.title}
@@ -324,39 +365,40 @@ export function CreateRequirementModal({
           placeholder="e.g., Senior Java Developer, DevOps Engineer"
         />
 
-        {/* Company and Contact selection */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Company display - show if we have a locked company or selected contact */}
-          {(propCompany || displayCompany) && (
-            <div>
-              <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
-                Company
-              </label>
-              <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
-                {displayCompany?.logo_url ? (
-                  <img src={displayCompany.logo_url} alt="" className="w-6 h-6 rounded object-contain" />
-                ) : (
-                  <Building2 className="h-5 w-5 text-brand-grey-400" />
-                )}
-                <span className="font-medium text-brand-slate-900">{displayCompany?.name}</span>
+        {/* Company and Contact selection - hidden when project is locked */}
+        {!isProjectLocked && (
+          <div className="grid grid-cols-2 gap-4">
+            {/* Company display - show if we have a locked company or selected contact */}
+            {(propCompany || displayCompany) && (
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
+                  Company
+                </label>
+                <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
+                  {displayCompany?.logo_url ? (
+                    <img src={displayCompany.logo_url} alt="" className="w-6 h-6 rounded object-contain" />
+                  ) : (
+                    <Building2 className="h-5 w-5 text-brand-grey-400" />
+                  )}
+                  <span className="font-medium text-brand-slate-900">{displayCompany?.name}</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Contact - locked or selectable */}
-          {propContact ? (
-            <div>
-              <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
-                Contact
-              </label>
-              <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
-                <Avatar name={`${propContact.first_name} ${propContact.last_name}`} size="sm" />
-                <div>
-                  <span className="font-medium text-brand-slate-900">
-                    {propContact.first_name} {propContact.last_name}
-                  </span>
-                  {propContact.role && (
-                    <span className="text-sm text-brand-grey-500 ml-2">{propContact.role}</span>
+            {/* Contact - locked or selectable */}
+            {propContact ? (
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">
+                  Contact
+                </label>
+                <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
+                  <Avatar name={`${propContact.first_name} ${propContact.last_name}`} size="sm" />
+                  <div>
+                    <span className="font-medium text-brand-slate-900">
+                      {propContact.first_name} {propContact.last_name}
+                    </span>
+                    {propContact.role && (
+                      <span className="text-sm text-brand-grey-500 ml-2">{propContact.role}</span>
                   )}
                 </div>
               </div>
@@ -381,9 +423,10 @@ export function CreateRequirementModal({
             />
           )}
         </div>
+        )}
 
-        {/* Location if company is shown */}
-        {(propCompany || displayCompany) && (
+        {/* Location if company is shown (and not project locked) */}
+        {!isProjectLocked && (propCompany || displayCompany) && (
           <Input
             label="Location"
             value={formData.location}
@@ -392,43 +435,61 @@ export function CreateRequirementModal({
           />
         )}
 
-        {/* Project Type and Existing Project Selection */}
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label="Project Type *"
-            options={[
-              { value: 'T&M', label: 'Time & Materials' },
-              { value: 'Fixed_Price', label: 'Fixed Price / Work Package' },
-            ]}
-            value={formData.project_type}
-            onChange={(e) => handleFormChange('project_type', e.target.value)}
+        {/* Location when project is locked */}
+        {isProjectLocked && (
+          <Input
+            label="Location"
+            value={formData.location}
+            onChange={(e) => handleFormChange('location', e.target.value)}
+            placeholder="e.g., London, Remote"
           />
-          <Select
-            label="Existing Project"
-            options={[
-              { value: '', label: 'New Project (will be created on win)' },
-              ...contactProjects.map(p => ({
-                value: p.id,
-                label: `${p.name} (${p.type})`,
-              })),
-            ]}
-            value={formData.project_id}
-            onChange={(e) => handleFormChange('project_id', e.target.value)}
-            disabled={!formData.contact_id}
-          />
-        </div>
+        )}
 
-        {/* Info banner based on selection */}
-        {formData.project_type === 'Fixed_Price' && !formData.project_id && (
+        {/* Project Type and Existing Project Selection - hidden when project is locked */}
+        {!isProjectLocked && (
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Project Type *"
+              options={[
+                { value: 'T&M', label: 'Time & Materials' },
+                { value: 'Fixed_Price', label: 'Fixed Price / Work Package' },
+              ]}
+              value={formData.project_type}
+              onChange={(e) => handleFormChange('project_type', e.target.value)}
+            />
+            <Select
+              label="Existing Project"
+              options={[
+                { value: '', label: 'New Project (will be created on win)' },
+                ...contactProjects.map(p => ({
+                  value: p.id,
+                  label: `${p.name} (${p.type})`,
+                })),
+              ]}
+              value={formData.project_id}
+              onChange={(e) => handleFormChange('project_id', e.target.value)}
+              disabled={!formData.contact_id}
+            />
+          </div>
+        )}
+
+        {/* Info banner based on selection - only when not project locked */}
+        {!isProjectLocked && formData.project_type === 'Fixed_Price' && !formData.project_id && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
             <strong>Bid Process:</strong> This will create a bid that goes through qualifying → proposal → submitted stages.
             If won, a project will be created and you can then add staffing requirements.
           </div>
         )}
-        {formData.project_id && (
+        {!isProjectLocked && formData.project_id && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
             <strong>Staffing Requirement:</strong> This requirement will be added to the existing project.
             On win, a mission will be created within that project.
+          </div>
+        )}
+        {isProjectLocked && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+            <strong>Staffing Requirement:</strong> This requirement will be added to the project "{propProject?.name}".
+            On win, a mission will be created within this project.
           </div>
         )}
 
@@ -445,7 +506,7 @@ export function CreateRequirementModal({
             options={statusOptions}
             value={formData.status}
             onChange={(e) => handleFormChange('status', e.target.value)}
-            disabled={formData.project_type === 'Fixed_Price' && !formData.project_id}
+            disabled={!isProjectLocked && formData.project_type === 'Fixed_Price' && !formData.project_id}
           />
           <Select
             label="Engineering Discipline"

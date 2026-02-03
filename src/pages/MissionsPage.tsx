@@ -15,14 +15,16 @@ import {
   XCircle,
   Trash2,
   FolderOpen,
+  Plus,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, Button, Badge, EmptyState, Modal, Input, Select, Textarea, DeleteDialog, ConfirmDialog } from '@/components/ui';
+import { CreateRequirementModal } from '@/components/CreateRequirementModal';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { missionsService, companiesService, projectsService, consultantsService, type DbMission, type DbCompany, type DbProject } from '@/lib/services';
+import { missionsService, companiesService, projectsService, consultantsService, contactsService, type DbMission, type DbCompany, type DbProject, type DbContact } from '@/lib/services';
 
 const workModeLabels: Record<string, string> = {
   full_onsite: 'On-site',
@@ -120,6 +122,7 @@ export function MissionsPage() {
   const [missions, setMissions] = useState<DbMission[]>([]);
   const [companies, setCompanies] = useState<DbCompany[]>([]);
   const [projects, setProjects] = useState<DbProject[]>([]);
+  const [contacts, setContacts] = useState<DbContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -167,6 +170,10 @@ export function MissionsPage() {
   });
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isCloseProjectDialogOpen, setIsCloseProjectDialogOpen] = useState(false);
+  
+  // Create Requirement modal (from project)
+  const [isCreateRequirementModalOpen, setIsCreateRequirementModalOpen] = useState(false);
+  const [requirementProject, setRequirementProject] = useState<DbProject | null>(null);
 
   useEffect(() => {
     loadData();
@@ -175,16 +182,24 @@ export function MissionsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [missionsData, companiesData, projectsData] = await Promise.all([
+      const [missionsData, companiesData, projectsData, contactsData] = await Promise.all([
         missionsService.getAll(),
         companiesService.getAll(),
         projectsService.getAll(),
+        contactsService.getAll(),
       ]);
       setMissions(missionsData);
       setCompanies(companiesData);
       setProjects(projectsData);
+      setContacts(contactsData);
       
-      const customerIds = new Set(missionsData.map(m => m.company_id));
+      // Expand all companies that have missions or projects
+      const customerIds = new Set<string>();
+      missionsData.forEach(m => customerIds.add(m.company_id));
+      projectsData.forEach(p => {
+        const companyId = p.customer_contact?.company_id;
+        if (companyId) customerIds.add(companyId);
+      });
       setExpandedCustomers(customerIds);
       
       // Expand all projects that have missions
@@ -199,6 +214,21 @@ export function MissionsPage() {
   };
 
   const weeks = useMemo(() => getWeeksInRange(timelineStart, numWeeks), [timelineStart, numWeeks]);
+
+  // Group projects by company (via customer_contact)
+  const projectsByCompany = useMemo(() => {
+    const grouped: Record<string, DbProject[]> = {};
+    projects.forEach(project => {
+      const companyId = project.customer_contact?.company_id;
+      if (companyId) {
+        if (!grouped[companyId]) {
+          grouped[companyId] = [];
+        }
+        grouped[companyId].push(project);
+      }
+    });
+    return grouped;
+  }, [projects]);
 
   // Group missions by customer, then by project
   const missionsByCustomerAndProject = useMemo(() => {
@@ -234,14 +264,40 @@ export function MissionsPage() {
     return grouped;
   }, [missions]);
 
-  const companiesWithMissions = useMemo(() => {
-    return companies.filter(c => missionsByCustomer[c.id]?.length > 0);
-  }, [companies, missionsByCustomer]);
+  // Companies that have either missions OR projects
+  const companiesWithActivity = useMemo(() => {
+    const companyIds = new Set<string>();
+    
+    // Add companies with missions
+    missions.forEach(m => companyIds.add(m.company_id));
+    
+    // Add companies with projects
+    projects.forEach(p => {
+      const companyId = p.customer_contact?.company_id;
+      if (companyId) companyIds.add(companyId);
+    });
+    
+    return companies.filter(c => companyIds.has(c.id));
+  }, [companies, missions, projects]);
 
-  // Get projects for a specific company
+  // Get projects for a specific company (ALL projects, not just those with missions)
   const getProjectsForCompany = (companyId: string) => {
-    const projectIds = Object.keys(missionsByCustomerAndProject[companyId]?.byProject || {});
-    return projects.filter(p => projectIds.includes(p.id));
+    return projectsByCompany[companyId] || [];
+  };
+
+  // Get missions for a project
+  const getMissionsForProject = (companyId: string, projectId: string) => {
+    return missionsByCustomerAndProject[companyId]?.byProject[projectId] || [];
+  };
+
+  // Get missions without a project for a company
+  const getMissionsWithoutProject = (companyId: string) => {
+    return missionsByCustomerAndProject[companyId]?.noProject || [];
+  };
+
+  // Get total mission count for a company
+  const getMissionCountForCompany = (companyId: string) => {
+    return missionsByCustomer[companyId]?.length || 0;
   };
 
   const toggleProject = (projectId: string) => {
@@ -472,7 +528,8 @@ export function MissionsPage() {
     active: missions.filter(m => m.status === 'active').length,
     total: missions.length,
     consultants: new Set(missions.filter(m => m.status === 'active').map(m => m.consultant_id)).size,
-    companies: companiesWithMissions.length,
+    companies: companiesWithActivity.length,
+    projects: projects.length,
   };
 
   if (isLoading) {
@@ -598,12 +655,12 @@ export function MissionsPage() {
               </div>
 
               {/* Timeline Body */}
-              {companiesWithMissions.map(customer => {
-                const customerData = missionsByCustomerAndProject[customer.id];
+              {companiesWithActivity.map(customer => {
                 const customerMissions = missionsByCustomer[customer.id] || [];
                 const isExpanded = expandedCustomers.has(customer.id);
                 const customerProjects = getProjectsForCompany(customer.id);
-                const missionsWithoutProject = customerData?.noProject || [];
+                const missionsWithoutProject = getMissionsWithoutProject(customer.id);
+                const totalMissions = getMissionCountForCompany(customer.id);
                 
                 return (
                   <div key={customer.id} className="min-w-[900px]">
@@ -620,14 +677,18 @@ export function MissionsPage() {
                         )}
                         <Building2 className="h-4 w-4 text-brand-grey-400" />
                         <span className="font-medium text-brand-slate-900">{customer.name}</span>
-                        <Badge variant="grey">{customerMissions.length}</Badge>
+                        <span title={`${customerProjects.length} projects, ${totalMissions} missions`}>
+                          <Badge variant="grey">
+                            {customerProjects.length}P / {totalMissions}M
+                          </Badge>
+                        </span>
                       </div>
                       <div className="flex-1" />
                     </div>
 
                     {/* Projects and their Missions */}
                     {isExpanded && customerProjects.map(project => {
-                      const projectMissions = customerData?.byProject[project.id] || [];
+                      const projectMissions = getMissionsForProject(customer.id, project.id);
                       const isProjectExpanded = expandedProjects.has(project.id);
                       const projectBarStyle = getProjectBarStyle(project, weeks);
                       
@@ -656,6 +717,17 @@ export function MissionsPage() {
                                 <span className="font-medium text-slate-700 text-sm hover:text-brand-cyan transition-colors">{project.name}</span>
                                 <Badge variant="grey" className="text-xs">{projectMissions.length}</Badge>
                               </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRequirementProject(project);
+                                  setIsCreateRequirementModalOpen(true);
+                                }}
+                                className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-brand-cyan transition-colors"
+                                title="Add Requirement to Project"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                             {/* Project Timeline Bar */}
                             <div className="flex-1 relative py-2">
@@ -670,6 +742,14 @@ export function MissionsPage() {
                           </div>
                           
                           {/* Project Missions - Indented */}
+                          {isProjectExpanded && projectMissions.length === 0 && (
+                            <div className="flex border-b border-brand-grey-100 bg-slate-50/50">
+                              <div className="w-64 flex-shrink-0 p-3 pl-12 border-r border-brand-grey-200">
+                                <p className="text-xs text-brand-grey-400 italic">No missions yet</p>
+                              </div>
+                              <div className="flex-1" />
+                            </div>
+                          )}
                           {isProjectExpanded && projectMissions.map(mission => {
                             const barStyle = getMissionBarStyle(mission, weeks);
                             const statusInfo = statusConfig[mission.status] || statusConfig.active;
@@ -1210,6 +1290,23 @@ export function MissionsPage() {
         confirmText="Yes, Close Project"
         variant="primary"
         isLoading={isSavingProject}
+      />
+
+      {/* Create Requirement Modal - from project */}
+      <CreateRequirementModal
+        isOpen={isCreateRequirementModalOpen}
+        onClose={() => {
+          setIsCreateRequirementModalOpen(false);
+          setRequirementProject(null);
+        }}
+        onSuccess={() => {
+          loadData();
+        }}
+        project={requirementProject || undefined}
+        company={requirementProject?.customer_contact?.company as DbCompany | undefined}
+        contact={requirementProject?.customer_contact as DbContact | undefined}
+        allContacts={contacts}
+        allCompanies={companies}
       />
     </div>
   );
