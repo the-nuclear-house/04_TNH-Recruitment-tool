@@ -1563,7 +1563,10 @@ export function CustomersPage() {
                           <Card
                             key={req.id}
                             className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                            onClick={() => navigate(`/requirements/${req.id}`)}
+                            onClick={() => {
+                              const path = req.is_bid || req.project_type === 'Fixed_Price' ? `/bids/${req.id}` : `/requirements/${req.id}`;
+                              navigate(path);
+                            }}
                           >
                             <div className="flex items-start justify-between">
                               <div>
@@ -1829,7 +1832,9 @@ export function CustomersPage() {
                         className="flex items-center gap-3 p-3 bg-brand-grey-50 rounded-lg hover:bg-brand-grey-100 cursor-pointer transition-colors"
                         onClick={() => {
                           setIsContactDetailOpen(false);
-                          window.location.href = `/requirements/${req.id}`;
+                          // Navigate to bids page if it's a bid, otherwise requirements
+                          const path = req.is_bid || req.project_type === 'Fixed_Price' ? `/bids/${req.id}` : `/requirements/${req.id}`;
+                          window.location.href = path;
                         }}
                       >
                         <div className={`px-2 py-1 rounded text-xs font-medium ${config.bg} ${config.text}`}>
