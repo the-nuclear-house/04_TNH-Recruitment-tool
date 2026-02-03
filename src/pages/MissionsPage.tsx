@@ -519,6 +519,22 @@ export function MissionsPage() {
         status: 'completed',
         end_date: projectForm.end_date || new Date().toISOString().split('T')[0],
       });
+      
+      // Check if all projects for this company are now closed
+      const companyId = selectedProject.customer_contact?.company_id;
+      if (companyId) {
+        const companyProjects = projects.filter(p => p.customer_contact?.company_id === companyId);
+        const remainingActiveProjects = companyProjects.filter(
+          p => p.id !== selectedProject.id && p.status === 'active'
+        );
+        
+        // If no more active projects, set company to dormant
+        if (remainingActiveProjects.length === 0) {
+          await companiesService.update(companyId, { status: 'dormant' });
+          toast.info('Customer Status Updated', 'All projects closed. Customer status set to Dormant.');
+        }
+      }
+      
       toast.success('Project Closed', 'The project has been marked as completed');
       setIsCloseProjectDialogOpen(false);
       setIsProjectModalOpen(false);

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { Modal, Button, Input, Select, Textarea, SearchableSelect } from '@/components/ui';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import {
   projectsService,
   requirementsService,
+  companiesService,
   usersService,
   type DbRequirement,
   type DbCompany,
@@ -32,6 +34,9 @@ export function CreateProjectModal({
 }: CreateProjectModalProps) {
   const toast = useToast();
   const { user } = useAuthStore();
+
+  // Check if financial scoring is missing
+  const missingFinancialScoring = !company?.financial_scoring;
 
   const [isLoading, setIsLoading] = useState(false);
   const [users, setUsers] = useState<DbUser[]>([]);
@@ -109,6 +114,12 @@ export function CreateProjectModal({
       return;
     }
 
+    // Check for financial scoring
+    if (missingFinancialScoring) {
+      toast.error('Financial Scoring Required', 'Please add a financial scoring to the customer before creating a project');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const project = await projectsService.create({
@@ -130,6 +141,11 @@ export function CreateProjectModal({
         await requirementsService.update(requirement.id, {
           project_id: project.id,
         });
+      }
+
+      // Auto-activate company if it's a prospect (first project)
+      if (company && company.status === 'prospect') {
+        await companiesService.update(company.id, { status: 'active' });
       }
 
       toast.success('Project Created', `Project "${formData.name}" has been created. Now create a mission.`);
@@ -168,6 +184,20 @@ export function CreateProjectModal({
       size="lg"
     >
       <div className="space-y-6">
+        {/* Financial Scoring Warning */}
+        {missingFinancialScoring && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-800">Financial Scoring Required</p>
+              <p className="text-sm text-amber-700 mt-1">
+                You need to add a financial scoring to {company?.name || 'this customer'} before creating a project. 
+                Please go to the customer profile and add a financial scoring first.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Read-only info from requirement */}
         <div className="grid grid-cols-2 gap-4 p-4 bg-brand-grey-50 rounded-lg">
           <div>

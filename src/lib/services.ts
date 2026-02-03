@@ -1492,6 +1492,7 @@ export interface DbCompany {
   website: string | null;
   logo_url: string | null;
   status: string;
+  financial_scoring: string | null;
   notes: string | null;
   created_by: string | null;
   assigned_manager_id: string | null;
@@ -1524,6 +1525,7 @@ export interface CreateCompanyInput {
   website?: string;
   logo_url?: string | null;
   status?: string;
+  financial_scoring?: string;
   notes?: string;
   assigned_manager_id?: string;
 }

@@ -93,6 +93,7 @@ const companySizeOptions = [
 const statusOptions = [
   { value: 'prospect', label: 'Prospect' },
   { value: 'active', label: 'Active' },
+  { value: 'dormant', label: 'Dormant' },
   { value: 'inactive', label: 'Inactive' },
   { value: 'former', label: 'Former' },
 ];
@@ -160,7 +161,7 @@ type TabType = 'contacts' | 'org-chart' | 'locations' | 'requirements';
 export function CustomersPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { isAdmin } = usePermissions();
+  const { isAdmin, isSuperAdmin } = usePermissions();
   const toast = useToast();
 
   // Data
@@ -202,6 +203,7 @@ export function CustomersPage() {
     status: 'prospect',
     notes: '',
     logo_url: '',
+    financial_scoring: '',
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -436,6 +438,7 @@ export function CustomersPage() {
       status: 'prospect',
       notes: '',
       logo_url: '',
+      financial_scoring: '',
     });
     setLogoFile(null);
     setLogoPreview(null);
@@ -464,6 +467,7 @@ export function CustomersPage() {
       status: selectedCompany.status,
       notes: selectedCompany.notes || '',
       logo_url: selectedCompany.logo_url || '',
+      financial_scoring: selectedCompany.financial_scoring || '',
     });
     setLogoFile(null);
     setLogoPreview(selectedCompany.logo_url || null);
@@ -1244,10 +1248,10 @@ export function CustomersPage() {
                     Add Contact
                   </Button>
                 )}
-                {/* Only show Add Subsidiary for parent companies (no parent_company_id) */}
+                {/* Only show Add Location / Subsidiary for parent companies (no parent_company_id) */}
                 {!selectedCompany.parent_company_id && (
                   <Button variant="success" leftIcon={<Building2 className="h-4 w-4" />} onClick={() => handleOpenAddCompany(selectedCompany.id)}>
-                    Add Subsidiary
+                    Add Location / Subsidiary
                   </Button>
                 )}
               </div>
@@ -1839,7 +1843,7 @@ export function CustomersPage() {
       <Modal
         isOpen={isCompanyModalOpen}
         onClose={() => setIsCompanyModalOpen(false)}
-        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Subsidiary' : 'Add Company')}
+        title={isEditingCompany ? 'Edit Company' : (companyForm.parent_company_id ? 'Add Location / Subsidiary' : 'Add Company')}
         size="xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -1941,6 +1945,24 @@ export function CustomersPage() {
             />
           </div>
 
+          {/* Financial Scoring - only for parent companies */}
+          {!companyForm.parent_company_id && (
+            <Select
+              label="Financial Scoring"
+              options={[
+                { value: '', label: 'Not assessed yet' },
+                { value: 'A', label: 'A - Excellent' },
+                { value: 'B', label: 'B - Good' },
+                { value: 'C', label: 'C - Satisfactory' },
+                { value: 'D', label: 'D - Below Average' },
+                { value: 'E', label: 'E - Poor' },
+                { value: 'F', label: 'F - Very Poor / High Risk' },
+              ]}
+              value={companyForm.financial_scoring}
+              onChange={(e) => setCompanyForm(prev => ({ ...prev, financial_scoring: e.target.value }))}
+            />
+          )}
+
           {/* Only show address, contact info and status for subsidiaries */}
           {companyForm.parent_company_id && (
             <>
@@ -1998,12 +2020,25 @@ export function CustomersPage() {
                 </div>
               </div>
 
-              <Select
-                label="Status"
-                options={statusOptions}
-                value={companyForm.status}
-                onChange={(e) => setCompanyForm(prev => ({ ...prev, status: e.target.value }))}
-              />
+              {/* Status - only editable by SuperAdmin, read-only for others */}
+              {isSuperAdmin ? (
+                <Select
+                  label="Status"
+                  options={statusOptions}
+                  value={companyForm.status}
+                  onChange={(e) => setCompanyForm(prev => ({ ...prev, status: e.target.value }))}
+                />
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-brand-slate-700 mb-1.5">Status</label>
+                  <div className="px-4 py-2.5 rounded-lg border border-brand-grey-200 bg-brand-grey-50">
+                    <span className="text-brand-slate-900 capitalize">{companyForm.status}</span>
+                    <p className="text-xs text-brand-grey-400 mt-1">
+                      Status changes automatically: Prospect → Active (first project) → Dormant (all projects closed)
+                    </p>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
