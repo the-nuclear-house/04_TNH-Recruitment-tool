@@ -760,33 +760,37 @@ export function CustomerMeetingsPage() {
                         </Button>
                       )}
                       
-                      {/* Create Mission button for GO assessments */}
+                      {/* Create Project/Mission button for GO assessments */}
                       {meeting.outcome === 'go' && (
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
-                            if (isCandidateConsultant(candidateId)) {
-                              setAssessmentForMission(meeting as DbCustomerAssessment);
-                              // Check if requirement has a project
-                              const requirementProjectId = (meeting as any).application?.requirement?.project_id;
-                              if (!requirementProjectId) {
-                                setIsCreateProjectModalOpen(true);
-                              } else {
-                                setIsCreateMissionModalOpen(true);
-                              }
-                            } else {
-                              toast.warning(
-                                'Cannot Create Mission Yet',
-                                'Progress this candidate to consultant before creating a mission.'
-                              );
-                            }
-                          }}
-                        >
-                          Create Mission
-                        </Button>
+                        (() => {
+                          const requirementProjectId = (meeting as any).application?.requirement?.project_id;
+                          return (
+                            <Button
+                              variant="success"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
+                                if (isCandidateConsultant(candidateId)) {
+                                  setAssessmentForMission(meeting as DbCustomerAssessment);
+                                  // Check if requirement has a project
+                                  if (!requirementProjectId) {
+                                    setIsCreateProjectModalOpen(true);
+                                  } else {
+                                    setIsCreateMissionModalOpen(true);
+                                  }
+                                } else {
+                                  toast.warning(
+                                    'Cannot Create Mission Yet',
+                                    'Progress this candidate to consultant before creating a mission.'
+                                  );
+                                }
+                              }}
+                            >
+                              {requirementProjectId ? 'Create Mission' : 'Create Project'}
+                            </Button>
+                          );
+                        })()
                       )}
                     </div>
                   </Card>
@@ -1434,9 +1438,12 @@ export function CustomerMeetingsPage() {
             setIsCreateMissionModalOpen(true);
           }
         }}
-        title="Create Mission"
-        message="Would you like to create a mission for this consultant now?"
-        confirmText="Yes, Create Mission"
+        title={assessmentForMission?.application?.requirement?.project_id ? "Create Mission" : "Create Project"}
+        message={assessmentForMission?.application?.requirement?.project_id 
+          ? "Would you like to create a mission for this consultant now?"
+          : "This requirement doesn't have a project yet. Would you like to create one now?"
+        }
+        confirmText={assessmentForMission?.application?.requirement?.project_id ? "Yes, Create Mission" : "Yes, Create Project"}
         cancelText="No, Later"
         variant="primary"
       />

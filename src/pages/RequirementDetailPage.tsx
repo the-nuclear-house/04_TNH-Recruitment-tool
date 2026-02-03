@@ -750,7 +750,7 @@ export function RequirementDetailPage() {
                       }
                     }}
                   >
-                    Create Mission
+                    {requirement.project_id ? 'Create Mission' : 'Create Project'}
                   </Button>
                 )}
               </div>

@@ -444,7 +444,7 @@ export function RequirementsPage() {
                           </div>
                         )}
                         
-                        {/* Create Mission button for won requirements */}
+                        {/* Create Project/Mission button for won requirements */}
                         {(status === 'won' || requirement.status === 'filled') && requirement.winning_candidate_id && (
                           <Button
                             variant="success"
@@ -463,7 +463,7 @@ export function RequirementsPage() {
                               }
                             }}
                           >
-                            Create Mission
+                            {requirement.project_id ? 'Create Mission' : 'Create Project'}
                           </Button>
                         )}
                         
