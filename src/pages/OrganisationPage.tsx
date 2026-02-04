@@ -234,8 +234,9 @@ export function OrganisationPage() {
         // Use edge function to create user (works even with signups disabled)
         const { data: sessionData } = await supabase.auth.getSession();
         
-        // Auto-generate a random password (SSO will be used for login, not this password)
-        const autoPassword = `SSO_${crypto.randomUUID().slice(0, 16)}!`;
+        // Auto-generate a password (SSO will be used for login in production)
+        // For testing: password is "Test1234!"
+        const autoPassword = 'Test1234!';
         
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
           method: 'POST',
