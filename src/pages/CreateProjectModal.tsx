@@ -106,11 +106,24 @@ export function CreateProjectModal({
   const parentCompany = actualCompany?.parent_company || null;
   const companyForFinancialCheck = parentCompany || actualCompany;
   
+  // Debug logging
+  console.log('=== Financial Scoring Check ===');
+  console.log('hasLoadedCompany:', hasLoadedCompany);
+  console.log('freshCompany:', freshCompany);
+  console.log('actualCompany:', actualCompany);
+  console.log('parentCompany:', parentCompany);
+  console.log('companyForFinancialCheck:', companyForFinancialCheck);
+  console.log('companyForFinancialCheck?.financial_scoring:', companyForFinancialCheck?.financial_scoring);
+  
   // Check if financial scoring is missing (null, undefined, or empty string)
   // Only check AFTER we've loaded the fresh company data to avoid false positives
   const hasFinancialScoringColumn = companyForFinancialCheck && 'financial_scoring' in companyForFinancialCheck;
   const missingFinancialScoring = hasLoadedCompany && hasFinancialScoringColumn && 
     (!companyForFinancialCheck?.financial_scoring || companyForFinancialCheck.financial_scoring.trim() === '');
+  
+  console.log('hasFinancialScoringColumn:', hasFinancialScoringColumn);
+  console.log('missingFinancialScoring:', missingFinancialScoring);
+  console.log('==============================');
 
   // Pre-fill form when requirement data is available
   useEffect(() => {
