@@ -328,7 +328,7 @@ export function OrganisationPage() {
         title="Organisation"
         subtitle="Manage team members and consultants"
         actions={
-          permissions.isAdmin && activeTab === 'corporate' ? (
+          permissions.isAdmin ? (
             <Button 
               variant="success"
               leftIcon={<Plus className="h-4 w-4" />}
@@ -602,6 +602,27 @@ export function OrganisationPage() {
             </div>
           </div>
 
+          {/* Production Department */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-brand-grey-500 mb-3 uppercase tracking-wider">Production Department</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-amber-50 rounded-lg">
+                <h4 className="font-medium text-amber-800 mb-2">Consultant</h4>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  <li>• Submit timesheets</li>
+                  <li>• Request leave</li>
+                  <li>• View own missions</li>
+                </ul>
+                <p className="text-xs text-amber-600 mt-2 italic">Reports to: Business Manager</p>
+              </div>
+              <div className="p-4 bg-amber-100/50 rounded-lg border border-dashed border-amber-300">
+                <p className="text-sm text-amber-700 italic">
+                  Consultants have restricted access to the system. They can only view their timesheets and submit leave requests.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Admin Roles */}
           <div>
             <h4 className="text-sm font-semibold text-brand-grey-500 mb-3 uppercase tracking-wider">System Administration</h4>
@@ -633,62 +654,6 @@ export function OrganisationPage() {
         ) : (
           /* Consultants Tab - Shows users with consultant role */
           <>
-            {/* Consultants Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-brand-cyan/10 rounded-lg">
-                    <UserCog className="h-5 w-5 text-brand-cyan" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-brand-slate-900">
-                      {consultantUsers.length}
-                    </p>
-                    <p className="text-sm text-brand-grey-400">Consultant Accounts</p>
-                  </div>
-                </div>
-              </Card>
-              <Card className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <UserCog className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-brand-slate-900">
-                      {consultants.filter(c => c.status === 'in_mission').length}
-                    </p>
-                    <p className="text-sm text-brand-grey-400">In Mission</p>
-                  </div>
-                </div>
-              </Card>
-              <Card className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-100 rounded-lg">
-                    <UserCog className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-brand-slate-900">
-                      {consultants.filter(c => c.status === 'bench').length}
-                    </p>
-                    <p className="text-sm text-brand-grey-400">On Bench</p>
-                  </div>
-                </div>
-              </Card>
-              <Card className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <UserCog className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-brand-slate-900">
-                      {consultants.filter(c => c.status === 'on_leave').length}
-                    </p>
-                    <p className="text-sm text-brand-grey-400">On Leave</p>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
             {/* Consultant User Accounts */}
             <Card>
               <CardHeader>
@@ -761,113 +726,6 @@ export function OrganisationPage() {
                 </div>
               )}
             </Card>
-
-            {/* Production Consultants (from consultants table) */}
-            {consultants.filter(c => c.status !== 'terminated').length > 0 && (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      Production Staff
-                      <span className="text-sm font-normal text-brand-grey-400">
-                        (from contracts pipeline)
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  
-                  {(() => {
-                    const activeConsultants = consultants.filter(c => c.status !== 'terminated');
-                    const groupedByManager: Record<string, DbConsultant[]> = {};
-                    const unassigned: DbConsultant[] = [];
-                    
-                    activeConsultants.forEach(consultant => {
-                      if (consultant.account_manager_id) {
-                        if (!groupedByManager[consultant.account_manager_id]) {
-                          groupedByManager[consultant.account_manager_id] = [];
-                        }
-                        groupedByManager[consultant.account_manager_id].push(consultant);
-                      } else {
-                        unassigned.push(consultant);
-                      }
-                    });
-
-                    return (
-                      <div className="divide-y divide-brand-grey-100">
-                        {Object.entries(groupedByManager).map(([managerId, managerConsultants]) => {
-                          const manager = allUsers.find(u => u.id === managerId);
-                          return (
-                            <div key={managerId}>
-                              <div className="px-4 py-2 bg-brand-grey-50 text-sm font-medium text-brand-grey-600 flex items-center gap-2">
-                                <Avatar name={manager?.full_name || 'Unknown'} size="sm" />
-                                {manager?.full_name || 'Unknown Manager'} ({managerConsultants.length})
-                              </div>
-                              {managerConsultants.map(consultant => (
-                                <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
-                                  <div className="flex items-center gap-3">
-                                    <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
-                                    <div>
-                                      <p className="font-medium text-brand-slate-900">
-                                        {consultant.first_name} {consultant.last_name}
-                                        {consultant.reference_id && (
-                                          <span className="text-xs text-brand-grey-400 ml-2">[{consultant.reference_id}]</span>
-                                        )}
-                                      </p>
-                                      <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
-                                    </div>
-                                  </div>
-                                  <Badge 
-                                    variant={
-                                      consultant.status === 'in_mission' ? 'green' :
-                                      consultant.status === 'bench' ? 'amber' :
-                                      consultant.status === 'on_leave' ? 'purple' : 'grey'
-                                    }
-                                  >
-                                    {consultant.status === 'in_mission' ? 'In Mission' :
-                                     consultant.status === 'bench' ? 'On Bench' :
-                                     consultant.status === 'on_leave' ? 'On Leave' : consultant.status}
-                                  </Badge>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
-                        
-                        {unassigned.length > 0 && (
-                          <>
-                            <div className="px-4 py-2 bg-amber-50 text-sm font-medium text-amber-700">
-                              Unassigned ({unassigned.length})
-                            </div>
-                            {unassigned.map(consultant => (
-                              <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                  <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
-                                  <div>
-                                    <p className="font-medium text-brand-slate-900">
-                                      {consultant.first_name} {consultant.last_name}
-                                    </p>
-                                    <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
-                                  </div>
-                                </div>
-                                <Badge 
-                                  variant={
-                                    consultant.status === 'in_mission' ? 'green' :
-                                    consultant.status === 'bench' ? 'amber' : 'grey'
-                                  }
-                                >
-                                  {consultant.status === 'in_mission' ? 'In Mission' :
-                                   consultant.status === 'bench' ? 'On Bench' : consultant.status}
-                                </Badge>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </Card>
-              </>
-            )}
           </>
         )}
       </div>
