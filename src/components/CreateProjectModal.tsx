@@ -62,9 +62,16 @@ export function CreateProjectModal({
         setUsers(usersData);
         
         // Load fresh company data to get latest financial_scoring
-        if (company?.id) {
-          const companyData = await companiesService.getById(company.id);
+        // Use company.id if available, otherwise try requirement.company_id
+        const companyId = company?.id || (requirement as any)?.company_id;
+        console.log('Loading company with ID:', companyId, 'from requirement:', requirement);
+        
+        if (companyId) {
+          const companyData = await companiesService.getById(companyId);
+          console.log('Fetched company data:', companyData);
           setFreshCompany(companyData);
+        } else {
+          console.log('No company ID found');
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -74,7 +81,7 @@ export function CreateProjectModal({
     if (isOpen) {
       loadData();
     }
-  }, [isOpen, company?.id]);
+  }, [isOpen, company?.id, requirement]);
 
   // Use fresh company data if available, otherwise fall back to prop
   const actualCompany = freshCompany || company;
