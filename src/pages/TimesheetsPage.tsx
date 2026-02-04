@@ -901,7 +901,7 @@ export function TimesheetsPage() {
           {/* Monthly Overview */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-brand-slate-700">{consultantMonthData.monthLabel}</h3>
+              <h3 className="font-semibold text-brand-slate-700">{consultantMonthData.monthLabel}</h3>
               <div className="flex items-center gap-3 text-xs">
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-slate-200" />
@@ -923,16 +923,15 @@ export function TimesheetsPage() {
             </div>
             
             {/* Day headers */}
-            <div className="grid grid-cols-7 gap-1 mb-1">
+            <div className="grid grid-cols-7 gap-px bg-brand-grey-200 rounded-t-lg overflow-hidden">
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                <div key={d} className="text-center text-[10px] font-medium text-brand-grey-400 py-1">{d}</div>
+                <div key={d} className="text-center text-xs font-semibold text-brand-grey-500 py-2 bg-brand-grey-50">{d}</div>
               ))}
             </div>
             
             {/* Calendar grid */}
-            <div className="space-y-1">
+            <div className="bg-brand-grey-200 rounded-b-lg overflow-hidden" style={{ display: 'grid', gap: '1px' }}>
               {consultantMonthData.calendarWeeks.map((week, wi) => {
-                // Check if any day in this row matches the currently viewed week
                 const isCurrentWeekRow = week.some(d => {
                   if (!d) return false;
                   const ws = getWeekStart(d);
@@ -942,13 +941,12 @@ export function TimesheetsPage() {
                 return (
                   <div 
                     key={wi} 
-                    className={`grid grid-cols-7 gap-1 rounded-lg transition-all ${
-                      isCurrentWeekRow ? 'ring-2 ring-brand-cyan ring-offset-1' : ''
-                    }`}
+                    className="grid grid-cols-7"
+                    style={{ gap: '1px' }}
                   >
                     {week.map((date, di) => {
                       if (!date) {
-                        return <div key={`empty-${di}`} className="h-8 rounded" />;
+                        return <div key={`empty-${di}`} className="h-16 bg-white" />;
                       }
                       
                       const dayOfWeek = date.getDay();
@@ -965,16 +963,33 @@ export function TimesheetsPage() {
                               setCurrentWeekStart(weekStartOfDay);
                             }
                           }}
-                          className={`h-8 rounded text-xs font-medium flex items-center justify-center transition-all ${
-                            isWeekend ? 'bg-slate-50 text-slate-300 cursor-default' :
-                            status === 'approved' ? 'bg-green-400 text-white cursor-pointer hover:bg-green-500' :
-                            status === 'submitted' ? 'bg-amber-300 text-amber-900 cursor-pointer hover:bg-amber-400' :
-                            status === 'rejected' ? 'bg-red-300 text-white cursor-pointer hover:bg-red-400' :
-                            status === 'has_entries' || status === 'draft' ? 'bg-slate-200 text-slate-600 cursor-pointer hover:bg-slate-300' :
-                            'bg-slate-100 text-slate-400 cursor-pointer hover:bg-slate-200'
-                          } ${isToday ? 'ring-2 ring-brand-cyan' : ''}`}
+                          className={`h-16 p-1.5 text-left transition-all relative ${
+                            isWeekend ? 'bg-slate-50 cursor-default' :
+                            status === 'approved' ? 'bg-green-100 cursor-pointer hover:bg-green-200' :
+                            status === 'submitted' ? 'bg-amber-100 cursor-pointer hover:bg-amber-200' :
+                            status === 'rejected' ? 'bg-red-50 cursor-pointer hover:bg-red-100' :
+                            status === 'has_entries' || status === 'draft' ? 'bg-slate-100 cursor-pointer hover:bg-slate-200' :
+                            'bg-white cursor-pointer hover:bg-slate-50'
+                          } ${isCurrentWeekRow && !isWeekend ? 'ring-2 ring-inset ring-brand-cyan' : ''}`}
                         >
-                          {date.getDate()}
+                          <span className={`text-sm font-medium ${
+                            isToday ? 'bg-brand-cyan text-white w-6 h-6 rounded-full flex items-center justify-center' :
+                            isWeekend ? 'text-slate-300' :
+                            status === 'approved' ? 'text-green-700' :
+                            status === 'submitted' ? 'text-amber-700' :
+                            status === 'rejected' ? 'text-red-600' :
+                            'text-brand-slate-600'
+                          }`}>
+                            {date.getDate()}
+                          </span>
+                          {!isWeekend && status !== 'empty' && status !== 'weekend' && (
+                            <div className={`absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full ${
+                              status === 'approved' ? 'bg-green-500' :
+                              status === 'submitted' ? 'bg-amber-400' :
+                              status === 'rejected' ? 'bg-red-400' :
+                              'bg-slate-300'
+                            }`} />
+                          )}
                         </button>
                       );
                     })}
