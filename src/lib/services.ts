@@ -3959,15 +3959,20 @@ export const hrTicketsService = {
     return data;
   },
 
-  async markITAccessCreated(id: string, userId: string): Promise<DbHrTicket> {
+  async markITAccessCreated(id: string, userId: string, companyEmail: string): Promise<DbHrTicket> {
     const ticket = await this.getById(id);
     if (!ticket) throw new Error('Ticket not found');
 
-    // Update ticket status
+    // Store the company email in ticket_data
+    const ticketData = ticket.ticket_data || {};
+    ticketData.company_email = companyEmail;
+
+    // Update ticket status and store company email
     const { data, error } = await supabase
       .from('hr_tickets')
       .update({
         status: 'it_access_created',
+        ticket_data: ticketData,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -3984,10 +3989,14 @@ export const hrTicketsService = {
     return data;
   },
 
-  async convertToConsultant(id: string, userId: string): Promise<DbHrTicket> {
+  async convertToConsultant(id: string, userId: string, supabaseUrl: string, authToken: string): Promise<DbHrTicket> {
     const ticket = await this.getById(id);
     if (!ticket) throw new Error('Ticket not found');
     if (!ticket.candidate_id) throw new Error('No candidate linked to this ticket');
+
+    // Get company email from ticket_data (set during IT Access step)
+    const companyEmail = ticket.ticket_data?.company_email;
+    if (!companyEmail) throw new Error('Company email not set. Please complete the IT Access step first.');
 
     // Get candidate details
     const candidate = await candidatesService.getById(ticket.candidate_id);
@@ -3999,15 +4008,41 @@ export const hrTicketsService = {
       offerData = await offersService.getById(ticket.offer_id);
     }
 
-    // Create consultant from candidate
+    // Create user account via edge function
+    const tempPassword = `Welcome${new Date().getFullYear()}!`;
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        email: companyEmail,
+        password: tempPassword,
+        full_name: `${candidate.first_name} ${candidate.last_name}`,
+        roles: ['consultant'],
+      }),
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to create user account');
+    }
+
+    const newUserId = result.user?.id;
+
+    // Create consultant from candidate with user_id linked
     const candidateData = candidate as any; // Cast to allow access to all DB fields
     const { data: newConsultant, error: consultantError } = await supabase
       .from('consultants')
       .insert({
         candidate_id: candidate.id,
+        user_id: newUserId, // Link to the user account
         first_name: candidate.first_name,
         last_name: candidate.last_name,
-        email: candidate.email,
+        email: companyEmail, // Use company email, not personal email
         phone: candidate.phone,
         location: candidate.location,
         linkedin_url: candidate.linkedin_url,
@@ -4036,7 +4071,7 @@ export const hrTicketsService = {
         status: 'completed',
         completed_at: new Date().toISOString(),
         completed_by: userId,
-        completion_notes: `Converted to consultant: ${newConsultant.reference_id || newConsultant.id}`,
+        completion_notes: `Converted to consultant: ${newConsultant.reference_id || newConsultant.id}. User account created with email: ${companyEmail}`,
         consultant_id: newConsultant.id,
         updated_at: new Date().toISOString(),
       })
@@ -4606,7 +4641,10 @@ export const timesheetWeeksService = {
   async getPendingApprovals(): Promise<DbTimesheetWeek[]> {
     const { data, error } = await supabase
       .from('timesheet_weeks')
-      .select('*')
+      .select(`
+        *,
+        consultant:consultants(id, first_name, last_name, email, user_id, account_manager_id)
+      `)
       .in('status', ['submitted', 'approved'])
       .order('week_start_date', { ascending: false });
 

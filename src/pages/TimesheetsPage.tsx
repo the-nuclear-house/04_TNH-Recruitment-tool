@@ -115,7 +115,7 @@ export function TimesheetsPage() {
   const [weekStatus, setWeekStatus] = useState<DbTimesheetWeek | null>(null);
   const [missions, setMissions] = useState<DbMission[]>([]);
   const [consultants, setConsultants] = useState<DbConsultant[]>([]);
-  const [pendingWeeks, setPendingWeeks] = useState<DbTimesheetWeek[]>([]);
+  const [pendingWeeks, setPendingWeeks] = useState<(DbTimesheetWeek & { consultant?: DbConsultant })[]>([]);
   const [myConsultant, setMyConsultant] = useState<DbConsultant | null>(null);
   
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -148,6 +148,7 @@ export function TimesheetsPage() {
       const weekStartKey = formatDateKey(currentWeekStart);
       
       if (isConsultant) {
+        // Consultant view: find their consultant record via user_id
         const allConsultants = await consultantsService.getAll();
         const myRecord = allConsultants.find(c => c.user_id === user.id);
         setMyConsultant(myRecord || null);
@@ -166,20 +167,28 @@ export function TimesheetsPage() {
           setMissions(myMissions);
         }
       } else if (canApprove) {
+        // Manager view: load pending approvals
         const [allConsultants, allPendingWeeks, allMissions] = await Promise.all([
           consultantsService.getAll(),
           timesheetWeeksService.getPendingApprovals(),
           missionsService.getAll(),
         ]);
         
+        // Filter consultants that report to this manager
         const myConsultants = allConsultants.filter(c => 
           c.account_manager_id === user.id || 
           permissions.isAdmin || 
           permissions.isBusinessDirector
         );
         
+        // Add consultant info to pending weeks
+        const weeksWithConsultants = allPendingWeeks.map(w => ({
+          ...w,
+          consultant: allConsultants.find(c => c.id === w.consultant_id)
+        }));
+        
         setConsultants(myConsultants);
-        setPendingWeeks(allPendingWeeks);
+        setPendingWeeks(weeksWithConsultants);
         setMissions(allMissions);
       }
     } catch (error) {
@@ -365,15 +374,14 @@ export function TimesheetsPage() {
     }
   };
 
-  const handleViewTimesheet = async (week: DbTimesheetWeek) => {
+  const handleViewTimesheet = async (week: DbTimesheetWeek & { consultant?: DbConsultant }) => {
     try {
-      const consultant = consultants.find(c => c.id === week.consultant_id);
       const weekEntries = await timesheetEntriesService.getByConsultantAndWeek(
         week.consultant_id, 
         week.week_start_date
       );
       
-      setViewingConsultant(consultant || null);
+      setViewingConsultant(week.consultant || null);
       setViewingWeek(week);
       setViewingEntries(weekEntries);
       setIsViewModalOpen(true);
@@ -689,16 +697,15 @@ export function TimesheetsPage() {
               {pendingWeeks
                 .filter(w => w.status === 'submitted')
                 .map(week => {
-                  const consultant = consultants.find(c => c.id === week.consultant_id);
                   const weekStart = new Date(week.week_start_date);
                   
                   return (
                     <div key={week.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
                       <div className="flex items-center gap-4">
-                        <Avatar name={consultant ? `${consultant.first_name} ${consultant.last_name}` : 'Unknown'} size="md" />
+                        <Avatar name={week.consultant ? `${week.consultant.first_name} ${week.consultant.last_name}` : 'Unknown'} size="md" />
                         <div>
                           <p className="font-medium text-brand-slate-900">
-                            {consultant ? `${consultant.first_name} ${consultant.last_name}` : 'Unknown Consultant'}
+                            {week.consultant ? `${week.consultant.first_name} ${week.consultant.last_name}` : 'Unknown Consultant'}
                           </p>
                           <p className="text-sm text-brand-grey-500">
                             Week of {formatWeekRange(weekStart)}

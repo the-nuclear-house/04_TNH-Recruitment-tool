@@ -35,8 +35,7 @@ const baseRoles = [
   // HR Department
   { value: 'hr', label: 'HR', description: 'Handle employee matters and contracts', colour: 'purple', department: 'HR' },
   { value: 'hr_manager', label: 'HR Manager', description: 'Manage HR team and approve HR requests', colour: 'purple', department: 'HR' },
-  // Production / Consultants
-  { value: 'consultant', label: 'Consultant', description: 'Submit timesheets and leave requests only', colour: 'amber', department: 'Production' },
+  // Note: Consultant role is NOT here - consultants are created via the HR ticket pipeline (Candidate -> Consultant)
 ];
 
 // Add-on roles - can be combined with base role

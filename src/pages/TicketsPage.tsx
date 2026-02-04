@@ -28,6 +28,7 @@ import {
   EmptyState,
   Textarea,
   ConfirmDialog,
+  Input,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -40,6 +41,7 @@ import {
   type HrTicketType,
   type DbApprovalRequest,
 } from '@/lib/services';
+import { supabase } from '@/lib/supabase';
 
 const ticketTypeConfig: Record<HrTicketType | 'general', { icon: any; colour: string; label: string }> = {
   contract_send: { icon: Send, colour: 'cyan', label: 'Contract Process' },
@@ -106,6 +108,10 @@ export function TicketsPage() {
   // Workflow confirmation dialogs
   const [confirmAction, setConfirmAction] = useState<'contract_sent' | 'contract_signed' | 'it_access' | 'convert' | null>(null);
   const [ticketForConfirm, setTicketForConfirm] = useState<UITicket | null>(null);
+  
+  // IT Access email modal
+  const [isITAccessModalOpen, setIsITAccessModalOpen] = useState(false);
+  const [companyEmail, setCompanyEmail] = useState('');
 
   useEffect(() => {
     loadTickets();
@@ -231,13 +237,58 @@ export function TicketsPage() {
 
   // Contract workflow handlers - these show confirmation first
   const openConfirmDialog = (action: 'contract_sent' | 'contract_signed' | 'it_access' | 'convert', ticket: UITicket) => {
-    setConfirmAction(action);
-    setTicketForConfirm(ticket);
+    if (action === 'it_access') {
+      // For IT Access, open the email modal instead
+      setTicketForConfirm(ticket);
+      // Generate suggested email from candidate name
+      const candidateName = ticket.candidate_name || '';
+      const nameParts = candidateName.toLowerCase().split(' ').filter(Boolean);
+      if (nameParts.length >= 2) {
+        setCompanyEmail(`${nameParts[0]}.${nameParts[nameParts.length - 1]}@thenuclearhouse.co.uk`);
+      } else if (nameParts.length === 1) {
+        setCompanyEmail(`${nameParts[0]}@thenuclearhouse.co.uk`);
+      } else {
+        setCompanyEmail('');
+      }
+      setIsITAccessModalOpen(true);
+    } else {
+      setConfirmAction(action);
+      setTicketForConfirm(ticket);
+    }
   };
 
   const closeConfirmDialog = () => {
     setConfirmAction(null);
     setTicketForConfirm(null);
+  };
+  
+  const closeITAccessModal = () => {
+    setIsITAccessModalOpen(false);
+    setTicketForConfirm(null);
+    setCompanyEmail('');
+  };
+  
+  const handleITAccessSubmit = async () => {
+    if (!ticketForConfirm || !companyEmail || !user?.id) return;
+    
+    // Validate email format
+    if (!companyEmail.endsWith('@thenuclearhouse.co.uk')) {
+      toast.error('Invalid Email', 'Email must be a @thenuclearhouse.co.uk address');
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      await hrTicketsService.markITAccessCreated(ticketForConfirm.id, user.id, companyEmail);
+      toast.success('IT Access Created', `Account email set to ${companyEmail}. Ready to convert to consultant.`);
+      closeITAccessModal();
+      loadTickets();
+    } catch (error) {
+      console.error('Error marking IT access:', error);
+      toast.error('Error', 'Failed to save IT access details');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Download document from storage
@@ -286,18 +337,25 @@ export function TicketsPage() {
       } else if (confirmAction === 'contract_signed') {
         await hrTicketsService.markContractSigned(ticketForConfirm.id, user!.id);
         toast.success('Contract Signed', 'Ticket updated - contract has been signed. Now create IT access.');
-      } else if (confirmAction === 'it_access') {
-        await hrTicketsService.markITAccessCreated(ticketForConfirm.id, user!.id);
-        toast.success('IT Access Created', 'IT credentials have been set up. Ready to convert to consultant.');
       } else if (confirmAction === 'convert') {
-        await hrTicketsService.convertToConsultant(ticketForConfirm.id, user!.id);
-        toast.success('Converted', 'Candidate has been converted to consultant. Ticket completed.');
+        // Get auth token for edge function call
+        const { data: sessionData } = await supabase.auth.getSession();
+        const authToken = sessionData.session?.access_token;
+        
+        if (!authToken) {
+          throw new Error('No authentication token available');
+        }
+        
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        
+        await hrTicketsService.convertToConsultant(ticketForConfirm.id, user!.id, supabaseUrl, authToken);
+        toast.success('Converted', 'Consultant profile and user account created. Ticket completed.');
       }
       closeConfirmDialog();
       loadTickets();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing action:', error);
-      toast.error('Error', 'Failed to process action');
+      toast.error('Error', error.message || 'Failed to process action');
     } finally {
       setIsProcessing(false);
     }
@@ -643,13 +701,12 @@ export function TicketsPage() {
 
       {/* Workflow Confirmation Dialog */}
       <ConfirmDialog
-        isOpen={confirmAction !== null}
+        isOpen={confirmAction !== null && confirmAction !== 'it_access'}
         onClose={closeConfirmDialog}
         onConfirm={handleConfirmedAction}
         title={
           confirmAction === 'contract_sent' ? 'Confirm Contract Sent' :
           confirmAction === 'contract_signed' ? 'Confirm Contract Signed' :
-          confirmAction === 'it_access' ? 'Confirm IT Access Created' :
           confirmAction === 'convert' ? 'Convert to Consultant' : ''
         }
         message={
@@ -657,20 +714,60 @@ export function TicketsPage() {
             ? `Do you confirm you have sent the contract to ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
           confirmAction === 'contract_signed' 
             ? `Do you confirm you have received and verified the signed contract from ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
-          confirmAction === 'it_access'
-            ? `Do you confirm IT access credentials have been created for ${ticketForConfirm?.candidate_name || 'this candidate'}?` :
           confirmAction === 'convert' 
-            ? `This will create a new consultant record for ${ticketForConfirm?.candidate_name || 'this candidate'} and complete this ticket. Do you want to proceed?` : ''
+            ? `This will create a consultant profile AND a user account for ${ticketForConfirm?.candidate_name || 'this candidate'} using the email set in IT Access step. They will be able to log in and submit timesheets. Proceed?` : ''
         }
         confirmText={
           confirmAction === 'contract_sent' ? 'Yes, Contract Sent' :
           confirmAction === 'contract_signed' ? 'Yes, Contract Signed' :
-          confirmAction === 'it_access' ? 'Yes, IT Access Created' :
-          confirmAction === 'convert' ? 'Yes, Convert to Consultant' : 'Confirm'
+          confirmAction === 'convert' ? 'Yes, Create Consultant' : 'Confirm'
         }
         variant={confirmAction === 'convert' ? 'primary' : 'primary'}
         isLoading={isProcessing}
       />
+      
+      {/* IT Access Email Modal */}
+      <Modal
+        isOpen={isITAccessModalOpen}
+        onClose={closeITAccessModal}
+        title="Set Up IT Access"
+        description={`Create company email for ${ticketForConfirm?.candidate_name || 'this candidate'}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>Standard format:</strong> firstname.lastname@thenuclearhouse.co.uk
+            </p>
+          </div>
+          
+          <Input
+            label="Company Email *"
+            type="email"
+            value={companyEmail}
+            onChange={(e) => setCompanyEmail(e.target.value.toLowerCase())}
+            placeholder="firstname.lastname@thenuclearhouse.co.uk"
+          />
+          
+          <p className="text-xs text-brand-grey-500">
+            This email will be used to create the consultant's login account. A temporary password will be generated.
+          </p>
+          
+          <div className="flex justify-end gap-2 pt-4 border-t border-brand-grey-200">
+            <Button variant="secondary" onClick={closeITAccessModal}>
+              Cancel
+            </Button>
+            <Button 
+              variant="success" 
+              onClick={handleITAccessSubmit}
+              isLoading={isProcessing}
+              disabled={!companyEmail || !companyEmail.includes('@')}
+            >
+              Save & Continue
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
