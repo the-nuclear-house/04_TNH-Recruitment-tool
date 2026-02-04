@@ -135,6 +135,10 @@ export function OrganisationPage() {
     }
   };
 
+  // Filter users: corporate = non-consultants, consultantUsers = users with consultant role
+  const corporateUsers = users.filter(u => !u.roles?.includes('consultant'));
+  const consultantUsers = users.filter(u => u.roles?.includes('consultant'));
+
   useEffect(() => {
     loadUsers();
   }, []);
@@ -348,7 +352,7 @@ export function OrganisationPage() {
             }`}
           >
             <Building2 className="h-4 w-4" />
-            Corporate ({users.length})
+            Corporate ({corporateUsers.length})
           </button>
           <button
             onClick={() => setActiveTab('consultants')}
@@ -359,7 +363,7 @@ export function OrganisationPage() {
             }`}
           >
             <UserCog className="h-4 w-4" />
-            Consultants ({consultants.filter(c => c.status !== 'terminated').length})
+            Consultants ({consultantUsers.length})
           </button>
         </div>
 
@@ -373,7 +377,7 @@ export function OrganisationPage() {
                     <Users className="h-5 w-5 text-brand-cyan" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-brand-slate-900">{users.length}</p>
+                    <p className="text-2xl font-bold text-brand-slate-900">{corporateUsers.length}</p>
                     <p className="text-sm text-brand-grey-400">Total Members</p>
                   </div>
                 </div>
@@ -385,7 +389,7 @@ export function OrganisationPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-brand-slate-900">
-                      {users.filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager'].includes(r))).length}
+                      {corporateUsers.filter(u => u.roles?.some((r: string) => ['recruiter', 'recruiter_manager'].includes(r))).length}
                     </p>
                     <p className="text-sm text-brand-grey-400">Recruitment</p>
                   </div>
@@ -398,7 +402,7 @@ export function OrganisationPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-brand-slate-900">
-                      {users.filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director'].includes(r))).length}
+                      {corporateUsers.filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director'].includes(r))).length}
                     </p>
                     <p className="text-sm text-brand-grey-400">Business</p>
                   </div>
@@ -411,7 +415,7 @@ export function OrganisationPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-brand-slate-900">
-                      {users.filter(u => u.roles?.some((r: string) => ['admin', 'superadmin'].includes(r))).length}
+                      {corporateUsers.filter(u => u.roles?.some((r: string) => ['admin', 'superadmin'].includes(r))).length}
                     </p>
                     <p className="text-sm text-brand-grey-400">Admins</p>
                   </div>
@@ -430,14 +434,14 @@ export function OrganisationPage() {
               
               {isLoading ? (
                 <div className="text-center py-8 text-brand-grey-400">Loading team members...</div>
-              ) : users.length === 0 ? (
+              ) : corporateUsers.length === 0 ? (
                 <div className="text-center py-8">
                   <Users className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
                   <p className="text-brand-grey-400">No team members yet</p>
                 </div>
               ) : (
             <div className="space-y-2">
-              {users.map((user) => (
+              {corporateUsers.map((user) => (
                 <div 
                   key={user.id} 
                   className="flex items-center justify-between p-4 rounded-lg bg-brand-grey-50 hover:bg-brand-grey-100 transition-colors"
@@ -627,7 +631,7 @@ export function OrganisationPage() {
         </Card>
           </>
         ) : (
-          /* Consultants Tab */
+          /* Consultants Tab - Shows users with consultant role */
           <>
             {/* Consultants Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -638,9 +642,9 @@ export function OrganisationPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-brand-slate-900">
-                      {consultants.filter(c => c.status !== 'terminated').length}
+                      {consultantUsers.length}
                     </p>
-                    <p className="text-sm text-brand-grey-400">Active Consultants</p>
+                    <p className="text-sm text-brand-grey-400">Consultant Accounts</p>
                   </div>
                 </div>
               </Card>
@@ -685,127 +689,196 @@ export function OrganisationPage() {
               </Card>
             </div>
 
-            {/* Consultants grouped by Account Manager */}
-            {(() => {
-              const activeConsultants = consultants.filter(c => c.status !== 'terminated');
-              const groupedByManager: Record<string, DbConsultant[]> = {};
-              const unassigned: DbConsultant[] = [];
+            {/* Consultant User Accounts */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserCog className="h-5 w-5" />
+                  Consultant Accounts
+                </CardTitle>
+              </CardHeader>
               
-              activeConsultants.forEach(consultant => {
-                if (consultant.account_manager_id) {
-                  if (!groupedByManager[consultant.account_manager_id]) {
-                    groupedByManager[consultant.account_manager_id] = [];
-                  }
-                  groupedByManager[consultant.account_manager_id].push(consultant);
-                } else {
-                  unassigned.push(consultant);
-                }
-              });
-
-              return (
-                <div className="space-y-6">
-                  {Object.entries(groupedByManager).map(([managerId, managerConsultants]) => {
-                    const manager = allUsers.find(u => u.id === managerId);
+              {isLoading ? (
+                <div className="text-center py-8 text-brand-grey-400">Loading consultants...</div>
+              ) : consultantUsers.length === 0 ? (
+                <div className="text-center py-8">
+                  <UserCog className="h-12 w-12 mx-auto text-brand-grey-300 mb-3" />
+                  <p className="text-brand-grey-400">No consultant accounts yet</p>
+                  <p className="text-sm text-brand-grey-400 mt-1">Add a user with the Consultant role to get started</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-brand-grey-100">
+                  {consultantUsers.map(user => {
+                    // Find linked consultant record if any
+                    const linkedConsultant = consultants.find(c => c.user_id === user.id);
+                    
                     return (
-                      <Card key={managerId}>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-3">
-                            <Avatar name={manager?.full_name || 'Unknown'} size="sm" />
-                            <div>
-                              <span>{manager?.full_name || 'Unknown Manager'}</span>
-                              <span className="text-sm font-normal text-brand-grey-400 ml-2">
-                                ({managerConsultants.length} consultant{managerConsultants.length !== 1 ? 's' : ''})
-                              </span>
+                      <div key={user.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={user.full_name} size="md" />
+                          <div>
+                            <p className="font-medium text-brand-slate-900">
+                              {user.full_name}
+                            </p>
+                            <p className="text-sm text-brand-grey-500 flex items-center gap-2">
+                              <Mail className="h-3 w-3" />
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {linkedConsultant ? (
+                            <Badge 
+                              variant={
+                                linkedConsultant.status === 'in_mission' ? 'green' :
+                                linkedConsultant.status === 'bench' ? 'amber' :
+                                linkedConsultant.status === 'on_leave' ? 'purple' : 'grey'
+                              }
+                            >
+                              {linkedConsultant.status === 'in_mission' ? 'In Mission' :
+                               linkedConsultant.status === 'bench' ? 'On Bench' :
+                               linkedConsultant.status === 'on_leave' ? 'On Leave' : linkedConsultant.status}
+                            </Badge>
+                          ) : (
+                            <Badge variant="grey">Not Linked</Badge>
+                          )}
+                          {permissions.canManageUsers && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenEditModal(user)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {user.id !== currentUser?.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setUserToDelete(user);
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              )}
                             </div>
-                          </CardTitle>
-                        </CardHeader>
-                        <div className="divide-y divide-brand-grey-100">
-                          {managerConsultants.map(consultant => (
-                            <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
-                                <div>
-                                  <p className="font-medium text-brand-slate-900">
-                                    {consultant.first_name} {consultant.last_name}
-                                    {consultant.reference_id && (
-                                      <span className="text-xs text-brand-grey-400 ml-2">[{consultant.reference_id}]</span>
-                                    )}
-                                  </p>
-                                  <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
-                                </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
+            {/* Production Consultants (from consultants table) */}
+            {consultants.filter(c => c.status !== 'terminated').length > 0 && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Production Staff
+                      <span className="text-sm font-normal text-brand-grey-400">
+                        (from contracts pipeline)
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  
+                  {(() => {
+                    const activeConsultants = consultants.filter(c => c.status !== 'terminated');
+                    const groupedByManager: Record<string, DbConsultant[]> = {};
+                    const unassigned: DbConsultant[] = [];
+                    
+                    activeConsultants.forEach(consultant => {
+                      if (consultant.account_manager_id) {
+                        if (!groupedByManager[consultant.account_manager_id]) {
+                          groupedByManager[consultant.account_manager_id] = [];
+                        }
+                        groupedByManager[consultant.account_manager_id].push(consultant);
+                      } else {
+                        unassigned.push(consultant);
+                      }
+                    });
+
+                    return (
+                      <div className="divide-y divide-brand-grey-100">
+                        {Object.entries(groupedByManager).map(([managerId, managerConsultants]) => {
+                          const manager = allUsers.find(u => u.id === managerId);
+                          return (
+                            <div key={managerId}>
+                              <div className="px-4 py-2 bg-brand-grey-50 text-sm font-medium text-brand-grey-600 flex items-center gap-2">
+                                <Avatar name={manager?.full_name || 'Unknown'} size="xs" />
+                                {manager?.full_name || 'Unknown Manager'} ({managerConsultants.length})
                               </div>
-                              <div className="flex items-center gap-3">
+                              {managerConsultants.map(consultant => (
+                                <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
+                                    <div>
+                                      <p className="font-medium text-brand-slate-900">
+                                        {consultant.first_name} {consultant.last_name}
+                                        {consultant.reference_id && (
+                                          <span className="text-xs text-brand-grey-400 ml-2">[{consultant.reference_id}]</span>
+                                        )}
+                                      </p>
+                                      <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
+                                    </div>
+                                  </div>
+                                  <Badge 
+                                    variant={
+                                      consultant.status === 'in_mission' ? 'green' :
+                                      consultant.status === 'bench' ? 'amber' :
+                                      consultant.status === 'on_leave' ? 'purple' : 'grey'
+                                    }
+                                  >
+                                    {consultant.status === 'in_mission' ? 'In Mission' :
+                                     consultant.status === 'bench' ? 'On Bench' :
+                                     consultant.status === 'on_leave' ? 'On Leave' : consultant.status}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                        
+                        {unassigned.length > 0 && (
+                          <>
+                            <div className="px-4 py-2 bg-amber-50 text-sm font-medium text-amber-700">
+                              Unassigned ({unassigned.length})
+                            </div>
+                            {unassigned.map(consultant => (
+                              <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
+                                  <div>
+                                    <p className="font-medium text-brand-slate-900">
+                                      {consultant.first_name} {consultant.last_name}
+                                    </p>
+                                    <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
+                                  </div>
+                                </div>
                                 <Badge 
                                   variant={
                                     consultant.status === 'in_mission' ? 'green' :
-                                    consultant.status === 'bench' ? 'amber' :
-                                    consultant.status === 'on_leave' ? 'purple' : 'grey'
+                                    consultant.status === 'bench' ? 'amber' : 'grey'
                                   }
                                 >
                                   {consultant.status === 'in_mission' ? 'In Mission' :
-                                   consultant.status === 'bench' ? 'On Bench' :
-                                   consultant.status === 'on_leave' ? 'On Leave' : consultant.status}
+                                   consultant.status === 'bench' ? 'On Bench' : consultant.status}
                                 </Badge>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </Card>
-                    );
-                  })}
-
-                  {unassigned.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-3 text-amber-600">
-                          <Users className="h-5 w-5" />
-                          <div>
-                            <span>Unassigned</span>
-                            <span className="text-sm font-normal text-brand-grey-400 ml-2">
-                              ({unassigned.length} consultant{unassigned.length !== 1 ? 's' : ''})
-                            </span>
-                          </div>
-                        </CardTitle>
-                      </CardHeader>
-                      <div className="divide-y divide-brand-grey-100">
-                        {unassigned.map(consultant => (
-                          <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
-                              <div>
-                                <p className="font-medium text-brand-slate-900">
-                                  {consultant.first_name} {consultant.last_name}
-                                </p>
-                                <p className="text-sm text-brand-grey-500">{consultant.job_title || consultant.email}</p>
-                              </div>
-                            </div>
-                            <Badge 
-                              variant={
-                                consultant.status === 'in_mission' ? 'green' :
-                                consultant.status === 'bench' ? 'amber' : 'grey'
-                              }
-                            >
-                              {consultant.status === 'in_mission' ? 'In Mission' :
-                               consultant.status === 'bench' ? 'On Bench' : consultant.status}
-                            </Badge>
-                          </div>
-                        ))}
+                            ))}
+                          </>
+                        )}
                       </div>
-                    </Card>
-                  )}
-
-                  {activeConsultants.length === 0 && (
-                    <Card>
-                      <EmptyState
-                        icon={<UserCog className="h-12 w-12" />}
-                        title="No Consultants Yet"
-                        description="Consultants will appear here once candidates are converted through the contracts pipeline."
-                      />
-                    </Card>
-                  )}
-                </div>
-              );
-            })()}
+                    );
+                  })()}
+                </Card>
+              </>
+            )}
           </>
         )}
       </div>
