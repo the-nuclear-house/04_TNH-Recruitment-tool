@@ -61,8 +61,11 @@ export function Sidebar() {
   
   const isAdmin = user?.roles?.some(r => ['admin', 'superadmin'].includes(r)) ?? false;
 
-  // Top-level items (always visible)
-  const topItems: NavItem[] = [
+  const isConsultant = user?.roles?.some(r => ['consultant'].includes(r)) ?? false;
+  const isOnlyConsultant = isConsultant && !isAdmin && !canViewFullSales && !isHR;
+
+  // Top-level items (always visible, except for consultant-only users)
+  const topItems: NavItem[] = isOnlyConsultant ? [] : [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   ];
 
@@ -83,42 +86,53 @@ export function Sidebar() {
   }
 
   // Build navigation groups based on permissions
-  const navGroups: NavGroup[] = [
-    {
-      name: 'SALES',
-      items: salesItems,
-    },
-    {
-      name: 'RECRUITMENT',
-      items: [
-        { name: 'Candidates', href: '/candidates', icon: Users },
-        { name: 'Interviews', href: '/interviews', icon: Calendar },
-        { name: 'Contracts', href: '/contracts', icon: FileText },
-      ].filter(() => permissions.canViewCandidates),
-    },
-    {
-      name: 'OPERATIONS',
-      items: [
-        { name: 'Consultants', href: '/consultants', icon: UserCog },
-        { name: 'Missions', href: '/missions', icon: Rocket },
-        { name: 'Timesheets', href: '/timesheets', icon: Clock },
-      ].filter(() => canViewFullSales || isHR),
-    },
-    {
-      name: 'HR',
-      items: [
-        { name: 'Leave Requests', href: '/leave-requests', icon: CalendarDays },
-        { name: 'Tickets', href: '/tickets', icon: Ticket },
-      ].filter(() => isHR),
-    },
-    {
-      name: 'ADMIN',
-      items: [
-        { name: 'Organisation', href: '/organisation', icon: Building2 },
-        { name: 'Settings', href: '/settings', icon: Settings },
-      ].filter(() => isAdmin),
-    },
-  ].filter(group => group.items.length > 0);
+  const navGroups: NavGroup[] = isOnlyConsultant 
+    ? [
+        // Consultant-only navigation
+        {
+          name: 'MY WORK',
+          items: [
+            { name: 'Timesheets', href: '/timesheets', icon: Clock },
+            { name: 'Leave Requests', href: '/leave-requests', icon: CalendarDays },
+          ],
+        },
+      ]
+    : [
+        {
+          name: 'SALES',
+          items: salesItems,
+        },
+        {
+          name: 'RECRUITMENT',
+          items: [
+            { name: 'Candidates', href: '/candidates', icon: Users },
+            { name: 'Interviews', href: '/interviews', icon: Calendar },
+            { name: 'Contracts', href: '/contracts', icon: FileText },
+          ].filter(() => permissions.canViewCandidates),
+        },
+        {
+          name: 'OPERATIONS',
+          items: [
+            { name: 'Consultants', href: '/consultants', icon: UserCog },
+            { name: 'Missions', href: '/missions', icon: Rocket },
+            { name: 'Timesheets', href: '/timesheets', icon: Clock },
+          ].filter(() => canViewFullSales || isHR),
+        },
+        {
+          name: 'HR',
+          items: [
+            { name: 'Leave Requests', href: '/leave-requests', icon: CalendarDays },
+            { name: 'Tickets', href: '/tickets', icon: Ticket },
+          ].filter(() => isHR),
+        },
+        {
+          name: 'ADMIN',
+          items: [
+            { name: 'Organisation', href: '/organisation', icon: Building2 },
+            { name: 'Settings', href: '/settings', icon: Settings },
+          ].filter(() => isAdmin),
+        },
+      ].filter(group => group.items.length > 0);
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups(prev => {

@@ -37,6 +37,11 @@ interface Permissions {
   canViewDepartmentStats: boolean;
   canApproveRequests: boolean;
   
+  // Timesheet permissions
+  canViewTimesheets: boolean;
+  canSubmitTimesheets: boolean;
+  canApproveTimesheets: boolean;
+  
   // Role checks
   isSuperAdmin: boolean;
   isAdmin: boolean;
@@ -48,6 +53,7 @@ interface Permissions {
   isRecruiter: boolean;
   isHRManager: boolean;
   isHR: boolean;
+  isConsultant: boolean;
 }
 
 const rolePermissions: Record<UserRole, Permissions> = {
@@ -75,6 +81,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: true,
     canViewDepartmentStats: true,
     canApproveRequests: true,
+    canViewTimesheets: true,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: true,
     isSuperAdmin: true,
     isAdmin: true,
     isBusinessDirector: false,
@@ -85,6 +94,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
 
   admin: {
@@ -111,6 +121,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: true,
     canApproveRequests: true,
+    canViewTimesheets: true,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: true,
     isSuperAdmin: false,
     isAdmin: true,
     isBusinessDirector: false,
@@ -121,6 +134,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
   
   business_director: {
@@ -147,6 +161,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: true,
     canApproveRequests: true,
+    canViewTimesheets: true,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: true,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: true,
@@ -157,6 +174,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
   
   business_manager: {
@@ -183,6 +201,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: false,
     canApproveRequests: false,
+    canViewTimesheets: true,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: true,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: false,
@@ -193,6 +214,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
 
   technical_director: {
@@ -219,6 +241,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: true,
     canApproveRequests: true,
+    canViewTimesheets: false,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: false,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: false,
@@ -229,6 +254,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
   
   technical: {
@@ -255,6 +281,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: false,
     canApproveRequests: false,
+    canViewTimesheets: false,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: false,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: false,
@@ -265,6 +294,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
 
   recruiter_manager: {
@@ -291,6 +321,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: true,
     canApproveRequests: true,
+    canViewTimesheets: false,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: false,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: false,
@@ -301,6 +334,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
   
   recruiter: {
@@ -327,6 +361,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: false,
     canApproveRequests: false,
+    canViewTimesheets: false,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: false,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: false,
@@ -337,6 +374,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: true,
     isHRManager: false,
     isHR: false,
+    isConsultant: false,
   },
 
   hr_manager: {
@@ -363,6 +401,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: true,
     canApproveRequests: true,
+    canViewTimesheets: true,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: false,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: false,
@@ -373,6 +414,7 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: true,
     isHR: false,
+    isConsultant: false,
   },
   
   hr: {
@@ -399,6 +441,9 @@ const rolePermissions: Record<UserRole, Permissions> = {
     canHardDelete: false,
     canViewDepartmentStats: false,
     canApproveRequests: false,
+    canViewTimesheets: true,
+    canSubmitTimesheets: false,
+    canApproveTimesheets: false,
     isSuperAdmin: false,
     isAdmin: false,
     isBusinessDirector: false,
@@ -409,6 +454,47 @@ const rolePermissions: Record<UserRole, Permissions> = {
     isRecruiter: false,
     isHRManager: false,
     isHR: true,
+    isConsultant: false,
+  },
+
+  consultant: {
+    canViewCandidates: false,
+    canAddCandidates: false,
+    canEditCandidates: false,
+    canDeleteCandidates: false,
+    canViewRequirements: false,
+    canCreateRequirements: false,
+    canEditRequirements: false,
+    canDeleteRequirements: false,
+    canViewInterviews: false,
+    canScheduleInterviews: false,
+    canConductInterviews: false,
+    canViewAllInterviewFeedback: false,
+    canViewContracts: false,
+    canCreateContracts: false,
+    canApproveContracts: false,
+    canViewOrganisation: false,
+    canManageUsers: false,
+    canManageBusinessUnits: false,
+    canManageApprovalChains: false,
+    canCreateAdmins: false,
+    canHardDelete: false,
+    canViewDepartmentStats: false,
+    canApproveRequests: false,
+    canViewTimesheets: true,
+    canSubmitTimesheets: true,
+    canApproveTimesheets: false,
+    isSuperAdmin: false,
+    isAdmin: false,
+    isBusinessDirector: false,
+    isBusinessManager: false,
+    isTechnicalDirector: false,
+    isTechnical: false,
+    isRecruiterManager: false,
+    isRecruiter: false,
+    isHRManager: false,
+    isHR: false,
+    isConsultant: true,
   },
 };
 
@@ -437,6 +523,9 @@ const defaultPermissions: Permissions = {
   canHardDelete: false,
   canViewDepartmentStats: false,
   canApproveRequests: false,
+  canViewTimesheets: false,
+  canSubmitTimesheets: false,
+  canApproveTimesheets: false,
   isSuperAdmin: false,
   isAdmin: false,
   isBusinessDirector: false,
@@ -447,6 +536,7 @@ const defaultPermissions: Permissions = {
   isRecruiter: false,
   isHRManager: false,
   isHR: false,
+  isConsultant: false,
 };
 
 // Merge permissions from multiple roles (user gets highest permission from any role)
@@ -480,6 +570,7 @@ function mergePermissions(roles: UserRole[]): Permissions {
   merged.isRecruiter = roles.includes('recruiter');
   merged.isHRManager = roles.includes('hr_manager');
   merged.isHR = roles.includes('hr');
+  merged.isConsultant = roles.includes('consultant');
   
   return merged;
 }
@@ -518,6 +609,7 @@ export const roleHierarchy: Record<UserRole, UserRole | null> = {
   recruiter: 'recruiter_manager',
   hr_manager: null,
   hr: 'hr_manager',
+  consultant: 'business_manager',
 };
 
 // Get roles that can be a manager for a given role

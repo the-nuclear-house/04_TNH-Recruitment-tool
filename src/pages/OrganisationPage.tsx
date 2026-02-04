@@ -35,6 +35,8 @@ const baseRoles = [
   // HR Department
   { value: 'hr', label: 'HR', description: 'Handle employee matters and contracts', colour: 'purple', department: 'HR' },
   { value: 'hr_manager', label: 'HR Manager', description: 'Manage HR team and approve HR requests', colour: 'purple', department: 'HR' },
+  // Production / Consultants
+  { value: 'consultant', label: 'Consultant', description: 'Submit timesheets and leave requests only', colour: 'amber', department: 'Production' },
 ];
 
 // Add-on roles - can be combined with base role
@@ -42,7 +44,7 @@ const addonRoles = [
   { value: 'admin', label: 'Admin', description: 'Full system access and user management' },
 ];
 
-const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple' | 'red' | 'blue'> = {
+const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'purple' | 'red' | 'blue' | 'amber'> = {
   recruiter: 'cyan',
   recruiter_manager: 'cyan',
   technical: 'blue',
@@ -53,6 +55,7 @@ const roleBadgeVariant: Record<string, 'cyan' | 'green' | 'gold' | 'orange' | 'p
   hr_manager: 'purple',
   admin: 'orange',
   superadmin: 'red',
+  consultant: 'amber',
 };
 
 const roleLabels: Record<string, string> = {
@@ -66,6 +69,7 @@ const roleLabels: Record<string, string> = {
   hr_manager: 'HR Manager',
   admin: 'Admin',
   superadmin: 'Super Admin',
+  consultant: 'Consultant',
 };
 
 export function OrganisationPage() {
@@ -165,7 +169,13 @@ export function OrganisationPage() {
     setFormData(prev => {
       // Remove any existing base roles and add the new one
       const baseRoleValues = baseRoles.map(r => r.value);
-      const currentAddons = prev.roles.filter(r => !baseRoleValues.includes(r));
+      let currentAddons = prev.roles.filter(r => !baseRoleValues.includes(r));
+      
+      // If switching to consultant, remove admin addon (consultant cannot have admin)
+      if (role === 'consultant') {
+        currentAddons = currentAddons.filter(r => r !== 'admin');
+      }
+      
       // Reset reports_to when role changes
       return { ...prev, roles: [role, ...currentAddons], reports_to: '' };
     });
@@ -858,8 +868,8 @@ export function OrganisationPage() {
               </div>
             </div>
 
-            {/* Admin Add-on - Checkbox (only visible to superadmin) */}
-            {permissions.canCreateAdmins && (
+            {/* Admin Add-on - Checkbox (only visible to superadmin, blocked for consultants) */}
+            {permissions.canCreateAdmins && currentBaseRole !== 'consultant' && (
               <div>
                 <label className="block text-sm font-medium text-brand-slate-700 mb-2">
                   Additional Permissions
@@ -884,6 +894,16 @@ export function OrganisationPage() {
                     <p className="text-xs text-orange-600">Full system access, user management, and soft delete capability</p>
                   </div>
                 </label>
+              </div>
+            )}
+
+            {/* Show warning when consultant is selected */}
+            {currentBaseRole === 'consultant' && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-700">
+                  <strong>Note:</strong> Consultants can only access Timesheets and Leave Requests. 
+                  Admin access cannot be granted to consultants.
+                </p>
               </div>
             )}
           </div>

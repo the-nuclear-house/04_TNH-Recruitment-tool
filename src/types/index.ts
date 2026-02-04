@@ -12,7 +12,8 @@ export type UserRole =
   | 'recruiter_manager'
   | 'recruiter' 
   | 'hr_manager'
-  | 'hr';
+  | 'hr'
+  | 'consultant';
 
 export interface User {
   id: string;

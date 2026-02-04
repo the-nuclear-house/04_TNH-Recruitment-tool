@@ -762,15 +762,12 @@ export function MissionsPage() {
                                       ? project.type === 'T&M'
                                         ? 'bg-emerald-200/70 border-emerald-400'  // T&M Active - Green
                                         : 'bg-violet-200/70 border-violet-400'    // Fixed Price Active - Purple
-                                      : project.status === 'completed'
-                                        ? 'bg-blue-200/50 border-blue-300'        // Completed - Blue
-                                        : project.status === 'on_hold'
-                                          ? 'bg-amber-200/50 border-amber-300'    // On Hold - Amber
-                                          : 'bg-red-200/50 border-red-300'        // Cancelled - Red
+                                      : 'bg-slate-200/50 border-slate-300'        // Closed - Grey
                                   }`}
                                   style={{ left: projectBarStyle.left, width: projectBarStyle.width, minWidth: '8px' }}
                                   title={`${project.name}\n${project.type === 'T&M' ? 'Time & Materials' : 'Fixed Price / Work Package'}\n${project.start_date || '?'} - ${project.end_date || 'ongoing'}`}
                                 />
+                              )}
                               )}
                             </div>
                           </div>
@@ -821,14 +818,12 @@ export function MissionsPage() {
                                   {barStyle && (
                                     <div
                                       className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full transition-all hover:h-8 ${
-                                        mission.status === 'active' ? 'bg-green-500' :
-                                        mission.status === 'completed' ? 'bg-blue-400' :
-                                        mission.status === 'on_hold' ? 'bg-amber-400' :
-                                        'bg-red-400'
+                                        mission.status === 'active' ? 'bg-green-500' : 'bg-slate-400'
                                       }`}
                                       style={{ left: barStyle.left, width: barStyle.width, minWidth: '8px' }}
                                       title={`${mission.name}\n${formatDate(mission.start_date)} - ${formatDate(mission.end_date)}`}
                                     />
+                                  )}
                                   )}
                                 </div>
                               </div>
@@ -886,10 +881,7 @@ export function MissionsPage() {
                                 {barStyle && (
                                   <div
                                     className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full transition-all hover:h-8 ${
-                                      mission.status === 'active' ? 'bg-green-500' :
-                                      mission.status === 'completed' ? 'bg-blue-400' :
-                                      mission.status === 'on_hold' ? 'bg-amber-400' :
-                                      'bg-red-400'
+                                      mission.status === 'active' ? 'bg-green-500' : 'bg-slate-400'
                                     }`}
                                     style={{ left: barStyle.left, width: barStyle.width, minWidth: '8px' }}
                                     title={`${mission.name}\n${formatDate(mission.start_date)} - ${formatDate(mission.end_date)}`}
@@ -921,20 +913,16 @@ export function MissionsPage() {
             <span>Fixed Price Project</span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded bg-slate-200/50 border-2 border-slate-300" />
+            <span>Closed Project</span>
+          </div>
+          <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-green-500" />
             <span>Active Mission</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-blue-400" />
-            <span>Completed</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-amber-400" />
-            <span>On Hold</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-red-400" />
-            <span>Cancelled</span>
+            <div className="w-4 h-4 rounded-full bg-slate-400" />
+            <span>Closed Mission</span>
           </div>
         </div>
       </div>
