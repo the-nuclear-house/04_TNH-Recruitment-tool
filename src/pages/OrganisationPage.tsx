@@ -810,7 +810,7 @@ export function OrganisationPage() {
                           return (
                             <div key={managerId}>
                               <div className="px-4 py-2 bg-brand-grey-50 text-sm font-medium text-brand-grey-600 flex items-center gap-2">
-                                <Avatar name={manager?.full_name || 'Unknown'} size="xs" />
+                                <Avatar name={manager?.full_name || 'Unknown'} size="sm" />
                                 {manager?.full_name || 'Unknown Manager'} ({managerConsultants.length})
                               </div>
                               {managerConsultants.map(consultant => (
