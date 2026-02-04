@@ -68,21 +68,14 @@ export function CreateProjectModal({
         // Load fresh company data to get latest financial_scoring
         // Use company.id if available, otherwise try requirement.company_id
         const companyId = company?.id || requirement?.company_id;
-        console.log('Loading company with ID:', companyId);
         
         if (companyId) {
           const companyData = await companiesService.getById(companyId);
-          console.log('Fetched company data:', companyData);
-          console.log('Financial scoring value:', companyData?.financial_scoring);
-          console.log('Parent company ID:', companyData?.parent_company_id);
-          console.log('Parent company data (from join):', companyData?.parent_company);
-          console.log('Parent financial scoring:', companyData?.parent_company?.financial_scoring);
-          
           if (companyData) {
             setFreshCompany(companyData);
           }
         } else {
-          console.log('No company ID found');
+          // No company ID found - this shouldn't happen in normal flow
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -106,24 +99,11 @@ export function CreateProjectModal({
   const parentCompany = actualCompany?.parent_company || null;
   const companyForFinancialCheck = parentCompany || actualCompany;
   
-  // Debug logging
-  console.log('=== Financial Scoring Check ===');
-  console.log('hasLoadedCompany:', hasLoadedCompany);
-  console.log('freshCompany:', freshCompany);
-  console.log('actualCompany:', actualCompany);
-  console.log('parentCompany:', parentCompany);
-  console.log('companyForFinancialCheck:', companyForFinancialCheck);
-  console.log('companyForFinancialCheck?.financial_scoring:', companyForFinancialCheck?.financial_scoring);
-  
   // Check if financial scoring is missing (null, undefined, or empty string)
   // Only check AFTER we've loaded the fresh company data to avoid false positives
   const hasFinancialScoringColumn = companyForFinancialCheck && 'financial_scoring' in companyForFinancialCheck;
   const missingFinancialScoring = hasLoadedCompany && hasFinancialScoringColumn && 
     (!companyForFinancialCheck?.financial_scoring || companyForFinancialCheck.financial_scoring.trim() === '');
-  
-  console.log('hasFinancialScoringColumn:', hasFinancialScoringColumn);
-  console.log('missingFinancialScoring:', missingFinancialScoring);
-  console.log('==============================');
 
   // Pre-fill form when requirement data is available
   useEffect(() => {
