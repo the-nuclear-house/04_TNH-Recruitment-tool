@@ -76,6 +76,7 @@ export interface DbConsultant {
   id: string;
   reference_id: string | null;
   candidate_id: string | null;
+  user_id: string | null;  // Links to users table for login
   first_name: string;
   last_name: string;
   email: string;
@@ -4511,4 +4512,128 @@ export const bidDocumentService = {
 
     if (error) throw error;
   }
+};
+
+// ============================================
+// TIMESHEET TYPES & SERVICES
+// ============================================
+
+export interface DbTimesheetEntry {
+  id: string;
+  consultant_id: string;
+  week_start_date: string;
+  date: string;
+  period: 'AM' | 'PM';
+  entry_type: 'mission' | 'bench' | 'leave' | 'bank_holiday';
+  mission_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbTimesheetWeek {
+  id: string;
+  consultant_id: string;
+  week_start_date: string;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  submitted_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const timesheetEntriesService = {
+  async getByConsultantAndWeek(consultantId: string, weekStartDate: string): Promise<DbTimesheetEntry[]> {
+    const { data, error } = await supabase
+      .from('timesheet_entries')
+      .select('*')
+      .eq('consultant_id', consultantId)
+      .eq('week_start_date', weekStartDate)
+      .order('date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(entry: Omit<DbTimesheetEntry, 'id' | 'notes' | 'created_at' | 'updated_at'>): Promise<DbTimesheetEntry> {
+    const { data, error } = await supabase
+      .from('timesheet_entries')
+      .insert([entry])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, updates: Partial<DbTimesheetEntry>): Promise<DbTimesheetEntry> {
+    const { data, error } = await supabase
+      .from('timesheet_entries')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('timesheet_entries')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
+
+export const timesheetWeeksService = {
+  async getByConsultantAndWeek(consultantId: string, weekStartDate: string): Promise<DbTimesheetWeek | null> {
+    const { data, error } = await supabase
+      .from('timesheet_weeks')
+      .select('*')
+      .eq('consultant_id', consultantId)
+      .eq('week_start_date', weekStartDate)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  async getPendingApprovals(): Promise<DbTimesheetWeek[]> {
+    const { data, error } = await supabase
+      .from('timesheet_weeks')
+      .select('*')
+      .in('status', ['submitted', 'approved'])
+      .order('week_start_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(week: Omit<DbTimesheetWeek, 'id' | 'submitted_at' | 'approved_by' | 'approved_at' | 'rejection_reason' | 'created_at' | 'updated_at'>): Promise<DbTimesheetWeek> {
+    const { data, error } = await supabase
+      .from('timesheet_weeks')
+      .insert([{ ...week, submitted_at: new Date().toISOString() }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, updates: Partial<DbTimesheetWeek>): Promise<DbTimesheetWeek> {
+    const { data, error } = await supabase
+      .from('timesheet_weeks')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
 };
