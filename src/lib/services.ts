@@ -3798,6 +3798,7 @@ export const hrTicketsService = {
         *,
         consultant:consultants(*),
         candidate:candidates(*),
+        offer:offers(*),
         assignee:users!hr_tickets_assigned_to_fkey(*)
       `)
       .order('created_at', { ascending: false });
@@ -3813,6 +3814,7 @@ export const hrTicketsService = {
         *,
         consultant:consultants(*),
         candidate:candidates(*),
+        offer:offers(*),
         assignee:users!hr_tickets_assigned_to_fkey(*)
       `)
       .eq('id', id)
@@ -3829,6 +3831,7 @@ export const hrTicketsService = {
         *,
         consultant:consultants(*),
         candidate:candidates(*),
+        offer:offers(*),
         assignee:users!hr_tickets_assigned_to_fkey(*)
       `)
       .in('status', ['pending', 'in_progress'])
@@ -3847,6 +3850,7 @@ export const hrTicketsService = {
         *,
         consultant:consultants(*),
         candidate:candidates(*),
+        offer:offers(*),
         assignee:users!hr_tickets_assigned_to_fkey(*)
       `)
       .eq('assigned_to', userId)
