@@ -64,7 +64,7 @@ serve(async (req) => {
     }
 
     // Get the new user data from request body
-    const { email, password, full_name, roles } = await req.json()
+    const { email, password, full_name, roles, reports_to } = await req.json()
 
     if (!email || !password || !full_name || !roles) {
       return new Response(
@@ -100,7 +100,8 @@ serve(async (req) => {
         id: newAuthUser.user.id,
         email,
         full_name,
-        roles
+        roles,
+        reports_to: reports_to || null
       })
 
     if (insertError) {
