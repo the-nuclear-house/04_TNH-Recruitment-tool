@@ -757,9 +757,19 @@ export function MissionsPage() {
                             <div className="flex-1 relative py-2">
                               {projectBarStyle && (
                                 <div
-                                  className="absolute top-1/2 -translate-y-1/2 h-8 rounded bg-slate-300/60 border-2 border-slate-400"
+                                  className={`absolute top-1/2 -translate-y-1/2 h-8 rounded border-2 ${
+                                    project.status === 'active' 
+                                      ? project.type === 'T&M'
+                                        ? 'bg-emerald-200/70 border-emerald-400'  // T&M Active - Green
+                                        : 'bg-violet-200/70 border-violet-400'    // Fixed Price Active - Purple
+                                      : project.status === 'completed'
+                                        ? 'bg-blue-200/50 border-blue-300'        // Completed - Blue
+                                        : project.status === 'on_hold'
+                                          ? 'bg-amber-200/50 border-amber-300'    // On Hold - Amber
+                                          : 'bg-red-200/50 border-red-300'        // Cancelled - Red
+                                  }`}
                                   style={{ left: projectBarStyle.left, width: projectBarStyle.width, minWidth: '8px' }}
-                                  title={`${project.name}\n${project.start_date || '?'} - ${project.end_date || 'ongoing'}`}
+                                  title={`${project.name}\n${project.type === 'T&M' ? 'Time & Materials' : 'Fixed Price / Work Package'}\n${project.start_date || '?'} - ${project.end_date || 'ongoing'}`}
                                 />
                               )}
                             </div>
@@ -900,15 +910,19 @@ export function MissionsPage() {
 
 
         {/* Legend */}
-        <div className="flex items-center gap-6 text-sm text-brand-grey-500">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-brand-grey-500">
           <span className="font-medium">Legend:</span>
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-slate-300/60 border-2 border-slate-400" />
-            <span>Project</span>
+            <div className="w-5 h-5 rounded bg-emerald-200/70 border-2 border-emerald-400" />
+            <span>T&M Project</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded bg-violet-200/70 border-2 border-violet-400" />
+            <span>Fixed Price Project</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-green-500" />
-            <span>Active</span>
+            <span>Active Mission</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-blue-400" />
