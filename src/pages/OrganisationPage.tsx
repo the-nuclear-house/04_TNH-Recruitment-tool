@@ -207,11 +207,6 @@ export function OrganisationPage() {
       toast.error('Validation Error', 'Please fill in all required fields and select at least one role');
       return;
     }
-    
-    if (!isEditing && !formData.password) {
-      toast.error('Validation Error', 'Password is required for new users');
-      return;
-    }
 
     // Validate reports_to if role requires a manager
     const selectedRole = formData.roles[0] as UserRole;
@@ -239,6 +234,9 @@ export function OrganisationPage() {
         // Use edge function to create user (works even with signups disabled)
         const { data: sessionData } = await supabase.auth.getSession();
         
+        // Auto-generate a random password (SSO will be used for login, not this password)
+        const autoPassword = `SSO_${crypto.randomUUID().slice(0, 16)}!`;
+        
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
           method: 'POST',
           headers: {
@@ -247,7 +245,7 @@ export function OrganisationPage() {
           },
           body: JSON.stringify({
             email: formData.email,
-            password: formData.password,
+            password: autoPassword,
             full_name: formData.full_name,
             roles: formData.roles,
             reports_to: formData.reports_to || null,
@@ -855,22 +853,6 @@ export function OrganisationPage() {
                 </div>
               )}
             </div>
-          )}
-          
-          {!isEditing && (
-            <Input
-              label="Temporary Password *"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-              placeholder="Minimum 6 characters"
-            />
-          )}
-          
-          {isEditing && (
-            <p className="text-sm text-brand-grey-400">
-              Password changes require the user to use the forgot password flow.
-            </p>
           )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
