@@ -79,7 +79,17 @@ serve(async (req) => {
       }
     }
 
-    // Delete from users table first
+    // First, unlink any consultant record (don't delete it - needed for history)
+    const { error: unlinkError } = await adminClient
+      .from('consultants')
+      .update({ user_id: null })
+      .eq('user_id', userId)
+
+    if (unlinkError) {
+      console.log('No consultant to unlink or error:', unlinkError.message)
+    }
+
+    // Delete from users table
     const { error: deleteUserError } = await adminClient
       .from('users')
       .delete()
@@ -89,6 +99,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Failed to delete user profile: ' + deleteUserError.message }), 
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+
+    // Note: We don't delete the consultant record - it's needed for historical data
+    // (timesheets, missions, invoices). The consultant profile just becomes orphaned.
 
     // Delete from auth.users
     const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(userId)
