@@ -768,7 +768,6 @@ export function MissionsPage() {
                                   title={`${project.name}\n${project.type === 'T&M' ? 'Time & Materials' : 'Fixed Price / Work Package'}\n${project.start_date || '?'} - ${project.end_date || 'ongoing'}`}
                                 />
                               )}
-                              )}
                             </div>
                           </div>
                           
@@ -823,7 +822,6 @@ export function MissionsPage() {
                                       style={{ left: barStyle.left, width: barStyle.width, minWidth: '8px' }}
                                       title={`${mission.name}\n${formatDate(mission.start_date)} - ${formatDate(mission.end_date)}`}
                                     />
-                                  )}
                                   )}
                                 </div>
                               </div>
