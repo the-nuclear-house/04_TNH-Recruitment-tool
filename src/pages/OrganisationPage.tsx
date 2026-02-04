@@ -737,19 +737,80 @@ export function OrganisationPage() {
         size="lg"
       >
         <div className="space-y-4">
-          <Input
-            label="Full Name *"
-            value={formData.full_name}
-            onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
-            placeholder="John Smith"
-          />
-          <Input
-            label="Email *"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            placeholder="john@company.com"
-          />
+          {/* Check if editing a consultant - show restricted form */}
+          {isEditing && formData.roles.includes('consultant') ? (
+            <>
+              {/* Consultant Edit - Restricted Form */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                <p className="text-sm text-amber-700">
+                  <strong>Consultant Profile</strong> - Only name and manager can be edited. 
+                  Role changes require deleting and recreating the account.
+                </p>
+              </div>
+              
+              <Input
+                label="Full Name *"
+                value={formData.full_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
+                placeholder="John Smith"
+              />
+              
+              <Input
+                label="Email"
+                type="email"
+                value={formData.email}
+                disabled
+                className="bg-brand-grey-50"
+              />
+              
+              <div className="p-3 bg-brand-grey-50 rounded-lg">
+                <p className="text-sm text-brand-grey-500">
+                  <strong>Role:</strong> Consultant
+                </p>
+              </div>
+              
+              {/* Manager Selection for Consultant */}
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-2">
+                  Reports To * <span className="text-brand-grey-400 font-normal">(select manager)</span>
+                </label>
+                <select
+                  value={formData.reports_to}
+                  onChange={(e) => setFormData(prev => ({ ...prev, reports_to: e.target.value }))}
+                  className="w-full px-3 py-2 border border-brand-grey-300 rounded-lg focus:ring-2 focus:ring-brand-cyan focus:border-brand-cyan"
+                >
+                  <option value="">Select a manager...</option>
+                  {users.filter(u => u.roles?.some((r: string) => ['business_manager', 'business_director'].includes(r))).map(manager => (
+                    <option key={manager.id} value={manager.id}>
+                      {manager.full_name} ({roleLabels[manager.roles?.[0]] || manager.roles?.[0]})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-brand-grey-200">
+                <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                <Button variant="success" onClick={handleSubmit} isLoading={isSubmitting}>
+                  Save Changes
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Normal Add/Edit Form for Corporate Users */}
+              <Input
+                label="Full Name *"
+                value={formData.full_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
+                placeholder="John Smith"
+              />
+              <Input
+                label="Email *"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="john@company.com"
+              />
           
           {/* Role Selection */}
           <div className="space-y-4">
@@ -862,6 +923,8 @@ export function OrganisationPage() {
               {isEditing ? 'Save Changes' : 'Add Member'}
             </Button>
           </div>
+            </>
+          )}
         </div>
       </Modal>
 
