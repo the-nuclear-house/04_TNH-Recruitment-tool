@@ -146,6 +146,10 @@ export function TimesheetsPage() {
   const [allWeeks, setAllWeeks] = useState<DbTimesheetWeek[]>([]);
   const [allEntries, setAllEntries] = useState<DbTimesheetEntry[]>([]);
   
+  // Consultant monthly overview
+  const [myMonthWeeks, setMyMonthWeeks] = useState<DbTimesheetWeek[]>([]);
+  const [myMonthEntries, setMyMonthEntries] = useState<DbTimesheetEntry[]>([]);
+  
   // Single entry modal (for editing existing)
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -197,13 +201,19 @@ export function TimesheetsPage() {
       setMyConsultant(myRecord || null);
       
       if (myRecord) {
-        const weekEntries = await timesheetEntriesService.getByConsultantAndWeek(myRecord.id, weekStartKey);
+        const [weekEntries, weekData, allMissions, monthWeeks, monthEntries] = await Promise.all([
+          timesheetEntriesService.getByConsultantAndWeek(myRecord.id, weekStartKey),
+          timesheetWeeksService.getByConsultantAndWeek(myRecord.id, weekStartKey),
+          missionsService.getAll(),
+          timesheetWeeksService.getByConsultant(myRecord.id),
+          timesheetEntriesService.getByConsultant(myRecord.id),
+        ]);
+        
         setEntries(weekEntries);
-        
-        const weekData = await timesheetWeeksService.getByConsultantAndWeek(myRecord.id, weekStartKey);
         setWeekStatus(weekData);
+        setMyMonthWeeks(monthWeeks);
+        setMyMonthEntries(monthEntries);
         
-        const allMissions = await missionsService.getAll();
         const myMissions = allMissions.filter(m => 
           m.consultant_id === myRecord.id && m.status === 'active'
         );
@@ -269,6 +279,61 @@ export function TimesheetsPage() {
   const monthDays = useMemo(() => {
     return getMonthDays(currentMonth.getFullYear(), currentMonth.getMonth());
   }, [currentMonth]);
+
+  // Consultant monthly overview: compute the month containing the current week
+  const consultantMonthData = useMemo(() => {
+    const monthOfWeek = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1);
+    const year = monthOfWeek.getFullYear();
+    const month = monthOfWeek.getMonth();
+    const days = getMonthDays(year, month);
+    
+    // Build a calendar grid (weeks as rows, 7 cols Mon-Sun)
+    const firstDay = days[0].getDay(); // 0=Sun
+    const startOffset = firstDay === 0 ? 6 : firstDay - 1; // offset to Monday start
+    
+    const calendarWeeks: (Date | null)[][] = [];
+    let currentRow: (Date | null)[] = [];
+    
+    // Pad start
+    for (let i = 0; i < startOffset; i++) {
+      currentRow.push(null);
+    }
+    
+    for (const day of days) {
+      currentRow.push(day);
+      if (currentRow.length === 7) {
+        calendarWeeks.push(currentRow);
+        currentRow = [];
+      }
+    }
+    
+    // Pad end
+    if (currentRow.length > 0) {
+      while (currentRow.length < 7) {
+        currentRow.push(null);
+      }
+      calendarWeeks.push(currentRow);
+    }
+    
+    return { year, month, calendarWeeks, monthLabel: monthOfWeek.toLocaleString('en-GB', { month: 'long', year: 'numeric' }) };
+  }, [currentWeekStart]);
+
+  // Get status for a day in the consultant's month overview
+  const getConsultantDayStatus = (date: Date): 'empty' | 'draft' | 'submitted' | 'approved' | 'rejected' | 'has_entries' => {
+    const dateKey = formatDateKey(date);
+    const weekStart = getWeekStart(date);
+    const weekStartKey = formatDateKey(weekStart);
+    
+    const week = myMonthWeeks.find(w => w.week_start_date === weekStartKey);
+    const hasEntries = myMonthEntries.some(e => e.date === dateKey);
+    
+    if (week) {
+      return week.status as 'draft' | 'submitted' | 'approved' | 'rejected';
+    }
+    
+    if (hasEntries) return 'has_entries';
+    return 'empty';
+  };
 
   // Navigation
   const goToPreviousWeek = () => {
@@ -832,6 +897,92 @@ export function TimesheetsPage() {
               </div>
             ))}
           </div>
+
+          {/* Monthly Overview */}
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-brand-slate-700">{consultantMonthData.monthLabel}</h3>
+              <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-slate-200" />
+                  <span className="text-brand-grey-500">Draft</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-amber-300" />
+                  <span className="text-brand-grey-500">Submitted</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-green-400" />
+                  <span className="text-brand-grey-500">Approved</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-red-300" />
+                  <span className="text-brand-grey-500">Rejected</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Day headers */}
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                <div key={d} className="text-center text-[10px] font-medium text-brand-grey-400 py-1">{d}</div>
+              ))}
+            </div>
+            
+            {/* Calendar grid */}
+            <div className="space-y-1">
+              {consultantMonthData.calendarWeeks.map((week, wi) => {
+                // Check if any day in this row matches the currently viewed week
+                const isCurrentWeekRow = week.some(d => {
+                  if (!d) return false;
+                  const ws = getWeekStart(d);
+                  return formatDateKey(ws) === formatDateKey(currentWeekStart);
+                });
+                
+                return (
+                  <div 
+                    key={wi} 
+                    className={`grid grid-cols-7 gap-1 rounded-lg transition-all ${
+                      isCurrentWeekRow ? 'ring-2 ring-brand-cyan ring-offset-1' : ''
+                    }`}
+                  >
+                    {week.map((date, di) => {
+                      if (!date) {
+                        return <div key={`empty-${di}`} className="h-8 rounded" />;
+                      }
+                      
+                      const dayOfWeek = date.getDay();
+                      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                      const isToday = formatDateKey(date) === formatDateKey(new Date());
+                      const status = isWeekend ? 'weekend' : getConsultantDayStatus(date);
+                      const weekStartOfDay = getWeekStart(date);
+                      
+                      return (
+                        <button
+                          key={formatDateKey(date)}
+                          onClick={() => {
+                            if (!isWeekend) {
+                              setCurrentWeekStart(weekStartOfDay);
+                            }
+                          }}
+                          className={`h-8 rounded text-xs font-medium flex items-center justify-center transition-all ${
+                            isWeekend ? 'bg-slate-50 text-slate-300 cursor-default' :
+                            status === 'approved' ? 'bg-green-400 text-white cursor-pointer hover:bg-green-500' :
+                            status === 'submitted' ? 'bg-amber-300 text-amber-900 cursor-pointer hover:bg-amber-400' :
+                            status === 'rejected' ? 'bg-red-300 text-white cursor-pointer hover:bg-red-400' :
+                            status === 'has_entries' || status === 'draft' ? 'bg-slate-200 text-slate-600 cursor-pointer hover:bg-slate-300' :
+                            'bg-slate-100 text-slate-400 cursor-pointer hover:bg-slate-200'
+                          } ${isToday ? 'ring-2 ring-brand-cyan' : ''}`}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         </div>
 
         {/* Single Entry Modal */}

@@ -4600,6 +4600,17 @@ export const timesheetEntriesService = {
     return data || [];
   },
 
+  async getByConsultant(consultantId: string): Promise<DbTimesheetEntry[]> {
+    const { data, error } = await supabase
+      .from('timesheet_entries')
+      .select('*')
+      .eq('consultant_id', consultantId)
+      .order('date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async getByConsultantAndWeek(consultantId: string, weekStartDate: string): Promise<DbTimesheetEntry[]> {
     const { data, error } = await supabase
       .from('timesheet_entries')
@@ -4646,6 +4657,17 @@ export const timesheetEntriesService = {
 };
 
 export const timesheetWeeksService = {
+  async getByConsultant(consultantId: string): Promise<DbTimesheetWeek[]> {
+    const { data, error } = await supabase
+      .from('timesheet_weeks')
+      .select('*')
+      .eq('consultant_id', consultantId)
+      .order('week_start_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async getByConsultantAndWeek(consultantId: string, weekStartDate: string): Promise<DbTimesheetWeek | null> {
     const { data, error } = await supabase
       .from('timesheet_weeks')
