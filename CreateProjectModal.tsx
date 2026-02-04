@@ -53,6 +53,7 @@ export function CreateProjectModal({
 
   // Fresh company data (to ensure financial_scoring is up to date)
   const [freshCompany, setFreshCompany] = useState<DbCompany | null>(null);
+  const [parentCompany, setParentCompany] = useState<DbCompany | null>(null);
   const [isLoadingCompany, setIsLoadingCompany] = useState(true); // Start as true to prevent flash of warning
   const [hasLoadedCompany, setHasLoadedCompany] = useState(false); // Track if we've completed initial load
 
@@ -74,8 +75,21 @@ export function CreateProjectModal({
           const companyData = await companiesService.getById(companyId);
           console.log('Fetched company data:', companyData);
           console.log('Financial scoring value:', companyData?.financial_scoring);
+          console.log('Parent company ID:', companyData?.parent_company_id);
+          
           if (companyData) {
             setFreshCompany(companyData);
+            
+            // If this is a subsidiary, load the parent company to get its financial scoring
+            if (companyData.parent_company_id) {
+              console.log('This is a subsidiary, loading parent company...');
+              const parentData = await companiesService.getById(companyData.parent_company_id);
+              console.log('Parent company data:', parentData);
+              console.log('Parent financial scoring:', parentData?.financial_scoring);
+              if (parentData) {
+                setParentCompany(parentData);
+              }
+            }
           }
         } else {
           console.log('No company ID found');
@@ -96,11 +110,15 @@ export function CreateProjectModal({
   // Use fresh company data if available, otherwise fall back to prop
   const actualCompany = freshCompany || company;
   
+  // For financial scoring, use parent company's score if this is a subsidiary
+  // Financial scoring is only set on parent companies, not subsidiaries
+  const companyForFinancialCheck = parentCompany || actualCompany;
+  
   // Check if financial scoring is missing (null, undefined, or empty string)
   // Only check AFTER we've loaded the fresh company data to avoid false positives
-  const hasFinancialScoringColumn = actualCompany && 'financial_scoring' in actualCompany;
+  const hasFinancialScoringColumn = companyForFinancialCheck && 'financial_scoring' in companyForFinancialCheck;
   const missingFinancialScoring = hasLoadedCompany && hasFinancialScoringColumn && 
-    (!actualCompany?.financial_scoring || actualCompany.financial_scoring.trim() === '');
+    (!companyForFinancialCheck?.financial_scoring || companyForFinancialCheck.financial_scoring.trim() === '');
 
   // Pre-fill form when requirement data is available
   useEffect(() => {
@@ -131,6 +149,7 @@ export function CreateProjectModal({
         notes: '',
       });
       setFreshCompany(null);
+      setParentCompany(null);
       setHasLoadedCompany(false);
       setIsLoadingCompany(true); // Reset to true so warning doesn't flash on next open
       setValidationErrors({});
@@ -225,8 +244,11 @@ export function CreateProjectModal({
             <div>
               <p className={`font-medium ${validationErrors.financial_scoring ? 'text-red-800' : 'text-amber-800'}`}>Financial Scoring Required</p>
               <p className={`text-sm mt-1 ${validationErrors.financial_scoring ? 'text-red-700' : 'text-amber-700'}`}>
-                You need to add a financial scoring to {actualCompany?.name || 'this customer'} before creating a project. 
-                Please go to the customer profile and add a financial scoring first.
+                {parentCompany ? (
+                  <>You need to add a financial scoring to the parent company ({parentCompany.name}) before creating a project for {actualCompany?.name}. Please go to the parent company profile and add a financial scoring first.</>
+                ) : (
+                  <>You need to add a financial scoring to {actualCompany?.name || 'this customer'} before creating a project. Please go to the customer profile and add a financial scoring first.</>
+                )}
               </p>
             </div>
           </div>
