@@ -4665,7 +4665,7 @@ export const timesheetWeeksService = {
         *,
         consultant:consultants(id, first_name, last_name, email, user_id, account_manager_id)
       `)
-      .in('status', ['submitted', 'approved'])
+      .in('status', ['submitted', 'approved', 'rejected'])
       .order('week_start_date', { ascending: false });
 
     if (error) throw error;

@@ -598,9 +598,7 @@ export function TimesheetsPage() {
     
     if (isWeekend) {
       return (
-        <div key={dateKey} className="h-10 bg-slate-50 rounded text-xs flex items-center justify-center text-slate-300">
-          -
-        </div>
+        <div className="h-10 w-full bg-slate-50 rounded" />
       );
     }
     
@@ -611,36 +609,40 @@ export function TimesheetsPage() {
     const hasEntries = am || pm;
     const isApproved = weekStatus === 'approved';
     const isSubmitted = weekStatus === 'submitted';
+    const isRejected = weekStatus === 'rejected';
     
     return (
       <button
-        key={dateKey}
         onClick={() => isSubmitted ? openWeekApproval(consultant, weekStartKey) : null}
-        className={`h-10 rounded text-xs flex flex-col items-center justify-center relative transition-all ${
+        className={`h-10 w-full rounded text-xs flex flex-col items-center justify-center relative transition-all ${
           isSubmitted ? 'cursor-pointer hover:ring-2 hover:ring-brand-cyan' : 'cursor-default'
         } ${
           !hasEntries ? 'bg-slate-100 text-slate-400' :
           isApproved ? 'bg-green-100 border border-green-300' :
           isSubmitted ? 'bg-amber-100 border border-amber-300' :
+          isRejected ? 'bg-red-50 border border-red-200' :
           'bg-slate-200'
         }`}
       >
         {hasEntries ? (
           <div className="flex gap-0.5">
             {am && (
-              <div className={`w-3 h-3 rounded-sm ${entryTypeConfig[am.entry_type].bgClass}`} 
+              <div className={`w-3.5 h-3.5 rounded-sm ${entryTypeConfig[am.entry_type].bgClass}`} 
                    title={`AM: ${entryTypeConfig[am.entry_type].label}`} />
             )}
             {pm && (
-              <div className={`w-3 h-3 rounded-sm ${entryTypeConfig[pm.entry_type].bgClass}`}
+              <div className={`w-3.5 h-3.5 rounded-sm ${entryTypeConfig[pm.entry_type].bgClass}`}
                    title={`PM: ${entryTypeConfig[pm.entry_type].label}`} />
             )}
           </div>
         ) : (
-          <span>-</span>
+          <span className="text-slate-300">-</span>
         )}
         {isApproved && (
           <Check className="absolute -top-1 -right-1 h-3 w-3 text-green-600 bg-white rounded-full" />
+        )}
+        {isRejected && (
+          <X className="absolute -top-1 -right-1 h-3 w-3 text-red-500 bg-white rounded-full" />
         )}
       </button>
     );
@@ -780,6 +782,17 @@ export function TimesheetsPage() {
                   </Button>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Rejection Reason Banner */}
+          {weekStatus?.status === 'rejected' && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm font-medium text-red-800">Timesheet Rejected</p>
+              {weekStatus.rejection_reason && (
+                <p className="text-sm text-red-700 mt-1">{weekStatus.rejection_reason}</p>
+              )}
+              <p className="text-xs text-red-600 mt-2">Please update the entries and resubmit.</p>
             </div>
           )}
 
@@ -951,6 +964,11 @@ export function TimesheetsPage() {
               <Check className="h-2 w-2 text-green-600" />
               <span className="text-brand-grey-600">Approved</span>
             </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-red-50 border border-red-200" />
+              <X className="h-2 w-2 text-red-500" />
+              <span className="text-brand-grey-600">Rejected</span>
+            </div>
           </div>
         </div>
 
@@ -970,10 +988,10 @@ export function TimesheetsPage() {
           </Card>
         ) : (
           <Card className="overflow-x-auto">
-            <table className="w-full">
+            <table className="border-collapse" style={{ tableLayout: 'fixed' }}>
               <thead>
                 <tr className="border-b border-brand-grey-200">
-                  <th className="text-left p-3 font-medium text-brand-slate-700 sticky left-0 bg-white min-w-[180px]">
+                  <th className="text-left p-3 font-medium text-brand-slate-700 sticky left-0 bg-white z-10 border-r border-brand-grey-200" style={{ width: '180px', minWidth: '180px' }}>
                     Consultant
                   </th>
                   {monthDays.map(date => {
@@ -983,7 +1001,8 @@ export function TimesheetsPage() {
                     return (
                       <th 
                         key={formatDateKey(date)} 
-                        className={`p-1 text-center min-w-[40px] ${
+                        style={{ width: '44px', minWidth: '44px' }}
+                        className={`p-0 text-center ${
                           isToday ? 'bg-brand-cyan text-white rounded' :
                           isWeekend ? 'text-slate-300' : 'text-brand-slate-600'
                         }`}
@@ -998,7 +1017,7 @@ export function TimesheetsPage() {
               <tbody>
                 {myConsultants.map(consultant => (
                   <tr key={consultant.id} className="border-b border-brand-grey-100 hover:bg-brand-grey-50">
-                    <td className="p-3 sticky left-0 bg-white">
+                    <td className="p-3 sticky left-0 bg-white z-10 border-r border-brand-grey-200" style={{ width: '180px', minWidth: '180px' }}>
                       <div className="flex items-center gap-2">
                         <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="sm" />
                         <div>
@@ -1010,7 +1029,7 @@ export function TimesheetsPage() {
                       </div>
                     </td>
                     {monthDays.map(date => (
-                      <td key={formatDateKey(date)} className="p-1">
+                      <td key={formatDateKey(date)} className="p-0.5" style={{ width: '44px', minWidth: '44px' }}>
                         {renderConsultantDayCell(consultant, date)}
                       </td>
                     ))}
