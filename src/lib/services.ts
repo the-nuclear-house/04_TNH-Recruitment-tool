@@ -4035,11 +4035,17 @@ export const hrTicketsService = {
 
     // Create consultant from candidate with user_id linked
     const candidateData = candidate as any; // Cast to allow access to all DB fields
+    
+    // The account manager should be whoever requested the offer (Business Manager)
+    // If not available, fall back to whoever is processing this ticket
+    const accountManagerId = offerData?.requested_by || userId;
+    
     const { data: newConsultant, error: consultantError } = await supabase
       .from('consultants')
       .insert({
         candidate_id: candidate.id,
         user_id: newUserId, // Link to the user account
+        account_manager_id: accountManagerId, // Link to their manager
         first_name: candidate.first_name,
         last_name: candidate.last_name,
         email: companyEmail, // Use company email, not personal email
