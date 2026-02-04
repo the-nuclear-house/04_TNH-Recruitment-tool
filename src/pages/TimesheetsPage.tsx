@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Header } from '@/components/layout';
-import { Card, Button, Badge, EmptyState, Modal, Avatar } from '@/components/ui';
+import { Card, Button, Badge, EmptyState, Modal, Avatar, Input } from '@/components/ui';
 import { 
   Clock, 
   ChevronLeft, 
@@ -10,7 +10,8 @@ import {
   User,
   AlertCircle,
   CheckCircle,
-  Eye,
+  CheckSquare,
+  X,
 } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -40,6 +41,11 @@ interface DayEntry {
   pm: DbTimesheetEntry | null;
 }
 
+interface SelectedSlot {
+  date: string;
+  period: Period;
+}
+
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
@@ -47,6 +53,10 @@ function getWeekStart(date: Date): Date {
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function getMonthStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
 function formatDateKey(date: Date): string {
@@ -77,6 +87,16 @@ function getWeekDays(weekStart: Date): DayEntry[] {
   return days;
 }
 
+function getMonthDays(year: number, month: number): Date[] {
+  const days: Date[] = [];
+  const date = new Date(year, month, 1);
+  while (date.getMonth() === month) {
+    days.push(new Date(date));
+    date.setDate(date.getDate() + 1);
+  }
+  return days;
+}
+
 function formatWeekRange(weekStart: Date): string {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
@@ -90,11 +110,15 @@ function formatWeekRange(weekStart: Date): string {
   return `${weekStart.getDate()} ${startMonth} - ${weekEnd.getDate()} ${endMonth} ${weekStart.getFullYear()}`;
 }
 
-const entryTypeConfig: Record<TimesheetEntryType, { label: string; bgClass: string; textClass: string }> = {
-  mission: { label: 'Project', bgClass: 'bg-emerald-500', textClass: 'text-white' },
-  bench: { label: 'Bench', bgClass: 'bg-amber-400', textClass: 'text-amber-900' },
-  leave: { label: 'Leave', bgClass: 'bg-blue-400', textClass: 'text-white' },
-  bank_holiday: { label: 'Bank Holiday', bgClass: 'bg-purple-400', textClass: 'text-white' },
+function formatMonthYear(date: Date): string {
+  return date.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+}
+
+const entryTypeConfig: Record<TimesheetEntryType, { label: string; bgClass: string; textClass: string; shortLabel: string }> = {
+  mission: { label: 'Project', shortLabel: 'P', bgClass: 'bg-emerald-500', textClass: 'text-white' },
+  bench: { label: 'Bench', shortLabel: 'B', bgClass: 'bg-amber-400', textClass: 'text-amber-900' },
+  leave: { label: 'Leave', shortLabel: 'L', bgClass: 'bg-blue-400', textClass: 'text-white' },
+  bank_holiday: { label: 'Bank Holiday', shortLabel: 'H', bgClass: 'bg-purple-400', textClass: 'text-white' },
 };
 
 const weekStatusConfig: Record<WeekStatus, { label: string; variant: 'grey' | 'amber' | 'green' | 'red' }> = {
@@ -111,13 +135,18 @@ export function TimesheetsPage() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => getWeekStart(new Date()));
+  const [currentMonth, setCurrentMonth] = useState<Date>(() => getMonthStart(new Date()));
   const [entries, setEntries] = useState<DbTimesheetEntry[]>([]);
   const [weekStatus, setWeekStatus] = useState<DbTimesheetWeek | null>(null);
   const [missions, setMissions] = useState<DbMission[]>([]);
-  const [consultants, setConsultants] = useState<DbConsultant[]>([]);
-  const [pendingWeeks, setPendingWeeks] = useState<(DbTimesheetWeek & { consultant?: DbConsultant })[]>([]);
   const [myConsultant, setMyConsultant] = useState<DbConsultant | null>(null);
   
+  // Manager view state
+  const [myConsultants, setMyConsultants] = useState<DbConsultant[]>([]);
+  const [allWeeks, setAllWeeks] = useState<DbTimesheetWeek[]>([]);
+  const [allEntries, setAllEntries] = useState<DbTimesheetEntry[]>([]);
+  
+  // Single entry modal (for editing existing)
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(null);
@@ -127,72 +156,93 @@ export function TimesheetsPage() {
   });
   const [isSaving, setIsSaving] = useState(false);
   
-  const [viewingConsultant, setViewingConsultant] = useState<DbConsultant | null>(null);
-  const [viewingWeek, setViewingWeek] = useState<DbTimesheetWeek | null>(null);
-  const [viewingEntries, setViewingEntries] = useState<DbTimesheetEntry[]>([]);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  // Multi-select state
+  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkEntryType, setBulkEntryType] = useState<TimesheetEntryType>('bench');
+  const [bulkMissionId, setBulkMissionId] = useState('');
+  
+  // Week approval modal
+  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [approvalWeek, setApprovalWeek] = useState<DbTimesheetWeek | null>(null);
+  const [approvalConsultant, setApprovalConsultant] = useState<DbConsultant | null>(null);
+  const [approvalEntries, setApprovalEntries] = useState<DbTimesheetEntry[]>([]);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const isConsultant = permissions.isConsultant;
   const canApprove = permissions.canApproveTimesheets;
+  const isLocked = weekStatus?.status === 'submitted' || weekStatus?.status === 'approved';
 
   useEffect(() => {
-    loadData();
-  }, [currentWeekStart, user?.id]);
+    if (isConsultant) {
+      loadConsultantData();
+    } else if (canApprove) {
+      loadManagerData();
+    }
+  }, [currentWeekStart, currentMonth, user?.id, isConsultant, canApprove]);
 
-  const loadData = async () => {
+  useEffect(() => {
+    setSelectedSlots([]);
+  }, [currentWeekStart]);
+
+  const loadConsultantData = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setIsLoading(true);
+      const weekStartKey = formatDateKey(currentWeekStart);
+      
+      const allConsultants = await consultantsService.getAll();
+      const myRecord = allConsultants.find(c => c.user_id === user.id);
+      setMyConsultant(myRecord || null);
+      
+      if (myRecord) {
+        const weekEntries = await timesheetEntriesService.getByConsultantAndWeek(myRecord.id, weekStartKey);
+        setEntries(weekEntries);
+        
+        const weekData = await timesheetWeeksService.getByConsultantAndWeek(myRecord.id, weekStartKey);
+        setWeekStatus(weekData);
+        
+        const allMissions = await missionsService.getAll();
+        const myMissions = allMissions.filter(m => 
+          m.consultant_id === myRecord.id && m.status === 'active'
+        );
+        setMissions(myMissions);
+      }
+    } catch (error) {
+      console.error('Error loading timesheet data:', error);
+      toast.error('Error', 'Failed to load timesheet data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadManagerData = async () => {
     if (!user?.id) return;
     
     try {
       setIsLoading(true);
       
-      const weekStartKey = formatDateKey(currentWeekStart);
+      const [allConsultants, weeks, entriesData, allMissions] = await Promise.all([
+        consultantsService.getAll(),
+        timesheetWeeksService.getPendingApprovals(),
+        timesheetEntriesService.getAll(),
+        missionsService.getAll(),
+      ]);
       
-      if (isConsultant) {
-        // Consultant view: find their consultant record via user_id
-        const allConsultants = await consultantsService.getAll();
-        const myRecord = allConsultants.find(c => c.user_id === user.id);
-        setMyConsultant(myRecord || null);
-        
-        if (myRecord) {
-          const weekEntries = await timesheetEntriesService.getByConsultantAndWeek(myRecord.id, weekStartKey);
-          setEntries(weekEntries);
-          
-          const weekData = await timesheetWeeksService.getByConsultantAndWeek(myRecord.id, weekStartKey);
-          setWeekStatus(weekData);
-          
-          const allMissions = await missionsService.getAll();
-          const myMissions = allMissions.filter(m => 
-            m.consultant_id === myRecord.id && m.status === 'active'
-          );
-          setMissions(myMissions);
-        }
-      } else if (canApprove) {
-        // Manager view: load pending approvals
-        const [allConsultants, allPendingWeeks, allMissions] = await Promise.all([
-          consultantsService.getAll(),
-          timesheetWeeksService.getPendingApprovals(),
-          missionsService.getAll(),
-        ]);
-        
-        // Filter consultants that report to this manager
-        const myConsultants = allConsultants.filter(c => 
-          c.account_manager_id === user.id || 
-          permissions.isAdmin || 
-          permissions.isBusinessDirector
-        );
-        
-        // Add consultant info to pending weeks
-        const weeksWithConsultants = allPendingWeeks.map(w => ({
-          ...w,
-          consultant: allConsultants.find(c => c.id === w.consultant_id)
-        }));
-        
-        setConsultants(myConsultants);
-        setPendingWeeks(weeksWithConsultants);
-        setMissions(allMissions);
-      }
+      // Filter consultants that report to this manager
+      const consultantsForManager = allConsultants.filter(c => 
+        c.account_manager_id === user.id || 
+        permissions.isAdmin || 
+        permissions.isBusinessDirector
+      );
+      
+      setMyConsultants(consultantsForManager);
+      setAllWeeks(weeks);
+      setAllEntries(entriesData);
+      setMissions(allMissions);
     } catch (error) {
-      console.error('Error loading timesheet data:', error);
+      console.error('Error loading manager data:', error);
       toast.error('Error', 'Failed to load timesheet data');
     } finally {
       setIsLoading(false);
@@ -216,6 +266,11 @@ export function TimesheetsPage() {
     return days;
   }, [currentWeekStart, entries]);
 
+  const monthDays = useMemo(() => {
+    return getMonthDays(currentMonth.getFullYear(), currentMonth.getMonth());
+  }, [currentMonth]);
+
+  // Navigation
   const goToPreviousWeek = () => {
     const newStart = new Date(currentWeekStart);
     newStart.setDate(newStart.getDate() - 7);
@@ -232,22 +287,122 @@ export function TimesheetsPage() {
     setCurrentWeekStart(getWeekStart(new Date()));
   };
 
-  const handleDayClick = (date: string, period: Period) => {
-    if (!myConsultant) return;
-    if (weekStatus?.status === 'submitted' || weekStatus?.status === 'approved') return;
+  const goToPreviousMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() - 1);
+    setCurrentMonth(newMonth);
+  };
+
+  const goToNextMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + 1);
+    setCurrentMonth(newMonth);
+  };
+
+  const goToCurrentMonth = () => {
+    setCurrentMonth(getMonthStart(new Date()));
+  };
+
+  // Slot selection helpers
+  const isSlotSelected = (date: string, period: Period) => {
+    return selectedSlots.some(s => s.date === date && s.period === period);
+  };
+
+  const toggleSlotSelection = (date: string, period: Period) => {
+    if (isLocked) return;
     
     const day = weekDays.find(d => d.date === date);
     if (day?.isWeekend) return;
     
-    const existingEntry = period === 'AM' ? day?.am : day?.pm;
-    
-    setSelectedDate(date);
-    setSelectedPeriod(period);
-    setEntryForm({
-      entry_type: existingEntry?.entry_type || 'mission',
-      mission_id: existingEntry?.mission_id || missions[0]?.id || '',
+    setSelectedSlots(prev => {
+      const exists = prev.some(s => s.date === date && s.period === period);
+      if (exists) {
+        return prev.filter(s => !(s.date === date && s.period === period));
+      } else {
+        return [...prev, { date, period }];
+      }
     });
-    setIsEntryModalOpen(true);
+  };
+
+  const handleSlotClick = (date: string, period: Period, hasEntry: boolean) => {
+    if (isLocked) return;
+    
+    const day = weekDays.find(d => d.date === date);
+    if (day?.isWeekend) return;
+    
+    if (hasEntry) {
+      const existingEntry = period === 'AM' ? day?.am : day?.pm;
+      setSelectedDate(date);
+      setSelectedPeriod(period);
+      setEntryForm({
+        entry_type: existingEntry?.entry_type || 'mission',
+        mission_id: existingEntry?.mission_id || missions[0]?.id || '',
+      });
+      setIsEntryModalOpen(true);
+    } else {
+      toggleSlotSelection(date, period);
+    }
+  };
+
+  const selectAllEmpty = () => {
+    const emptySlots: SelectedSlot[] = [];
+    weekDays.forEach(day => {
+      if (!day.isWeekend) {
+        if (!day.am) emptySlots.push({ date: day.date, period: 'AM' });
+        if (!day.pm) emptySlots.push({ date: day.date, period: 'PM' });
+      }
+    });
+    setSelectedSlots(emptySlots);
+  };
+
+  const clearSelection = () => {
+    setSelectedSlots([]);
+  };
+
+  const openBulkEdit = () => {
+    setBulkEntryType('bench');
+    setBulkMissionId(missions[0]?.id || '');
+    setIsBulkModalOpen(true);
+  };
+
+  // Save handlers
+  const handleBulkSave = async () => {
+    if (!myConsultant || selectedSlots.length === 0) return;
+    
+    try {
+      setIsSaving(true);
+      const weekStartKey = formatDateKey(currentWeekStart);
+      
+      for (const slot of selectedSlots) {
+        const existingEntry = entries.find(e => e.date === slot.date && e.period === slot.period);
+        
+        if (existingEntry) {
+          await timesheetEntriesService.update(existingEntry.id, {
+            entry_type: bulkEntryType,
+            mission_id: bulkEntryType === 'mission' ? bulkMissionId : null,
+          });
+        } else {
+          await timesheetEntriesService.create({
+            consultant_id: myConsultant.id,
+            week_start_date: weekStartKey,
+            date: slot.date,
+            period: slot.period,
+            entry_type: bulkEntryType,
+            mission_id: bulkEntryType === 'mission' ? bulkMissionId : null,
+          });
+        }
+      }
+      
+      toast.success('Saved', `${selectedSlots.length} entries saved`);
+      setIsBulkModalOpen(false);
+      setSelectedSlots([]);
+      loadConsultantData();
+    } catch (error) {
+      console.error('Error saving entries:', error);
+      toast.error('Error', 'Failed to save entries');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveEntry = async () => {
@@ -255,7 +410,6 @@ export function TimesheetsPage() {
     
     try {
       setIsSaving(true);
-      
       const weekStartKey = formatDateKey(currentWeekStart);
       
       const existingEntry = entries.find(e => 
@@ -280,7 +434,7 @@ export function TimesheetsPage() {
       
       toast.success('Saved', 'Timesheet entry saved');
       setIsEntryModalOpen(false);
-      loadData();
+      loadConsultantData();
     } catch (error) {
       console.error('Error saving entry:', error);
       toast.error('Error', 'Failed to save entry');
@@ -303,7 +457,7 @@ export function TimesheetsPage() {
       await timesheetEntriesService.delete(existingEntry.id);
       toast.success('Deleted', 'Entry removed');
       setIsEntryModalOpen(false);
-      loadData();
+      loadConsultantData();
     } catch (error) {
       console.error('Error deleting entry:', error);
       toast.error('Error', 'Failed to delete entry');
@@ -339,7 +493,7 @@ export function TimesheetsPage() {
       }
       
       toast.success('Submitted', 'Timesheet submitted for approval');
-      loadData();
+      loadConsultantData();
     } catch (error) {
       console.error('Error submitting timesheet:', error);
       toast.error('Error', 'Failed to submit timesheet');
@@ -348,51 +502,152 @@ export function TimesheetsPage() {
     }
   };
 
-  const handleApproveTimesheet = async (week: DbTimesheetWeek) => {
+  // Manager approval handlers
+  const openWeekApproval = (consultant: DbConsultant, weekStartDate: string) => {
+    const week = allWeeks.find(w => 
+      w.consultant_id === consultant.id && w.week_start_date === weekStartDate
+    );
+    
+    if (!week || week.status !== 'submitted') {
+      toast.error('Error', 'This week has not been submitted for approval');
+      return;
+    }
+    
+    const weekEntries = allEntries.filter(e => 
+      e.consultant_id === consultant.id && e.week_start_date === weekStartDate
+    );
+    
+    setApprovalConsultant(consultant);
+    setApprovalWeek(week);
+    setApprovalEntries(weekEntries);
+    setRejectionReason('');
+    setIsApprovalModalOpen(true);
+  };
+
+  const handleApproveWeek = async () => {
+    if (!approvalWeek) return;
+    
     try {
-      await timesheetWeeksService.update(week.id, { 
+      setIsSaving(true);
+      await timesheetWeeksService.update(approvalWeek.id, { 
         status: 'approved',
         approved_by: user?.id,
         approved_at: new Date().toISOString(),
       });
       toast.success('Approved', 'Timesheet approved');
-      loadData();
+      setIsApprovalModalOpen(false);
+      loadManagerData();
     } catch (error) {
       console.error('Error approving timesheet:', error);
       toast.error('Error', 'Failed to approve timesheet');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleRejectTimesheet = async (week: DbTimesheetWeek) => {
+  const handleRejectWeek = async () => {
+    if (!approvalWeek) return;
+    
+    if (!rejectionReason.trim()) {
+      toast.error('Required', 'Please provide a reason for rejection');
+      return;
+    }
+    
     try {
-      await timesheetWeeksService.update(week.id, { status: 'rejected' });
+      setIsSaving(true);
+      await timesheetWeeksService.update(approvalWeek.id, { 
+        status: 'rejected',
+        rejection_reason: rejectionReason,
+      });
       toast.success('Rejected', 'Timesheet sent back for revision');
-      loadData();
+      setIsApprovalModalOpen(false);
+      loadManagerData();
     } catch (error) {
       console.error('Error rejecting timesheet:', error);
       toast.error('Error', 'Failed to reject timesheet');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleViewTimesheet = async (week: DbTimesheetWeek & { consultant?: DbConsultant }) => {
-    try {
-      const weekEntries = await timesheetEntriesService.getByConsultantAndWeek(
-        week.consultant_id, 
-        week.week_start_date
+  // Get week status for a consultant and date
+  const getWeekStatusForDate = (consultantId: string, date: Date): WeekStatus | null => {
+    const weekStart = getWeekStart(date);
+    const weekStartKey = formatDateKey(weekStart);
+    const week = allWeeks.find(w => 
+      w.consultant_id === consultantId && w.week_start_date === weekStartKey
+    );
+    return week?.status as WeekStatus || null;
+  };
+
+  // Get entry for a consultant and date
+  const getEntryForDate = (consultantId: string, date: Date, period: Period): DbTimesheetEntry | null => {
+    const dateKey = formatDateKey(date);
+    return allEntries.find(e => 
+      e.consultant_id === consultantId && e.date === dateKey && e.period === period
+    ) || null;
+  };
+
+  // Render cell for consultant calendar
+  const renderConsultantDayCell = (consultant: DbConsultant, date: Date) => {
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const dateKey = formatDateKey(date);
+    const weekStart = getWeekStart(date);
+    const weekStartKey = formatDateKey(weekStart);
+    
+    if (isWeekend) {
+      return (
+        <div key={dateKey} className="h-10 bg-slate-50 rounded text-xs flex items-center justify-center text-slate-300">
+          -
+        </div>
       );
-      
-      setViewingConsultant(week.consultant || null);
-      setViewingWeek(week);
-      setViewingEntries(weekEntries);
-      setIsViewModalOpen(true);
-    } catch (error) {
-      console.error('Error loading timesheet details:', error);
-      toast.error('Error', 'Failed to load timesheet details');
     }
+    
+    const am = getEntryForDate(consultant.id, date, 'AM');
+    const pm = getEntryForDate(consultant.id, date, 'PM');
+    const weekStatus = getWeekStatusForDate(consultant.id, date);
+    
+    const hasEntries = am || pm;
+    const isApproved = weekStatus === 'approved';
+    const isSubmitted = weekStatus === 'submitted';
+    
+    return (
+      <button
+        key={dateKey}
+        onClick={() => isSubmitted ? openWeekApproval(consultant, weekStartKey) : null}
+        className={`h-10 rounded text-xs flex flex-col items-center justify-center relative transition-all ${
+          isSubmitted ? 'cursor-pointer hover:ring-2 hover:ring-brand-cyan' : 'cursor-default'
+        } ${
+          !hasEntries ? 'bg-slate-100 text-slate-400' :
+          isApproved ? 'bg-green-100 border border-green-300' :
+          isSubmitted ? 'bg-amber-100 border border-amber-300' :
+          'bg-slate-200'
+        }`}
+      >
+        {hasEntries ? (
+          <div className="flex gap-0.5">
+            {am && (
+              <div className={`w-3 h-3 rounded-sm ${entryTypeConfig[am.entry_type].bgClass}`} 
+                   title={`AM: ${entryTypeConfig[am.entry_type].label}`} />
+            )}
+            {pm && (
+              <div className={`w-3 h-3 rounded-sm ${entryTypeConfig[pm.entry_type].bgClass}`}
+                   title={`PM: ${entryTypeConfig[pm.entry_type].label}`} />
+            )}
+          </div>
+        ) : (
+          <span>-</span>
+        )}
+        {isApproved && (
+          <Check className="absolute -top-1 -right-1 h-3 w-3 text-green-600 bg-white rounded-full" />
+        )}
+      </button>
+    );
   };
 
   const renderEntryCell = (entry: DbTimesheetEntry | null, date: string, period: Period, isWeekend: boolean) => {
-    const isLocked = weekStatus?.status === 'submitted' || weekStatus?.status === 'approved';
+    const isSelected = isSlotSelected(date, period);
     
     if (isWeekend) {
       return (
@@ -408,7 +663,7 @@ export function TimesheetsPage() {
       
       return (
         <button
-          onClick={() => !isLocked && handleDayClick(date, period)}
+          onClick={() => handleSlotClick(date, period, true)}
           disabled={isLocked}
           className={`h-16 w-full rounded-lg ${config.bgClass} ${config.textClass} p-2 text-left transition-all ${
             isLocked ? 'cursor-not-allowed opacity-75' : 'hover:opacity-90 hover:shadow-md'
@@ -424,13 +679,21 @@ export function TimesheetsPage() {
     
     return (
       <button
-        onClick={() => !isLocked && handleDayClick(date, period)}
+        onClick={() => handleSlotClick(date, period, false)}
         disabled={isLocked}
-        className={`h-16 w-full rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center transition-all ${
-          isLocked ? 'cursor-not-allowed bg-slate-50' : 'hover:border-brand-cyan hover:bg-brand-cyan/5 cursor-pointer'
+        className={`h-16 w-full rounded-lg border-2 border-dashed flex items-center justify-center transition-all ${
+          isLocked 
+            ? 'cursor-not-allowed bg-slate-50 border-slate-200' 
+            : isSelected
+              ? 'border-brand-cyan bg-brand-cyan/20 border-solid'
+              : 'border-slate-300 hover:border-brand-cyan hover:bg-brand-cyan/5 cursor-pointer'
         }`}
       >
-        <span className="text-xs text-slate-400">{period}</span>
+        {isSelected ? (
+          <Check className="h-5 w-5 text-brand-cyan" />
+        ) : (
+          <span className="text-xs text-slate-400">{period}</span>
+        )}
       </button>
     );
   };
@@ -440,10 +703,7 @@ export function TimesheetsPage() {
     if (!myConsultant) {
       return (
         <div className="min-h-screen">
-          <Header 
-            title="Timesheets" 
-            subtitle="Submit your weekly timesheets"
-          />
+          <Header title="Timesheets" subtitle="Submit your weekly timesheets" />
           <div className="p-6">
             <Card>
               <EmptyState
@@ -459,10 +719,7 @@ export function TimesheetsPage() {
 
     return (
       <div className="min-h-screen">
-        <Header 
-          title="Timesheets" 
-          subtitle="Submit your weekly timesheets"
-        />
+        <Header title="Timesheets" subtitle="Submit your weekly timesheets" />
         <div className="p-6 space-y-6">
           {/* Week Navigation */}
           <div className="flex items-center justify-between">
@@ -501,6 +758,31 @@ export function TimesheetsPage() {
             </div>
           </div>
 
+          {/* Quick Actions */}
+          {!isLocked && (
+            <div className="flex items-center gap-3 p-3 bg-brand-grey-50 rounded-lg">
+              <span className="text-sm text-brand-grey-600">Quick fill:</span>
+              <Button variant="secondary" size="sm" onClick={selectAllEmpty}>
+                Select All Empty
+              </Button>
+              {selectedSlots.length > 0 && (
+                <>
+                  <Button variant="secondary" size="sm" onClick={clearSelection}>
+                    Clear ({selectedSlots.length})
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={openBulkEdit}
+                    leftIcon={<CheckSquare className="h-4 w-4" />}
+                  >
+                    Fill Selected ({selectedSlots.length})
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Week Calendar */}
           <Card className="p-6">
             {isLoading ? (
@@ -519,7 +801,6 @@ export function TimesheetsPage() {
                       <p className="text-xs font-medium">{day.dayName}</p>
                       <p className="text-lg font-bold">{day.dayNumber}</p>
                     </div>
-                    
                     {renderEntryCell(day.am, day.date, 'AM', day.isWeekend)}
                     {renderEntryCell(day.pm, day.date, 'PM', day.isWeekend)}
                   </div>
@@ -540,27 +821,18 @@ export function TimesheetsPage() {
           </div>
         </div>
 
-        {/* Entry Modal */}
-        <Modal
-          isOpen={isEntryModalOpen}
-          onClose={() => setIsEntryModalOpen(false)}
-          title="Edit Entry"
-          size="sm"
-        >
+        {/* Single Entry Modal */}
+        <Modal isOpen={isEntryModalOpen} onClose={() => setIsEntryModalOpen(false)} title="Edit Entry" size="sm">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-brand-slate-700 mb-2">
-                Entry Type
-              </label>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-2">Entry Type</label>
               <div className="grid grid-cols-2 gap-2">
                 {(['mission', 'bench', 'leave', 'bank_holiday'] as TimesheetEntryType[]).map(type => (
                   <button
                     key={type}
                     onClick={() => setEntryForm(prev => ({ ...prev, entry_type: type }))}
                     className={`p-3 rounded-lg border-2 text-left transition-all ${
-                      entryForm.entry_type === type
-                        ? 'border-brand-cyan bg-brand-cyan/5'
-                        : 'border-brand-grey-200 hover:border-brand-grey-300'
+                      entryForm.entry_type === type ? 'border-brand-cyan bg-brand-cyan/5' : 'border-brand-grey-200 hover:border-brand-grey-300'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -571,53 +843,68 @@ export function TimesheetsPage() {
                 ))}
               </div>
             </div>
-
             {entryForm.entry_type === 'mission' && (
               <div>
-                <label className="block text-sm font-medium text-brand-slate-700 mb-2">
-                  Project
-                </label>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-2">Project</label>
                 {missions.length > 0 ? (
                   <select
                     value={entryForm.mission_id}
                     onChange={(e) => setEntryForm(prev => ({ ...prev, mission_id: e.target.value }))}
-                    className="w-full px-3 py-2 border border-brand-grey-300 rounded-lg focus:ring-2 focus:ring-brand-cyan focus:border-brand-cyan"
+                    className="w-full px-3 py-2 border border-brand-grey-300 rounded-lg"
                   >
                     {missions.map(mission => (
-                      <option key={mission.id} value={mission.id}>
-                        {mission.name}
-                      </option>
+                      <option key={mission.id} value={mission.id}>{mission.name}</option>
                     ))}
                   </select>
                 ) : (
-                  <p className="text-sm text-amber-600 p-3 bg-amber-50 rounded-lg">
-                    No active missions assigned. Contact your manager.
-                  </p>
+                  <p className="text-sm text-amber-600 p-3 bg-amber-50 rounded-lg">No active missions assigned.</p>
                 )}
               </div>
             )}
-
-            <div className="flex justify-between pt-4 border-t border-brand-grey-200">
-              <Button
-                variant="secondary"
-                onClick={handleDeleteEntry}
-                disabled={!entries.find(e => e.date === selectedDate && e.period === selectedPeriod)}
-              >
-                Clear
-              </Button>
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="secondary" onClick={handleDeleteEntry} disabled={!entries.find(e => e.date === selectedDate && e.period === selectedPeriod)}>Clear</Button>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => setIsEntryModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  variant="primary" 
-                  onClick={handleSaveEntry}
-                  isLoading={isSaving}
-                  disabled={entryForm.entry_type === 'mission' && !entryForm.mission_id}
-                >
-                  Save
-                </Button>
+                <Button variant="secondary" onClick={() => setIsEntryModalOpen(false)}>Cancel</Button>
+                <Button variant="primary" onClick={handleSaveEntry} isLoading={isSaving} disabled={entryForm.entry_type === 'mission' && !entryForm.mission_id}>Save</Button>
               </div>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Bulk Edit Modal */}
+        <Modal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} title={`Fill ${selectedSlots.length} Slots`} size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-brand-grey-600">Apply the same entry type to all {selectedSlots.length} selected slots.</p>
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-2">Entry Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['mission', 'bench', 'leave', 'bank_holiday'] as TimesheetEntryType[]).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setBulkEntryType(type)}
+                    className={`p-3 rounded-lg border-2 text-left transition-all ${
+                      bulkEntryType === type ? 'border-brand-cyan bg-brand-cyan/5' : 'border-brand-grey-200 hover:border-brand-grey-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded ${entryTypeConfig[type].bgClass}`} />
+                      <span className="text-sm font-medium">{entryTypeConfig[type].label}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {bulkEntryType === 'mission' && missions.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-2">Project</label>
+                <select value={bulkMissionId} onChange={(e) => setBulkMissionId(e.target.value)} className="w-full px-3 py-2 border border-brand-grey-300 rounded-lg">
+                  {missions.map(mission => (<option key={mission.id} value={mission.id}>{mission.name}</option>))}
+                </select>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button variant="secondary" onClick={() => setIsBulkModalOpen(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleBulkSave} isLoading={isSaving} disabled={bulkEntryType === 'mission' && !bulkMissionId}>Apply to All</Button>
             </div>
           </div>
         </Modal>
@@ -625,194 +912,133 @@ export function TimesheetsPage() {
     );
   }
 
-  // Manager View
+  // Manager View - Monthly Calendar
   return (
     <div className="min-h-screen">
-      <Header 
-        title="Timesheets" 
-        subtitle="Review and approve consultant timesheets"
-      />
+      <Header title="Timesheets" subtitle="Review and approve consultant timesheets" />
       <div className="p-6 space-y-6">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Clock className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-slate-900">
-                  {pendingWeeks.filter(w => w.status === 'submitted').length}
-                </p>
-                <p className="text-sm text-brand-grey-400">Pending Approval</p>
-              </div>
-            </div>
-          </Card>
-          
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-slate-900">
-                  {pendingWeeks.filter(w => w.status === 'approved').length}
-                </p>
-                <p className="text-sm text-brand-grey-400">Approved This Month</p>
-              </div>
-            </div>
-          </Card>
-          
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <User className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-slate-900">{consultants.length}</p>
-                <p className="text-sm text-brand-grey-400">My Consultants</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Pending Approvals */}
-        <Card>
-          <div className="p-4 border-b border-brand-grey-200">
-            <h3 className="text-lg font-semibold text-brand-slate-900">Pending Approvals</h3>
+        {/* Month Navigation */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="secondary" size="sm" onClick={goToPreviousMonth}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="secondary" size="sm" onClick={goToCurrentMonth}>
+              Today
+            </Button>
+            <Button variant="secondary" size="sm" onClick={goToNextMonth}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <h2 className="text-lg font-semibold text-brand-slate-900 ml-2">
+              {formatMonthYear(currentMonth)}
+            </h2>
           </div>
           
-          {isLoading ? (
+          {/* Legend */}
+          <div className="flex items-center gap-4 text-xs">
+            {Object.entries(entryTypeConfig).map(([key, config]) => (
+              <div key={key} className="flex items-center gap-1">
+                <div className={`w-3 h-3 rounded-sm ${config.bgClass}`} />
+                <span className="text-brand-grey-600">{config.label}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-1 ml-2">
+              <div className="w-3 h-3 rounded bg-amber-100 border border-amber-300" />
+              <span className="text-brand-grey-600">Pending</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-green-100 border border-green-300" />
+              <Check className="h-2 w-2 text-green-600" />
+              <span className="text-brand-grey-600">Approved</span>
+            </div>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <Card>
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-cyan"></div>
             </div>
-          ) : pendingWeeks.filter(w => w.status === 'submitted').length === 0 ? (
-            <EmptyState
-              icon={<CheckCircle className="h-12 w-12" />}
-              title="All Caught Up"
-              description="No timesheets pending approval"
-            />
-          ) : (
-            <div className="divide-y divide-brand-grey-100">
-              {pendingWeeks
-                .filter(w => w.status === 'submitted')
-                .map(week => {
-                  const weekStart = new Date(week.week_start_date);
-                  
-                  return (
-                    <div key={week.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <Avatar name={week.consultant ? `${week.consultant.first_name} ${week.consultant.last_name}` : 'Unknown'} size="md" />
-                        <div>
-                          <p className="font-medium text-brand-slate-900">
-                            {week.consultant ? `${week.consultant.first_name} ${week.consultant.last_name}` : 'Unknown Consultant'}
-                          </p>
-                          <p className="text-sm text-brand-grey-500">
-                            Week of {formatWeekRange(weekStart)}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleViewTimesheet(week)}
-                          leftIcon={<Eye className="h-4 w-4" />}
-                        >
-                          View
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleRejectTimesheet(week)}
-                        >
-                          Reject
-                        </Button>
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => handleApproveTimesheet(week)}
-                          leftIcon={<Check className="h-4 w-4" />}
-                        >
-                          Approve
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-        </Card>
-
-        {/* All Consultants */}
-        <Card>
-          <div className="p-4 border-b border-brand-grey-200">
-            <h3 className="text-lg font-semibold text-brand-slate-900">My Consultants</h3>
-          </div>
-          
-          {consultants.length === 0 ? (
+          </Card>
+        ) : myConsultants.length === 0 ? (
+          <Card>
             <EmptyState
               icon={<User className="h-12 w-12" />}
               title="No Consultants"
               description="No consultants are assigned to you"
             />
-          ) : (
-            <div className="divide-y divide-brand-grey-100">
-              {consultants.map(consultant => {
-                const consultantWeeks = pendingWeeks.filter(w => w.consultant_id === consultant.id);
-                const latestWeek = consultantWeeks.sort((a, b) => 
-                  new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime()
-                )[0];
-                
-                return (
-                  <div key={consultant.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="md" />
-                      <div>
-                        <p className="font-medium text-brand-slate-900">
-                          {consultant.first_name} {consultant.last_name}
-                        </p>
-                        <p className="text-sm text-brand-grey-500">
-                          {consultant.job_title || 'Consultant'}
-                        </p>
+          </Card>
+        ) : (
+          <Card className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-brand-grey-200">
+                  <th className="text-left p-3 font-medium text-brand-slate-700 sticky left-0 bg-white min-w-[180px]">
+                    Consultant
+                  </th>
+                  {monthDays.map(date => {
+                    const dayOfWeek = date.getDay();
+                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                    const isToday = formatDateKey(date) === formatDateKey(new Date());
+                    return (
+                      <th 
+                        key={formatDateKey(date)} 
+                        className={`p-1 text-center min-w-[40px] ${
+                          isToday ? 'bg-brand-cyan text-white rounded' :
+                          isWeekend ? 'text-slate-300' : 'text-brand-slate-600'
+                        }`}
+                      >
+                        <div className="text-[10px] font-normal">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek]}</div>
+                        <div className="text-sm font-semibold">{date.getDate()}</div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {myConsultants.map(consultant => (
+                  <tr key={consultant.id} className="border-b border-brand-grey-100 hover:bg-brand-grey-50">
+                    <td className="p-3 sticky left-0 bg-white">
+                      <div className="flex items-center gap-2">
+                        <Avatar name={`${consultant.first_name} ${consultant.last_name}`} size="sm" />
+                        <div>
+                          <p className="font-medium text-brand-slate-900 text-sm">
+                            {consultant.first_name} {consultant.last_name}
+                          </p>
+                          <p className="text-xs text-brand-grey-400">{consultant.job_title || 'Consultant'}</p>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3">
-                      {latestWeek ? (
-                        <Badge variant={weekStatusConfig[latestWeek.status].variant}>
-                          {weekStatusConfig[latestWeek.status].label}
-                        </Badge>
-                      ) : (
-                        <Badge variant="grey">No Submissions</Badge>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
+                    </td>
+                    {monthDays.map(date => (
+                      <td key={formatDateKey(date)} className="p-1">
+                        {renderConsultantDayCell(consultant, date)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        )}
       </div>
 
-      {/* View Timesheet Modal */}
-      <Modal
-        isOpen={isViewModalOpen}
-        onClose={() => setIsViewModalOpen(false)}
-        title={viewingConsultant ? `${viewingConsultant.first_name} ${viewingConsultant.last_name}'s Timesheet` : 'Timesheet'}
-        size="xl"
+      {/* Week Approval Modal */}
+      <Modal 
+        isOpen={isApprovalModalOpen} 
+        onClose={() => setIsApprovalModalOpen(false)} 
+        title={approvalConsultant ? `${approvalConsultant.first_name} ${approvalConsultant.last_name}'s Timesheet` : 'Timesheet'} 
+        size="lg"
       >
-        {viewingWeek && (
+        {approvalWeek && (
           <div className="space-y-4">
             <p className="text-sm text-brand-grey-500">
-              Week of {formatWeekRange(new Date(viewingWeek.week_start_date))}
+              Week of {formatWeekRange(new Date(approvalWeek.week_start_date))}
             </p>
             
             <div className="grid grid-cols-7 gap-2">
-              {getWeekDays(new Date(viewingWeek.week_start_date)).map(day => {
-                const am = viewingEntries.find(e => e.date === day.date && e.period === 'AM');
-                const pm = viewingEntries.find(e => e.date === day.date && e.period === 'PM');
+              {getWeekDays(new Date(approvalWeek.week_start_date)).map(day => {
+                const am = approvalEntries.find(e => e.date === day.date && e.period === 'AM');
+                const pm = approvalEntries.find(e => e.date === day.date && e.period === 'PM');
                 
                 return (
                   <div key={day.date} className="space-y-1">
@@ -820,22 +1046,19 @@ export function TimesheetsPage() {
                       <p className="text-xs font-medium">{day.dayName}</p>
                       <p className="text-sm font-bold">{day.dayNumber}</p>
                     </div>
-                    
                     {day.isWeekend ? (
-                      <div className="h-16 bg-slate-50 rounded text-center text-xs text-slate-400 flex items-center justify-center">
-                        Weekend
-                      </div>
+                      <div className="h-16 bg-slate-50 rounded text-center text-xs text-slate-400 flex items-center justify-center">Weekend</div>
                     ) : (
                       <>
                         <div className={`h-8 rounded text-xs flex items-center justify-center ${
                           am ? `${entryTypeConfig[am.entry_type].bgClass} ${entryTypeConfig[am.entry_type].textClass}` : 'bg-red-100 text-red-600'
                         }`}>
-                          {am ? (am.entry_type === 'mission' ? 'Project' : entryTypeConfig[am.entry_type].label) : 'Missing'}
+                          {am ? entryTypeConfig[am.entry_type].label : 'Missing'}
                         </div>
                         <div className={`h-8 rounded text-xs flex items-center justify-center ${
                           pm ? `${entryTypeConfig[pm.entry_type].bgClass} ${entryTypeConfig[pm.entry_type].textClass}` : 'bg-red-100 text-red-600'
                         }`}>
-                          {pm ? (pm.entry_type === 'mission' ? 'Project' : entryTypeConfig[pm.entry_type].label) : 'Missing'}
+                          {pm ? entryTypeConfig[pm.entry_type].label : 'Missing'}
                         </div>
                       </>
                     )}
@@ -844,20 +1067,21 @@ export function TimesheetsPage() {
               })}
             </div>
             
-            <div className="flex justify-end gap-2 pt-4 border-t border-brand-grey-200">
-              <Button variant="secondary" onClick={() => handleRejectTimesheet(viewingWeek)}>
-                Reject
-              </Button>
-              <Button 
-                variant="success" 
-                onClick={() => {
-                  handleApproveTimesheet(viewingWeek);
-                  setIsViewModalOpen(false);
-                }}
-                leftIcon={<Check className="h-4 w-4" />}
-              >
-                Approve
-              </Button>
+            <div className="pt-4 border-t">
+              <label className="block text-sm font-medium text-brand-slate-700 mb-2">
+                Rejection Reason (required if rejecting)
+              </label>
+              <Input
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Enter reason for rejection..."
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="secondary" onClick={() => setIsApprovalModalOpen(false)}>Cancel</Button>
+              <Button variant="danger" onClick={handleRejectWeek} isLoading={isSaving}>Reject</Button>
+              <Button variant="success" onClick={handleApproveWeek} leftIcon={<Check className="h-4 w-4" />} isLoading={isSaving}>Approve</Button>
             </div>
           </div>
         )}
