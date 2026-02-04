@@ -111,7 +111,7 @@ export function OrganisationPage() {
     if (managerRoles.length === 0) return [];
     
     return users.filter(u => 
-      u.roles?.some(r => managerRoles.includes(r as UserRole)) && 
+      u.roles?.some((r: string) => managerRoles.includes(r as UserRole)) && 
       u.id !== editingUserId
     );
   };
