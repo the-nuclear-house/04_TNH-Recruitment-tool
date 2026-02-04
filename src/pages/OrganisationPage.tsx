@@ -709,9 +709,6 @@ export function OrganisationPage() {
               ) : (
                 <div className="divide-y divide-brand-grey-100">
                   {consultantUsers.map(user => {
-                    // Find linked consultant record if any
-                    const linkedConsultant = consultants.find(c => c.user_id === user.id);
-                    
                     return (
                       <div key={user.id} className="p-4 flex items-center justify-between hover:bg-brand-grey-50 transition-colors">
                         <div className="flex items-center gap-3">
@@ -727,20 +724,12 @@ export function OrganisationPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          {linkedConsultant ? (
-                            <Badge 
-                              variant={
-                                linkedConsultant.status === 'in_mission' ? 'green' :
-                                linkedConsultant.status === 'bench' ? 'amber' :
-                                linkedConsultant.status === 'on_leave' ? 'purple' : 'grey'
-                              }
-                            >
-                              {linkedConsultant.status === 'in_mission' ? 'In Mission' :
-                               linkedConsultant.status === 'bench' ? 'On Bench' :
-                               linkedConsultant.status === 'on_leave' ? 'On Leave' : linkedConsultant.status}
+                          {user.reports_to ? (
+                            <Badge variant="cyan">
+                              Reports to: {allUsers.find(u => u.id === user.reports_to)?.full_name || 'Unknown'}
                             </Badge>
                           ) : (
-                            <Badge variant="grey">Not Linked</Badge>
+                            <Badge variant="grey">No Manager</Badge>
                           )}
                           {permissions.canManageUsers && (
                             <div className="flex items-center gap-1">
