@@ -890,12 +890,20 @@ export function TimesheetsPage() {
           {/* Legend */}
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <span className="font-medium text-brand-slate-700">Legend:</span>
-            {Object.entries(entryTypeConfig).map(([key, config]) => (
+            {(['mission', 'bench'] as const).map(key => (
               <div key={key} className="flex items-center gap-2">
-                <div className={`w-4 h-4 rounded ${config.bgClass}`} />
-                <span className="text-brand-grey-600">{config.label}</span>
+                <div className={`w-4 h-4 rounded ${entryTypeConfig[key].bgClass}`} />
+                <span className="text-brand-grey-600">{entryTypeConfig[key].label}</span>
               </div>
             ))}
+            <div className="flex items-center gap-2">
+              <div className={`w-4 h-4 rounded ${entryTypeConfig.leave.bgClass}`} />
+              <span className="text-brand-grey-600">Leave (auto)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`w-4 h-4 rounded ${entryTypeConfig.bank_holiday.bgClass}`} />
+              <span className="text-brand-grey-600">Bank Holiday (auto)</span>
+            </div>
           </div>
 
           {/* Monthly Overview */}
@@ -1006,7 +1014,7 @@ export function TimesheetsPage() {
             <div>
               <label className="block text-sm font-medium text-brand-slate-700 mb-2">Entry Type</label>
               <div className="grid grid-cols-2 gap-2">
-                {(['mission', 'bench', 'leave', 'bank_holiday'] as TimesheetEntryType[]).map(type => (
+                {(['mission', 'bench'] as TimesheetEntryType[]).map(type => (
                   <button
                     key={type}
                     onClick={() => setEntryForm(prev => ({ ...prev, entry_type: type }))}
@@ -1057,7 +1065,7 @@ export function TimesheetsPage() {
             <div>
               <label className="block text-sm font-medium text-brand-slate-700 mb-2">Entry Type</label>
               <div className="grid grid-cols-2 gap-2">
-                {(['mission', 'bench', 'leave', 'bank_holiday'] as TimesheetEntryType[]).map(type => (
+                {(['mission', 'bench'] as TimesheetEntryType[]).map(type => (
                   <button
                     key={type}
                     onClick={() => setBulkEntryType(type)}
@@ -1115,10 +1123,10 @@ export function TimesheetsPage() {
           
           {/* Legend */}
           <div className="flex items-center gap-4 text-xs">
-            {Object.entries(entryTypeConfig).map(([key, config]) => (
+            {(['mission', 'bench', 'leave', 'bank_holiday'] as const).map(key => (
               <div key={key} className="flex items-center gap-1">
-                <div className={`w-3 h-3 rounded-sm ${config.bgClass}`} />
-                <span className="text-brand-grey-600">{config.label}</span>
+                <div className={`w-3 h-3 rounded-sm ${entryTypeConfig[key].bgClass}`} />
+                <span className="text-brand-grey-600">{entryTypeConfig[key].label}</span>
               </div>
             ))}
             <div className="flex items-center gap-1 ml-2">
