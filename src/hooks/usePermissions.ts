@@ -609,11 +609,16 @@ export const roleHierarchy: Record<UserRole, UserRole | null> = {
   recruiter: 'recruiter_manager',
   hr_manager: null,
   hr: 'hr_manager',
-  consultant: 'business_manager',
+  consultant: 'business_manager', // Primary, but can also report to director
 };
 
 // Get roles that can be a manager for a given role
 export function getManagerRolesFor(role: UserRole): UserRole[] {
+  // Consultants can report to either business_manager OR business_director
+  if (role === 'consultant') {
+    return ['business_manager', 'business_director'];
+  }
+  
   const managerRole = roleHierarchy[role];
   return managerRole ? [managerRole] : [];
 }

@@ -16,7 +16,7 @@ import {
 import { Plus, Users, Edit, Trash2, Mail, Shield, Building2, UserCog } from 'lucide-react';
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { usePermissions, roleHierarchy, requiresManager } from '@/hooks/usePermissions';
+import { usePermissions, roleHierarchy, requiresManager, getManagerRolesFor } from '@/hooks/usePermissions';
 import { usersService, consultantsService, type DbConsultant, type DbUser } from '@/lib/services';
 import { supabase } from '@/lib/supabase';
 import type { UserRole } from '@/types';
@@ -107,11 +107,11 @@ export function OrganisationPage() {
     const selectedRole = formData.roles[0] as UserRole;
     if (!selectedRole || !requiresManager(selectedRole)) return [];
     
-    const managerRole = roleHierarchy[selectedRole];
-    if (!managerRole) return [];
+    const managerRoles = getManagerRolesFor(selectedRole);
+    if (managerRoles.length === 0) return [];
     
     return users.filter(u => 
-      u.roles?.includes(managerRole) && 
+      u.roles?.some(r => managerRoles.includes(r as UserRole)) && 
       u.id !== editingUserId
     );
   };
