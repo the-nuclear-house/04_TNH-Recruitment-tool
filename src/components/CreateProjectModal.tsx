@@ -53,28 +53,35 @@ export function CreateProjectModal({
 
   // Fresh company data (to ensure financial_scoring is up to date)
   const [freshCompany, setFreshCompany] = useState<DbCompany | null>(null);
+  const [isLoadingCompany, setIsLoadingCompany] = useState(false);
 
   // Load users and fresh company data for dropdowns
   useEffect(() => {
     const loadData = async () => {
       try {
+        setIsLoadingCompany(true);
         const usersData = await usersService.getAll();
         setUsers(usersData);
         
         // Load fresh company data to get latest financial_scoring
         // Use company.id if available, otherwise try requirement.company_id
         const companyId = company?.id || (requirement as any)?.company_id;
-        console.log('Loading company with ID:', companyId, 'from requirement:', requirement);
+        console.log('Loading company with ID:', companyId);
         
         if (companyId) {
           const companyData = await companiesService.getById(companyId);
           console.log('Fetched company data:', companyData);
-          setFreshCompany(companyData);
+          console.log('Financial scoring value:', companyData?.financial_scoring);
+          if (companyData) {
+            setFreshCompany(companyData);
+          }
         } else {
           console.log('No company ID found');
         }
       } catch (error) {
         console.error('Error loading data:', error);
+      } finally {
+        setIsLoadingCompany(false);
       }
     };
 
@@ -86,18 +93,15 @@ export function CreateProjectModal({
   // Use fresh company data if available, otherwise fall back to prop
   const actualCompany = freshCompany || company;
   
-  // Debug: log the financial scoring value
-  console.log('Financial scoring check:', {
-    freshCompany: freshCompany?.financial_scoring,
-    company: company?.financial_scoring,
-    actualCompany: actualCompany?.financial_scoring,
-    hasProperty: actualCompany ? 'financial_scoring' in actualCompany : false,
-  });
+  // Debug: log when freshCompany changes
+  useEffect(() => {
+    console.log('freshCompany state updated:', freshCompany);
+  }, [freshCompany]);
   
   // Check if financial scoring is missing (null, undefined, or empty string)
   // Only check if the property exists on the object (migration might not have run)
   const hasFinancialScoringColumn = actualCompany && 'financial_scoring' in actualCompany;
-  const missingFinancialScoring = hasFinancialScoringColumn && 
+  const missingFinancialScoring = !isLoadingCompany && hasFinancialScoringColumn && 
     (!actualCompany?.financial_scoring || actualCompany.financial_scoring.trim() === '');
 
   // Pre-fill form when requirement data is available
