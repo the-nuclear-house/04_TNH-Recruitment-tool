@@ -4698,6 +4698,19 @@ export const timesheetEntriesService = {
 };
 
 export const timesheetWeeksService = {
+  async getAll(): Promise<DbTimesheetWeek[]> {
+    const { data, error } = await supabase
+      .from('timesheet_weeks')
+      .select(`
+        *,
+        consultant:consultants(id, first_name, last_name, email, user_id, account_manager_id)
+      `)
+      .order('week_start_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async getByConsultant(consultantId: string): Promise<DbTimesheetWeek[]> {
     const { data, error } = await supabase
       .from('timesheet_weeks')

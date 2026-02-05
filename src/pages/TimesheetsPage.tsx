@@ -144,6 +144,7 @@ export function TimesheetsPage() {
   // Manager view state
   const [myConsultants, setMyConsultants] = useState<DbConsultant[]>([]);
   const [allWeeks, setAllWeeks] = useState<DbTimesheetWeek[]>([]);
+  const [allWeeksForKpi, setAllWeeksForKpi] = useState<DbTimesheetWeek[]>([]);
   const [allEntries, setAllEntries] = useState<DbTimesheetEntry[]>([]);
   
   // Consultant monthly overview
@@ -233,9 +234,10 @@ export function TimesheetsPage() {
     try {
       setIsLoading(true);
       
-      const [allConsultants, weeks, entriesData, allMissions] = await Promise.all([
+      const [allConsultants, weeks, allWeeksData, entriesData, allMissions] = await Promise.all([
         consultantsService.getAll(),
         timesheetWeeksService.getPendingApprovals(),
+        timesheetWeeksService.getAll(),
         timesheetEntriesService.getAll(),
         missionsService.getAll(),
       ]);
@@ -249,6 +251,7 @@ export function TimesheetsPage() {
       
       setMyConsultants(consultantsForManager);
       setAllWeeks(weeks);
+      setAllWeeksForKpi(allWeeksData);
       setAllEntries(entriesData);
       setMissions(allMissions);
     } catch (error) {
@@ -1099,9 +1102,10 @@ export function TimesheetsPage() {
     );
   }
 
-  // Compute consultants with missing timesheet submissions
-  // A "complete" week means it has a submitted or approved timesheet_weeks record.
-  // We only check full weeks that have ended (i.e. before the current week's Monday).
+  // Compute consultants with missing timesheet submissions.
+  // For each active consultant, check every completed week (Mon-Sun) from their
+  // start_date up to but not including the current week. If any week has no
+  // timesheet_weeks record at all (regardless of status), that consultant is behind.
   const missingTimesheetData = useMemo(() => {
     if (myConsultants.length === 0) return { missing: 0, total: 0, consultants: [] as DbConsultant[] };
     
@@ -1113,26 +1117,30 @@ export function TimesheetsPage() {
     const consultantsWithGaps: DbConsultant[] = [];
     
     for (const consultant of activeConsultants) {
-      if (!consultant.start_date) continue;
+      if (!consultant.start_date) {
+        // No start date means we can't calculate, flag them
+        consultantsWithGaps.push(consultant);
+        continue;
+      }
       
-      // Start checking from the consultant's start date (aligned to its week's Monday)
+      // Start checking from the Monday of the consultant's start week
       const consultantStart = new Date(consultant.start_date);
       const firstWeekMonday = getWeekStart(consultantStart);
       
-      // Get all submitted/approved weeks for this consultant
-      const submittedWeekDates = new Set(
-        allWeeks
-          .filter(w => w.consultant_id === consultant.id && ['submitted', 'approved'].includes(w.status))
+      // Build a set of all week_start_dates this consultant has ANY record for
+      const existingWeekDates = new Set(
+        allWeeksForKpi
+          .filter(w => w.consultant_id === consultant.id)
           .map(w => w.week_start_date)
       );
       
-      // Walk through each full week from start to last completed week
+      // Walk through each completed week and check for gaps
       let weekMonday = new Date(firstWeekMonday);
       let hasMissing = false;
       
       while (weekMonday < currentWeekMonday) {
         const weekKey = formatDateKey(weekMonday);
-        if (!submittedWeekDates.has(weekKey)) {
+        if (!existingWeekDates.has(weekKey)) {
           hasMissing = true;
           break;
         }
@@ -1145,7 +1153,7 @@ export function TimesheetsPage() {
     }
     
     return { missing: consultantsWithGaps.length, total, consultants: consultantsWithGaps };
-  }, [myConsultants, allWeeks]);
+  }, [myConsultants, allWeeksForKpi]);
 
   // Manager View - Monthly Calendar
   return (
