@@ -664,9 +664,34 @@ export function TimesheetsPage() {
     const weekStart = getWeekStart(date);
     const weekStartKey = formatDateKey(weekStart);
     
+    // Check if this date falls outside the consultant's tenure
+    const consultantStart = consultant.start_date ? new Date(consultant.start_date) : null;
+    const consultantEnd = consultant.terminated_at 
+      ? new Date(consultant.terminated_at) 
+      : consultant.end_date 
+        ? new Date(consultant.end_date) 
+        : null;
+    
+    if (consultantStart) consultantStart.setHours(0, 0, 0, 0);
+    if (consultantEnd) consultantEnd.setHours(23, 59, 59, 999);
+    
+    const dateNorm = new Date(date);
+    dateNorm.setHours(12, 0, 0, 0);
+    
+    const isOutOfTenure = (consultantStart && dateNorm < consultantStart) || (consultantEnd && dateNorm > consultantEnd);
+    
     if (isWeekend) {
       return (
-        <div className="h-10 w-full bg-slate-50 rounded" />
+        <div className={`h-10 w-full rounded ${isOutOfTenure ? 'bg-slate-200' : 'bg-slate-50'}`} />
+      );
+    }
+    
+    // Render a distinct cell for dates outside the consultant's time at the company
+    if (isOutOfTenure) {
+      return (
+        <div className="h-10 w-full rounded bg-slate-200 flex items-center justify-center" title="Not in company">
+          <X className="h-3 w-3 text-slate-400" />
+        </div>
       );
     }
     
@@ -1104,8 +1129,8 @@ export function TimesheetsPage() {
 
   // Compute consultants with missing timesheet submissions.
   // For each active consultant, check every completed week (Mon-Sun) from their
-  // start_date up to but not including the current week. If any week has no
-  // timesheet_weeks record at all (regardless of status), that consultant is behind.
+  // start_date up to but not including the current week (or their end date if they left).
+  // If any week has no timesheet_weeks record at all, that consultant is behind.
   const missingTimesheetData = useMemo(() => {
     if (myConsultants.length === 0) return { missing: 0, total: 0, consultants: [] as DbConsultant[] };
     
@@ -1127,6 +1152,22 @@ export function TimesheetsPage() {
       const consultantStart = new Date(consultant.start_date);
       const firstWeekMonday = getWeekStart(consultantStart);
       
+      // End boundary: current week or end_date/terminated_at, whichever is earlier
+      let endBoundary = currentWeekMonday;
+      const consultantEnd = consultant.terminated_at 
+        ? new Date(consultant.terminated_at)
+        : consultant.end_date 
+          ? new Date(consultant.end_date) 
+          : null;
+      if (consultantEnd) {
+        const endWeekMonday = getWeekStart(consultantEnd);
+        // Only check up to the week after their last day (they should have submitted that week)
+        endWeekMonday.setDate(endWeekMonday.getDate() + 7);
+        if (endWeekMonday < endBoundary) {
+          endBoundary = endWeekMonday;
+        }
+      }
+      
       // Build a set of all week_start_dates this consultant has ANY record for
       const existingWeekDates = new Set(
         allWeeksForKpi
@@ -1138,7 +1179,7 @@ export function TimesheetsPage() {
       let weekMonday = new Date(firstWeekMonday);
       let hasMissing = false;
       
-      while (weekMonday < currentWeekMonday) {
+      while (weekMonday < endBoundary) {
         const weekKey = formatDateKey(weekMonday);
         if (!existingWeekDates.has(weekKey)) {
           hasMissing = true;
@@ -1271,6 +1312,11 @@ export function TimesheetsPage() {
               <div className="w-3 h-3 rounded bg-red-50 border border-red-200" />
               <X className="h-2 w-2 text-red-500" />
               <span className="text-brand-grey-600">Rejected</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-slate-200 flex items-center justify-center" />
+              <X className="h-2 w-2 text-slate-400" />
+              <span className="text-brand-grey-600">Not in company</span>
             </div>
           </div>
         </div>
