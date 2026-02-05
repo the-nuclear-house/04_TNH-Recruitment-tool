@@ -100,6 +100,7 @@ export interface DbConsultant {
   account_manager_id: string | null;
   coc_director_id: string | null;
   company_email: string | null;
+  annual_leave_allowance: number;
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -4717,3 +4718,205 @@ export const timesheetWeeksService = {
     return data;
   },
 };
+
+// ============================================
+// LEAVE REQUESTS
+// ============================================
+
+export type LeaveType = 'annual' | 'sick' | 'unpaid';
+export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancellation_pending' | 'cancelled';
+
+export interface DbLeaveRequest {
+  id: string;
+  consultant_id: string;
+  leave_type: LeaveType;
+  status: LeaveRequestStatus;
+  dates: string[];
+  total_days: number;
+  notes: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  cancellation_requested_at: string | null;
+  cancellation_reason: string | null;
+  cancellation_approved_by: string | null;
+  cancellation_approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  consultant?: DbConsultant;
+  approver?: DbUser;
+}
+
+export const leaveRequestsService = {
+  async getAll(): Promise<DbLeaveRequest[]> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .select(`
+        *,
+        consultant:consultants(id, first_name, last_name, email, account_manager_id, annual_leave_allowance),
+        approver:users!leave_requests_approved_by_fkey(id, full_name, email)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getByConsultant(consultantId: string): Promise<DbLeaveRequest[]> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .select(`
+        *,
+        consultant:consultants(id, first_name, last_name, email, account_manager_id, annual_leave_allowance),
+        approver:users!leave_requests_approved_by_fkey(id, full_name, email)
+      `)
+      .eq('consultant_id', consultantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(request: {
+    consultant_id: string;
+    leave_type: LeaveType;
+    dates: string[];
+    total_days: number;
+    notes?: string;
+  }): Promise<DbLeaveRequest> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .insert([request])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async approve(id: string, approvedBy: string): Promise<DbLeaveRequest> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .update({
+        status: 'approved',
+        approved_by: approvedBy,
+        approved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async reject(id: string, reason: string): Promise<DbLeaveRequest> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .update({
+        status: 'rejected',
+        rejection_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async requestCancellation(id: string, reason: string): Promise<DbLeaveRequest> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .update({
+        status: 'cancellation_pending',
+        cancellation_requested_at: new Date().toISOString(),
+        cancellation_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async approveCancellation(id: string, approvedBy: string): Promise<DbLeaveRequest> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .update({
+        status: 'cancelled',
+        cancellation_approved_by: approvedBy,
+        cancellation_approved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async rejectCancellation(id: string): Promise<DbLeaveRequest> {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .update({
+        status: 'approved', // Back to approved
+        cancellation_requested_at: null,
+        cancellation_reason: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Create timesheet entries for approved leave
+  async createTimesheetEntries(request: DbLeaveRequest): Promise<void> {
+    const entries = [];
+    for (const dateStr of request.dates) {
+      const date = new Date(dateStr);
+      const weekStart = getWeekStartDate(date);
+      
+      entries.push(
+        { consultant_id: request.consultant_id, week_start_date: weekStart, date: dateStr, period: 'AM', entry_type: 'leave', mission_id: null, notes: `${request.leave_type} leave` },
+        { consultant_id: request.consultant_id, week_start_date: weekStart, date: dateStr, period: 'PM', entry_type: 'leave', mission_id: null, notes: `${request.leave_type} leave` },
+      );
+    }
+
+    if (entries.length > 0) {
+      const { error } = await supabase.from('timesheet_entries').insert(entries);
+      if (error) throw error;
+    }
+  },
+
+  // Remove timesheet entries for cancelled leave
+  async removeTimesheetEntries(consultantId: string, dates: string[]): Promise<void> {
+    const { error } = await supabase
+      .from('timesheet_entries')
+      .delete()
+      .eq('consultant_id', consultantId)
+      .eq('entry_type', 'leave')
+      .in('date', dates);
+
+    if (error) throw error;
+  },
+};
+
+// Helper to get week start as string
+function getWeekStartDate(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().split('T')[0];
+}
