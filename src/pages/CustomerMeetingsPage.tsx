@@ -200,7 +200,17 @@ export function CustomerMeetingsPage() {
     setIsDetailModalOpen(true);
   };
 
-  // Check if a candidate has been converted to consultant
+  // Check if the winning person is a consultant.
+  // Works for both converted candidates and directly assigned consultants.
+  const isPersonConsultant = (candidateId: string | null | undefined, consultantId: string | null | undefined): boolean => {
+    // Direct consultant ID provided
+    if (consultantId) return true;
+    // Candidate converted to consultant
+    if (candidateId) return consultants.some(c => c.candidate_id === candidateId);
+    return false;
+  };
+
+  // Legacy helper for candidate-only checks
   const isCandidateConsultant = (candidateId: string | null | undefined): boolean => {
     if (!candidateId) return false;
     return consultants.some(c => c.candidate_id === candidateId);
@@ -400,10 +410,11 @@ export function CustomerMeetingsPage() {
       setSelectedAssessment(null);
       setOutcomeNotes('');
       
-      // If GO, check if candidate is consultant before prompting mission creation
+      // If GO, check if person is a consultant before prompting mission creation
       if (outcome === 'go') {
         const candidateId = targetAssessment.candidate_id || targetAssessment.application?.candidate?.id;
-        if (isCandidateConsultant(candidateId)) {
+        const consultantId = targetAssessment.consultant_id || targetAssessment.application?.consultant_id || (targetAssessment.application?.consultant as any)?.id;
+        if (isPersonConsultant(candidateId, consultantId)) {
           setAssessmentForMission(targetAssessment);
           setIsCreateMissionPromptOpen(true);
         } else {
@@ -771,7 +782,8 @@ export function CustomerMeetingsPage() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
-                                if (isCandidateConsultant(candidateId)) {
+                                const consultantId = (meeting as any).consultant_id || (meeting as any).application?.consultant_id || (meeting as any).application?.consultant?.id;
+                                if (isPersonConsultant(candidateId, consultantId)) {
                                   setAssessmentForMission(meeting as DbCustomerAssessment);
                                   // Check if requirement has a project
                                   if (!requirementProjectId) {
@@ -1464,6 +1476,7 @@ export function CustomerMeetingsPage() {
           }}
           requirement={assessmentForMission.requirement_id ? { id: assessmentForMission.requirement_id } as any : undefined}
           candidate={candidates.find(c => c.id === assessmentForMission.candidate_id)}
+          winningConsultantId={assessmentForMission.consultant_id || assessmentForMission.application?.consultant_id || (assessmentForMission.application?.consultant as any)?.id || undefined}
           company={(() => {
             const contact = contacts.find(c => c.id === assessmentForMission.contact_id);
             return contact ? companies.find(co => co.id === contact.company_id) : undefined;

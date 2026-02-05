@@ -387,7 +387,9 @@ export function RequirementsPage() {
                                 ) : null;
                                 const isNogo = assessment?.outcome === 'nogo';
                                 const isGo = assessment?.outcome === 'go';
-                                const isWinner = !isConsultantApp && requirement.winning_candidate_id === app.candidate_id;
+                                const isWinner = isConsultantApp 
+                                  ? requirement.winning_consultant_id === app.consultant_id
+                                  : requirement.winning_candidate_id === app.candidate_id;
                                 
                                 return (
                                   <div 
@@ -445,7 +447,7 @@ export function RequirementsPage() {
                         )}
                         
                         {/* Create Project/Mission button for won requirements */}
-                        {(status === 'won' || requirement.status === 'filled') && requirement.winning_candidate_id && (
+                        {(status === 'won' || requirement.status === 'filled') && (requirement.winning_candidate_id || requirement.winning_consultant_id) && (
                           <Button
                             variant="success"
                             size="sm"
@@ -553,6 +555,7 @@ export function RequirementsPage() {
           company={missionRequirement.company as any}
           contact={missionRequirement.contact}
           winningCandidateId={missionRequirement.winning_candidate_id || undefined}
+          winningConsultantId={missionRequirement.winning_consultant_id || undefined}
           projectId={missionRequirement.project_id || createdProjectId || undefined}
         />
       )}

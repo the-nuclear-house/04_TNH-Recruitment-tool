@@ -42,7 +42,7 @@ import { formatDate, computeCandidatePipelineStatus, timeOptions } from '@/lib/u
 import { useToast } from '@/lib/stores/ui-store';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePermissions } from '@/hooks/usePermissions';
-import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, consultantsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbConsultant } from '@/lib/services';
+import { requirementsService, usersService, candidatesService, applicationsService, customerAssessmentsService, interviewsService, contactsService, companiesService, missionsService, consultantsService, type DbApplication, type DbCandidate, type DbContact, type DbCompany, type DbConsultant, type DbRequirement } from '@/lib/services';
 import { CreateMissionModal } from '@/components/CreateMissionModal';
 import { CreateProjectModal } from '@/components/CreateProjectModal';
 
@@ -178,6 +178,22 @@ export function RequirementDetailPage() {
   const canScheduleAssessments = user?.roles?.some(r => ['admin', 'superadmin', 'business_director', 'business_manager'].includes(r)) ?? false;
 
   // Check if a candidate has been converted to consultant
+  // Check if the person assigned to this requirement is (or has become) a consultant.
+  // Returns true if:
+  //   - a winning_consultant_id is set on the requirement (direct consultant assignment), OR
+  //   - a candidate has been converted to a consultant (candidate_id maps to a consultant record)
+  const isWinnerConsultant = (req?: DbRequirement | null): boolean => {
+    if (!req) return false;
+    // Direct consultant win
+    if (req.winning_consultant_id) return true;
+    // Candidate converted to consultant
+    if (req.winning_candidate_id) {
+      return consultants.some(c => c.candidate_id === req.winning_candidate_id);
+    }
+    return false;
+  };
+
+  // Legacy helper kept for candidate-level checks in the applications list
   const isCandidateConsultant = (candidateId: string | null | undefined): boolean => {
     if (!candidateId) return false;
     return consultants.some(c => c.candidate_id === candidateId);
@@ -226,29 +242,38 @@ export function RequirementDetailPage() {
       const assessmentOutcomes: Record<string, 'pending' | 'go' | 'nogo' | null> = {};
       
       for (const app of appsData) {
-        // Skip if no candidate_id (consultant applications)
-        if (!app.candidate_id) continue;
+        const isConsultantApp = !app.candidate_id && app.consultant_id;
         
-        try {
-          const interviews = interviewsByCandidate[app.candidate_id] || [];
-          // Check if all 3 interviews passed
-          const phonePass = interviews.some((i: any) => i.stage === 'phone_qualification' && i.outcome === 'pass');
-          const techPass = interviews.some((i: any) => i.stage === 'technical_interview' && i.outcome === 'pass');
-          const directorPass = interviews.some((i: any) => i.stage === 'director_interview' && i.outcome === 'pass');
-          interviewStatus[app.candidate_id] = phonePass && techPass && directorPass;
-          
-          // Check if assessment is already scheduled for this application
-          const assessments = await customerAssessmentsService.getByApplication(app.id);
-          assessmentStatus[app.id] = assessments.length > 0;
-          
-          // Track assessment outcome for showing NOGO badge
-          if (assessments.length > 0) {
-            const latestAssessment = assessments[0]; // Already sorted by date desc
-            assessmentOutcomes[app.candidate_id] = latestAssessment.outcome;
+        // For candidate apps: check interviews and assessments
+        if (app.candidate_id) {
+          try {
+            const interviews = interviewsByCandidate[app.candidate_id] || [];
+            const phonePass = interviews.some((i: any) => i.stage === 'phone_qualification' && i.outcome === 'pass');
+            const techPass = interviews.some((i: any) => i.stage === 'technical_interview' && i.outcome === 'pass');
+            const directorPass = interviews.some((i: any) => i.stage === 'director_interview' && i.outcome === 'pass');
+            interviewStatus[app.candidate_id] = phonePass && techPass && directorPass;
+            
+            const assessments = await customerAssessmentsService.getByApplication(app.id);
+            assessmentStatus[app.id] = assessments.length > 0;
+            
+            if (assessments.length > 0) {
+              const latestAssessment = assessments[0];
+              assessmentOutcomes[app.candidate_id] = latestAssessment.outcome;
+            }
+          } catch (e) {
+            interviewStatus[app.candidate_id] = false;
+            assessmentStatus[app.id] = false;
           }
-        } catch (e) {
-          interviewStatus[app.candidate_id] = false;
-          assessmentStatus[app.id] = false;
+        }
+        
+        // For consultant apps: check assessments (no interview pipeline needed)
+        if (isConsultantApp) {
+          try {
+            const assessments = await customerAssessmentsService.getByApplication(app.id);
+            assessmentStatus[app.id] = assessments.length > 0;
+          } catch (e) {
+            assessmentStatus[app.id] = false;
+          }
         }
       }
       setCandidateInterviewStatus(interviewStatus);
@@ -498,6 +523,8 @@ export function RequirementDetailPage() {
     try {
       // Build auto-generated title
       const candidate = selectedApplicationForAssessment.candidate;
+      const appConsultant = selectedApplicationForAssessment.consultant;
+      const person = appConsultant || candidate;
       const contact = contacts.find(c => c.id === contactId);
       const company = contact?.company || companies.find(co => co.id === contact?.company_id);
       
@@ -505,13 +532,14 @@ export function RequirementDetailPage() {
         requirement?.reference_id || 'REQ',
         company?.name || requirement?.customer || 'Customer',
         requirement?.title || requirement?.customer || 'Requirement',
-        candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Candidate'
+        person ? `${person.first_name} ${person.last_name}` : 'Consultant/Candidate'
       ].join(' - ');
       
       await customerAssessmentsService.create({
         application_id: selectedApplicationForAssessment.id,
         requirement_id: id,
         candidate_id: selectedApplicationForAssessment.candidate_id || undefined,
+        consultant_id: selectedApplicationForAssessment.consultant_id || undefined,
         contact_id: contactId,
         scheduled_date: assessmentForm.scheduled_date,
         scheduled_time: assessmentForm.scheduled_time || undefined,
@@ -689,8 +717,12 @@ export function RequirementDetailPage() {
           </div>
         </Card>
 
-        {/* Winning Candidate Banner - shown when requirement is won */}
-        {(requirement.status === 'won' || requirement.status === 'filled') && requirement.winning_candidate && (
+        {/* Winning Person Banner - shown when requirement is won */}
+        {(requirement.status === 'won' || requirement.status === 'filled') && (requirement.winning_candidate || requirement.winning_consultant) && (() => {
+          const isConsultantWin = !!requirement.winning_consultant_id;
+          const winner = isConsultantWin ? requirement.winning_consultant : requirement.winning_candidate;
+          if (!winner) return null;
+          return (
           <Card className="border-green-200 bg-green-50">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-green-100 rounded-full">
@@ -700,17 +732,18 @@ export function RequirementDetailPage() {
                 <p className="text-sm text-green-700 font-medium">Requirement Won</p>
                 <div 
                   className="flex items-center gap-3 mt-1 cursor-pointer hover:opacity-80"
-                  onClick={() => navigate(`/candidates/${requirement.winning_candidate_id}`)}
+                  onClick={() => navigate(isConsultantWin ? `/consultants/${requirement.winning_consultant_id}` : `/candidates/${requirement.winning_candidate_id}`)}
                 >
                   <Avatar 
-                    name={`${requirement.winning_candidate.first_name} ${requirement.winning_candidate.last_name}`}
+                    name={`${winner.first_name} ${winner.last_name}`}
                     size="sm"
                   />
                   <div>
                     <p className="font-semibold text-brand-slate-900">
-                      {requirement.winning_candidate.first_name} {requirement.winning_candidate.last_name}
+                      {winner.first_name} {winner.last_name}
+                      {isConsultantWin && <span className="ml-2 text-xs font-medium text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded">Consultant</span>}
                     </p>
-                    <p className="text-sm text-brand-grey-500">{requirement.winning_candidate.email}</p>
+                    <p className="text-sm text-brand-grey-500">{winner.email}</p>
                   </div>
                 </div>
               </div>
@@ -735,7 +768,7 @@ export function RequirementDetailPage() {
                     size="sm"
                     leftIcon={<Rocket className="h-4 w-4" />}
                     onClick={() => {
-                      if (isCandidateConsultant(requirement.winning_candidate_id)) {
+                      if (isWinnerConsultant(requirement)) {
                         // Check if requirement has a project - if not, create project first
                         if (!requirement.project_id) {
                           setIsCreateProjectModalOpen(true);
@@ -756,7 +789,8 @@ export function RequirementDetailPage() {
               </div>
             </div>
           </Card>
-        )}
+          );
+        })()}
 
         {/* Details Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -888,9 +922,11 @@ export function RequirementDetailPage() {
                 
                 if (!person) return null;
                 
-                const hasScheduledAssessment = !isConsultantApp && scheduledAssessments[app.id];
+                const hasScheduledAssessment = scheduledAssessments[app.id];
                 const assessmentOutcome = !isConsultantApp && app.candidate_id ? candidateAssessmentOutcomes[app.candidate_id] : null;
-                const isWinningCandidate = !isConsultantApp && requirement.winning_candidate_id === app.candidate_id;
+                const isWinningCandidate = isConsultantApp 
+                  ? requirement.winning_consultant_id === app.consultant_id
+                  : requirement.winning_candidate_id === app.candidate_id;
                 
                 // Compute pipeline status for candidates only
                 const interviews = !isConsultantApp && app.candidate_id ? (candidateInterviews[app.candidate_id] || []) : [];
@@ -1583,6 +1619,7 @@ export function RequirementDetailPage() {
         company={requirement?.company}
         contact={contacts.find(c => c.id === requirement?.contact_id)}
         winningCandidateId={requirement?.winning_candidate_id}
+        winningConsultantId={requirement?.winning_consultant_id}
         projectId={requirement?.project_id || createdProjectId || undefined}
       />
     </div>

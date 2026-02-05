@@ -149,7 +149,7 @@ export function CreateMissionModal({
         let foundConsultant: DbConsultant | null = null;
         
         // Path 1: Direct consultant ID (consultant was assigned directly to requirement)
-        const directConsultantId = winningConsultantId || propRequirement?.winning_consultant_id;
+        const directConsultantId = winningConsultantId;
         if (directConsultantId) {
           foundConsultant = await consultantsService.getById(directConsultantId);
         }
@@ -178,7 +178,7 @@ export function CreateMissionModal({
             start_date: project?.start_date || prev.start_date,
             end_date: project?.end_date || prev.end_date,
           }));
-        } else if (!winningConsultantId && !winningCandidateId && !candidate?.id && !propRequirement?.winning_consultant_id) {
+        } else if (!winningConsultantId && !winningCandidateId && !candidate?.id) {
           setConsultantError('No candidate or consultant associated with this requirement');
         } else {
           setConsultantError('You cannot create a mission with a candidate. Transform your candidate to a consultant first.');

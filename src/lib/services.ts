@@ -709,8 +709,9 @@ export interface DbRequirement {
   bid_outcome_reason: string | null;
   bid_outcome_notes: string | null;
   bid_lessons_learned: string | null;
-  // Winning candidate (set when assessment = GO)
+  // Winning candidate or consultant (set when assessment = GO)
   winning_candidate_id: string | null;
+  winning_consultant_id: string | null;
   won_at: string | null;
   created_at: string;
   updated_at: string;
@@ -720,6 +721,7 @@ export interface DbRequirement {
   contact?: DbContact;
   project?: DbProject;
   winning_candidate?: DbCandidate;
+  winning_consultant?: DbConsultant;
   technical_director?: DbUser;
   business_director?: DbUser;
   manager?: DbUser;
@@ -841,6 +843,7 @@ export const requirementsService = {
         contact:contact_id(*),
         project:project_id(*),
         winning_candidate:winning_candidate_id(*),
+        winning_consultant:winning_consultant_id(*),
         technical_director:technical_director_id(*),
         business_director:business_director_id(*),
         manager:manager_id(*)
@@ -862,6 +865,7 @@ export const requirementsService = {
         contact:contact_id(*),
         project:project_id(*),
         winning_candidate:winning_candidate_id(*),
+        winning_consultant:winning_consultant_id(*),
         technical_director:technical_director_id(*),
         business_director:business_director_id(*),
         manager:manager_id(*)
@@ -1605,6 +1609,7 @@ export interface DbCustomerAssessment {
   requirement_id: string | null;  // Direct link to requirement
   contact_id: string | null;
   candidate_id: string | null;
+  consultant_id: string | null;  // Direct link to consultant for consultant applications
   scheduled_date: string;
   scheduled_time: string | null;
   customer_contact: string | null;
@@ -1623,6 +1628,7 @@ export interface DbCustomerAssessment {
   requirement?: DbRequirement;
   contact?: DbContact;
   candidate?: DbCandidate;
+  consultant?: DbConsultant;
 }
 
 export interface CreateCustomerAssessmentInput {
@@ -1630,6 +1636,7 @@ export interface CreateCustomerAssessmentInput {
   requirement_id?: string;  // Direct link to requirement
   contact_id?: string;
   candidate_id?: string;
+  consultant_id?: string;  // Direct link to consultant for consultant applications
   scheduled_date: string;
   scheduled_time?: string;
   customer_contact?: string;
@@ -1648,11 +1655,13 @@ export const customerAssessmentsService = {
         application:applications(
           *,
           candidate:candidates(*),
+          consultant:consultants(*),
           requirement:requirements(*)
         ),
         requirement:requirement_id(*),
         contact:contacts(*),
-        candidate:candidates(*)
+        candidate:candidates(*),
+        consultant:consultants(*)
       `)
       .order('scheduled_date', { ascending: true });
 
@@ -1720,10 +1729,10 @@ export const customerAssessmentsService = {
   // If outcome is GO, this also marks the requirement as WON
   // If changing from GO to NOGO, revert the requirement status to active
   async updateOutcome(id: string, outcome: 'go' | 'nogo', outcomeNotes?: string): Promise<DbCustomerAssessment> {
-    // First get the current assessment to check previous outcome
+    // First get the current assessment to check previous outcome and consultant_id
     const { data: currentAssessment } = await supabase
       .from('customer_assessments')
-      .select('outcome, requirement_id, candidate_id, application:applications(requirement:requirements(id))')
+      .select('outcome, requirement_id, candidate_id, consultant_id, application:applications(requirement:requirements(id), consultant_id)')
       .eq('id', id)
       .single();
     
@@ -1743,10 +1752,12 @@ export const customerAssessmentsService = {
         application:applications(
           *,
           candidate:candidates(*),
+          consultant:consultants(*),
           requirement:requirements(*)
         ),
         requirement:requirement_id(*),
-        candidate:candidates(*)
+        candidate:candidates(*),
+        consultant:consultants(*)
       `)
       .single();
 
@@ -1754,18 +1765,35 @@ export const customerAssessmentsService = {
     
     const requirementId = data?.requirement_id || data?.application?.requirement?.id;
     const candidateId = data?.candidate_id || data?.application?.candidate?.id;
+    const consultantId = data?.consultant_id || data?.application?.consultant_id || data?.application?.consultant?.id;
     
     // If outcome is GO, mark the requirement as won
-    if (outcome === 'go' && requirementId && candidateId) {
-      await supabase
-        .from('requirements')
-        .update({
-          status: 'won',
-          winning_candidate_id: candidateId,
-          won_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', requirementId);
+    if (outcome === 'go' && requirementId) {
+      if (consultantId) {
+        // Consultant-based win: set winning_consultant_id
+        await supabase
+          .from('requirements')
+          .update({
+            status: 'won',
+            winning_consultant_id: consultantId,
+            winning_candidate_id: null,
+            won_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', requirementId);
+      } else if (candidateId) {
+        // Candidate-based win: set winning_candidate_id (original behaviour)
+        await supabase
+          .from('requirements')
+          .update({
+            status: 'won',
+            winning_candidate_id: candidateId,
+            winning_consultant_id: null,
+            won_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', requirementId);
+      }
     }
     
     // If changing from GO to NOGO, revert the requirement status
@@ -1775,6 +1803,7 @@ export const customerAssessmentsService = {
         .update({
           status: 'active',
           winning_candidate_id: null,
+          winning_consultant_id: null,
           won_at: null,
           updated_at: new Date().toISOString(),
         })
