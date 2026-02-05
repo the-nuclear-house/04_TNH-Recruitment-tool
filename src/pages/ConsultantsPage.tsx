@@ -62,6 +62,7 @@ import {
   salaryHistoryService,
   bonusPaymentsService,
   consultantExitsService,
+  timesheetEntriesService,
   type DbConsultant, 
   type DbConsultantMeeting,
   type DbMission,
@@ -1167,32 +1168,132 @@ export function ConsultantProfilePage() {
   const [exitValidationErrors, setExitValidationErrors] = useState<string[]>([]);
   const [isExitShaking, setIsExitShaking] = useState(false);
 
-  // HR inline date editing
-  const [isEditingStartDate, setIsEditingStartDate] = useState(false);
-  const [isEditingEndDate, setIsEditingEndDate] = useState(false);
-  const [editStartDate, setEditStartDate] = useState('');
-  const [editEndDate, setEditEndDate] = useState('');
-  const [isSavingDate, setIsSavingDate] = useState(false);
+  // HR can edit consultant details
   const canEditDates = permissions.isHR || permissions.isHRManager || permissions.isAdmin;
 
-  const handleSaveDate = async (field: 'start_date' | 'end_date') => {
+  // HR Edit Consultant Modal
+  const [isEditConsultantModalOpen, setIsEditConsultantModalOpen] = useState(false);
+  const [editConsultantForm, setEditConsultantForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    location: '',
+    job_title: '',
+    company_email: '',
+    contract_type: 'permanent' as 'permanent' | 'contract',
+    salary_amount: '',
+    day_rate: '',
+    start_date: '',
+    end_date: '',
+    security_vetting: '',
+    annual_leave_allowance: '',
+  });
+  const [editConsultantErrors, setEditConsultantErrors] = useState<string[]>([]);
+  const [isSavingConsultant, setIsSavingConsultant] = useState(false);
+  const [consultantTimesheetEntries, setConsultantTimesheetEntries] = useState<any[]>([]);
+
+  const openEditConsultantModal = async () => {
     if (!consultant) return;
-    const value = field === 'start_date' ? editStartDate : editEndDate;
-    if (!value && field === 'start_date') {
-      toast.error('Error', 'Start date is required');
+    // Load timesheet entries to validate date changes
+    try {
+      const entries = await timesheetEntriesService.getByConsultant(consultant.id);
+      setConsultantTimesheetEntries(entries);
+    } catch {
+      setConsultantTimesheetEntries([]);
+    }
+    setEditConsultantForm({
+      first_name: consultant.first_name,
+      last_name: consultant.last_name,
+      email: consultant.email,
+      phone: consultant.phone || '',
+      location: consultant.location || '',
+      job_title: consultant.job_title || '',
+      company_email: consultant.company_email || '',
+      contract_type: (consultant.contract_type as 'permanent' | 'contract') || 'permanent',
+      salary_amount: consultant.salary_amount?.toString() || '',
+      day_rate: consultant.day_rate?.toString() || '',
+      start_date: consultant.start_date,
+      end_date: consultant.end_date || '',
+      security_vetting: consultant.security_vetting || '',
+      annual_leave_allowance: consultant.annual_leave_allowance?.toString() || '25',
+    });
+    setEditConsultantErrors([]);
+    setIsEditConsultantModalOpen(true);
+  };
+
+  const handleSaveConsultant = async () => {
+    if (!consultant) return;
+    const errors: string[] = [];
+    
+    // Validate required fields
+    if (!editConsultantForm.first_name.trim()) errors.push('First name is required');
+    if (!editConsultantForm.last_name.trim()) errors.push('Last name is required');
+    if (!editConsultantForm.email.trim()) errors.push('Email is required');
+    if (!editConsultantForm.start_date) errors.push('Start date is required');
+    
+    // Validate start date against existing timesheet entries
+    if (editConsultantForm.start_date && consultantTimesheetEntries.length > 0) {
+      const earliestEntry = consultantTimesheetEntries
+        .map(e => e.date)
+        .sort()[0];
+      if (earliestEntry && editConsultantForm.start_date > earliestEntry) {
+        errors.push(`Start date cannot be after existing timesheet entries (earliest: ${earliestEntry})`);
+      }
+    }
+    
+    // Validate end date against existing timesheet entries
+    if (editConsultantForm.end_date && consultantTimesheetEntries.length > 0) {
+      const latestEntry = consultantTimesheetEntries
+        .map(e => e.date)
+        .sort()
+        .reverse()[0];
+      if (latestEntry && editConsultantForm.end_date < latestEntry) {
+        errors.push(`End date cannot be before existing timesheet entries (latest: ${latestEntry})`);
+      }
+    }
+    
+    // Validate end date is after start date
+    if (editConsultantForm.end_date && editConsultantForm.start_date > editConsultantForm.end_date) {
+      errors.push('End date must be after start date');
+    }
+    
+    if (errors.length > 0) {
+      setEditConsultantErrors(errors);
       return;
     }
+    
     try {
-      setIsSavingDate(true);
-      await consultantsService.update(consultant.id, { [field]: value || undefined });
-      setConsultant({ ...consultant, [field]: value });
-      toast.success('Updated', `${field === 'start_date' ? 'Start' : 'End'} date updated`);
-      if (field === 'start_date') setIsEditingStartDate(false);
-      else setIsEditingEndDate(false);
+      setIsSavingConsultant(true);
+      const updated = await consultantsService.update(consultant.id, {
+        first_name: editConsultantForm.first_name.trim(),
+        last_name: editConsultantForm.last_name.trim(),
+        email: editConsultantForm.email.trim(),
+        phone: editConsultantForm.phone.trim() || undefined,
+        location: editConsultantForm.location.trim() || undefined,
+        job_title: editConsultantForm.job_title.trim() || undefined,
+        company_email: editConsultantForm.company_email.trim() || undefined,
+        contract_type: editConsultantForm.contract_type,
+        salary_amount: editConsultantForm.salary_amount ? parseFloat(editConsultantForm.salary_amount) : undefined,
+        day_rate: editConsultantForm.day_rate ? parseFloat(editConsultantForm.day_rate) : undefined,
+        start_date: editConsultantForm.start_date,
+        end_date: editConsultantForm.end_date || undefined,
+        security_vetting: editConsultantForm.security_vetting || undefined,
+      });
+      // Update annual leave allowance separately if changed
+      if (editConsultantForm.annual_leave_allowance !== consultant.annual_leave_allowance?.toString()) {
+        await consultantsService.update(consultant.id, {
+          annual_leave_allowance: parseInt(editConsultantForm.annual_leave_allowance) || 25,
+        } as any);
+      }
+      setConsultant({ ...consultant, ...updated });
+      toast.success('Updated', 'Consultant details updated successfully');
+      setIsEditConsultantModalOpen(false);
+      loadData(); // Reload to get fresh data
     } catch (error: any) {
-      toast.error('Error', error.message || 'Failed to update date');
+      toast.error('Error', error.message || 'Failed to update consultant');
     } finally {
-      setIsSavingDate(false);
+      setIsSavingConsultant(false);
     }
   };
 
@@ -1498,6 +1599,15 @@ export function ConsultantProfilePage() {
         title="Consultant Profile"
         actions={
           <div className="flex items-center gap-2">
+            {canEditDates && (
+              <Button
+                variant="secondary"
+                leftIcon={<Edit className="h-4 w-4" />}
+                onClick={openEditConsultantModal}
+              >
+                Edit
+              </Button>
+            )}
             {permissions.isAdmin && (
               <Button
                 variant="danger"
@@ -1992,90 +2102,16 @@ export function ConsultantProfilePage() {
                     <span className="text-brand-slate-700">£{consultant.day_rate}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between">
                   <span className="text-brand-grey-400">Start Date</span>
-                  {isEditingStartDate ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="date"
-                        value={editStartDate}
-                        onChange={(e) => setEditStartDate(e.target.value)}
-                        className="text-sm border border-brand-grey-300 rounded px-2 py-0.5"
-                      />
-                      <button
-                        onClick={() => handleSaveDate('start_date')}
-                        disabled={isSavingDate}
-                        className="text-green-600 hover:text-green-700 p-0.5"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setIsEditingStartDate(false)}
-                        className="text-brand-grey-400 hover:text-brand-grey-600 p-0.5"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-brand-slate-700 flex items-center gap-1">
-                      {formatDate(consultant.start_date)}
-                      {canEditDates && (
-                        <button
-                          onClick={() => {
-                            setEditStartDate(consultant.start_date);
-                            setIsEditingStartDate(true);
-                          }}
-                          className="text-brand-grey-300 hover:text-brand-cyan ml-1"
-                          title="Edit start date (HR only)"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </span>
-                  )}
+                  <span className="text-brand-slate-700">{formatDate(consultant.start_date)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-brand-grey-400">End Date</span>
-                  {isEditingEndDate ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="date"
-                        value={editEndDate}
-                        onChange={(e) => setEditEndDate(e.target.value)}
-                        className="text-sm border border-brand-grey-300 rounded px-2 py-0.5"
-                      />
-                      <button
-                        onClick={() => handleSaveDate('end_date')}
-                        disabled={isSavingDate}
-                        className="text-green-600 hover:text-green-700 p-0.5"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setIsEditingEndDate(false)}
-                        className="text-brand-grey-400 hover:text-brand-grey-600 p-0.5"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-brand-slate-700 flex items-center gap-1">
-                      {consultant.end_date ? formatDate(consultant.end_date) : 'Not set'}
-                      {canEditDates && (
-                        <button
-                          onClick={() => {
-                            setEditEndDate(consultant.end_date || '');
-                            setIsEditingEndDate(true);
-                          }}
-                          className="text-brand-grey-300 hover:text-brand-cyan ml-1"
-                          title="Edit end date (HR only)"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </span>
-                  )}
-                </div>
+                {consultant.end_date && (
+                  <div className="flex justify-between">
+                    <span className="text-brand-grey-400">End Date</span>
+                    <span className="text-brand-slate-700">{formatDate(consultant.end_date)}</span>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -2629,6 +2665,181 @@ export function ConsultantProfilePage() {
             <Button variant="secondary" onClick={() => { setIsExitModalOpen(false); setExitValidationErrors([]); }}>Cancel</Button>
             <Button variant="danger" onClick={handleSubmitExit} isLoading={isSubmittingRequest}>
               Submit Exit Request
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* HR Edit Consultant Modal */}
+      <Modal
+        isOpen={isEditConsultantModalOpen}
+        onClose={() => setIsEditConsultantModalOpen(false)}
+        title="Edit Consultant"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {editConsultantErrors.length > 0 && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <ul className="text-sm text-red-700 space-y-1">
+                {editConsultantErrors.map((error, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    {error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">First Name *</label>
+              <Input
+                value={editConsultantForm.first_name}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, first_name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Last Name *</label>
+              <Input
+                value={editConsultantForm.last_name}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, last_name: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Personal Email *</label>
+              <Input
+                type="email"
+                value={editConsultantForm.email}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, email: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Company Email</label>
+              <Input
+                type="email"
+                value={editConsultantForm.company_email}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, company_email: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Phone</label>
+              <Input
+                value={editConsultantForm.phone}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, phone: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Location</label>
+              <Input
+                value={editConsultantForm.location}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, location: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Job Title</label>
+              <Input
+                value={editConsultantForm.job_title}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, job_title: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-slate-700 mb-1">Security Clearance</label>
+              <Input
+                value={editConsultantForm.security_vetting}
+                onChange={(e) => setEditConsultantForm({ ...editConsultantForm, security_vetting: e.target.value })}
+                placeholder="e.g. SC, DV, BPSS"
+              />
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="font-medium text-brand-slate-900 mb-3">Contract Details</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1">Contract Type</label>
+                <select
+                  value={editConsultantForm.contract_type}
+                  onChange={(e) => setEditConsultantForm({ ...editConsultantForm, contract_type: e.target.value as 'permanent' | 'contract' })}
+                  className="w-full px-3 py-2 border border-brand-grey-300 rounded-lg"
+                >
+                  <option value="permanent">Permanent</option>
+                  <option value="contract">Contractor</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1">Annual Leave Allowance</label>
+                <Input
+                  type="number"
+                  value={editConsultantForm.annual_leave_allowance}
+                  onChange={(e) => setEditConsultantForm({ ...editConsultantForm, annual_leave_allowance: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1">Annual Salary (£)</label>
+                <Input
+                  type="number"
+                  value={editConsultantForm.salary_amount}
+                  onChange={(e) => setEditConsultantForm({ ...editConsultantForm, salary_amount: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1">Day Rate (£)</label>
+                <Input
+                  type="number"
+                  value={editConsultantForm.day_rate}
+                  onChange={(e) => setEditConsultantForm({ ...editConsultantForm, day_rate: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="font-medium text-brand-slate-900 mb-3">Employment Dates</h4>
+            {consultantTimesheetEntries.length > 0 && (
+              <p className="text-sm text-amber-600 mb-3">
+                <AlertCircle className="h-4 w-4 inline mr-1" />
+                This consultant has timesheet entries. Date changes will be validated against existing entries.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1">Start Date *</label>
+                <Input
+                  type="date"
+                  value={editConsultantForm.start_date}
+                  onChange={(e) => setEditConsultantForm({ ...editConsultantForm, start_date: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-slate-700 mb-1">End Date</label>
+                <Input
+                  type="date"
+                  value={editConsultantForm.end_date}
+                  onChange={(e) => setEditConsultantForm({ ...editConsultantForm, end_date: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="secondary" onClick={() => setIsEditConsultantModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleSaveConsultant} isLoading={isSavingConsultant}>
+              Save Changes
             </Button>
           </div>
         </div>

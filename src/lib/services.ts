@@ -137,6 +137,7 @@ export interface CreateConsultantInput {
   account_manager_id?: string;
   coc_director_id?: string;
   company_email?: string;
+  annual_leave_allowance?: number;
   created_by?: string;
 }
 
