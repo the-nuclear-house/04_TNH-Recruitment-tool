@@ -1821,8 +1821,8 @@ export function ConsultantProfilePage() {
                 </CardTitle>
               </CardHeader>
 
-              {/* Quick Actions - Request Changes */}
-              {consultant.status !== 'terminated' && (
+              {/* Quick Actions - Request Changes (hidden from HR who can edit directly) */}
+              {consultant.status !== 'terminated' && !canEditDates && (
                 <div className="mb-6 grid grid-cols-2 gap-3">
                   <div 
                     className="p-4 bg-gradient-to-r from-green-50 to-green-50/50 border border-green-200 rounded-xl cursor-pointer hover:from-green-100 hover:to-green-50 transition-all group"
@@ -1933,8 +1933,8 @@ export function ConsultantProfilePage() {
                 </CardTitle>
               </CardHeader>
 
-              {/* Quick Action - Initiate Exit */}
-              {!exitRecord && consultant.status !== 'terminated' && pendingApprovals.filter(r => r.request_type === 'employee_exit').length === 0 && (
+              {/* Quick Action - Initiate Exit (hidden from HR who can manage directly) */}
+              {!exitRecord && consultant.status !== 'terminated' && pendingApprovals.filter(r => r.request_type === 'employee_exit').length === 0 && !canEditDates && (
                 <div 
                   className="mb-4 p-4 bg-gradient-to-r from-red-50 to-red-50/50 border border-red-200 rounded-xl cursor-pointer hover:from-red-100 hover:to-red-50 transition-all group"
                   onClick={() => setIsExitModalOpen(true)}
