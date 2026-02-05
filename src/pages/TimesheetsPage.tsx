@@ -1165,25 +1165,29 @@ export function TimesheetsPage() {
           : null;
       if (consultantEnd) {
         consultantEnd.setHours(0, 0, 0, 0);
-        // If they left mid-week, we still check up to the start of current week
-        // but not beyond their departure
         if (consultantEnd < endBoundary) {
           endBoundary = new Date(consultantEnd);
-          endBoundary.setDate(endBoundary.getDate() + 1); // include their last day
+          endBoundary.setDate(endBoundary.getDate() + 1);
         }
       }
+      
+      console.log(`[KPI] ${consultant.first_name} ${consultant.last_name}: start=${consultant.start_date}, startParsed=${formatDateKey(consultantStart)}, endBoundary=${formatDateKey(endBoundary)}, currentWeekMon=${formatDateKey(currentWeekMonday)}, entries=${(entryLookup.get(consultant.id) || new Set()).size}`);
       
       const entries = entryLookup.get(consultant.id) || new Set();
       let hasMissing = false;
       
       // Walk day by day from start_date to endBoundary
       const day = new Date(consultantStart);
+      if (day >= endBoundary) {
+        console.log(`[KPI] ${consultant.first_name}: start_date is on or after endBoundary, no weeks to check`);
+      }
       while (day < endBoundary) {
         const dayOfWeek = day.getDay();
         // Skip weekends
         if (dayOfWeek !== 0 && dayOfWeek !== 6) {
           const dateKey = formatDateKey(day);
           if (!entries.has(`${dateKey}|AM`) || !entries.has(`${dateKey}|PM`)) {
+            console.log(`[KPI] ${consultant.first_name}: MISSING entry on ${dateKey}`);
             hasMissing = true;
             break;
           }
@@ -1196,6 +1200,7 @@ export function TimesheetsPage() {
       }
     }
     
+    console.log(`[KPI] Result: ${consultantsWithGaps.length} missing out of ${total}`);
     return { missing: consultantsWithGaps.length, total, consultants: consultantsWithGaps };
   }, [myConsultants, allEntries]);
 
