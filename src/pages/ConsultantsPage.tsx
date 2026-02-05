@@ -32,6 +32,8 @@ import {
   LogOut,
   AlertCircle,
   XCircle,
+  Check,
+  X,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { 
@@ -1165,6 +1167,35 @@ export function ConsultantProfilePage() {
   const [exitValidationErrors, setExitValidationErrors] = useState<string[]>([]);
   const [isExitShaking, setIsExitShaking] = useState(false);
 
+  // HR inline date editing
+  const [isEditingStartDate, setIsEditingStartDate] = useState(false);
+  const [isEditingEndDate, setIsEditingEndDate] = useState(false);
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [isSavingDate, setIsSavingDate] = useState(false);
+  const canEditDates = permissions.isHR || permissions.isHRManager || permissions.isAdmin;
+
+  const handleSaveDate = async (field: 'start_date' | 'end_date') => {
+    if (!consultant) return;
+    const value = field === 'start_date' ? editStartDate : editEndDate;
+    if (!value && field === 'start_date') {
+      toast.error('Error', 'Start date is required');
+      return;
+    }
+    try {
+      setIsSavingDate(true);
+      await consultantsService.update(consultant.id, { [field]: value || undefined });
+      setConsultant({ ...consultant, [field]: value });
+      toast.success('Updated', `${field === 'start_date' ? 'Start' : 'End'} date updated`);
+      if (field === 'start_date') setIsEditingStartDate(false);
+      else setIsEditingEndDate(false);
+    } catch (error: any) {
+      toast.error('Error', error.message || 'Failed to update date');
+    } finally {
+      setIsSavingDate(false);
+    }
+  };
+
   useEffect(() => {
     if (id) {
       loadData();
@@ -1961,16 +1992,90 @@ export function ConsultantProfilePage() {
                     <span className="text-brand-slate-700">£{consultant.day_rate}</span>
                   </div>
                 )}
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-brand-grey-400">Start Date</span>
-                  <span className="text-brand-slate-700">{formatDate(consultant.start_date)}</span>
+                  {isEditingStartDate ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="date"
+                        value={editStartDate}
+                        onChange={(e) => setEditStartDate(e.target.value)}
+                        className="text-sm border border-brand-grey-300 rounded px-2 py-0.5"
+                      />
+                      <button
+                        onClick={() => handleSaveDate('start_date')}
+                        disabled={isSavingDate}
+                        className="text-green-600 hover:text-green-700 p-0.5"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setIsEditingStartDate(false)}
+                        className="text-brand-grey-400 hover:text-brand-grey-600 p-0.5"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-brand-slate-700 flex items-center gap-1">
+                      {formatDate(consultant.start_date)}
+                      {canEditDates && (
+                        <button
+                          onClick={() => {
+                            setEditStartDate(consultant.start_date);
+                            setIsEditingStartDate(true);
+                          }}
+                          className="text-brand-grey-300 hover:text-brand-cyan ml-1"
+                          title="Edit start date (HR only)"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </div>
-                {consultant.end_date && (
-                  <div className="flex justify-between">
-                    <span className="text-brand-grey-400">End Date</span>
-                    <span className="text-brand-slate-700">{formatDate(consultant.end_date)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-brand-grey-400">End Date</span>
+                  {isEditingEndDate ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="date"
+                        value={editEndDate}
+                        onChange={(e) => setEditEndDate(e.target.value)}
+                        className="text-sm border border-brand-grey-300 rounded px-2 py-0.5"
+                      />
+                      <button
+                        onClick={() => handleSaveDate('end_date')}
+                        disabled={isSavingDate}
+                        className="text-green-600 hover:text-green-700 p-0.5"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setIsEditingEndDate(false)}
+                        className="text-brand-grey-400 hover:text-brand-grey-600 p-0.5"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-brand-slate-700 flex items-center gap-1">
+                      {consultant.end_date ? formatDate(consultant.end_date) : 'Not set'}
+                      {canEditDates && (
+                        <button
+                          onClick={() => {
+                            setEditEndDate(consultant.end_date || '');
+                            setIsEditingEndDate(true);
+                          }}
+                          className="text-brand-grey-300 hover:text-brand-cyan ml-1"
+                          title="Edit end date (HR only)"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </div>
               </div>
             </Card>
 
