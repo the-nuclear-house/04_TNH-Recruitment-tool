@@ -779,14 +779,14 @@ export function LeaveRequestsPage() {
           </Card>
           <Card>
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Check className="h-5 w-5 text-green-600" />
+              <div className={`p-2 rounded-lg ${pendingRequests.length + cancellationRequests.length > 0 ? 'bg-red-100' : 'bg-green-100'}`}>
+                <AlertCircle className={`h-5 w-5 ${pendingRequests.length + cancellationRequests.length > 0 ? 'text-red-600' : 'text-green-600'}`} />
               </div>
               <div>
                 <p className="text-2xl font-bold text-brand-slate-900">
-                  {allRequests.filter(r => r.status === 'approved').length}
+                  {pendingRequests.length + cancellationRequests.length}
                 </p>
-                <p className="text-sm text-brand-grey-400">Currently Approved</p>
+                <p className="text-sm text-brand-grey-400">Actions Required</p>
               </div>
             </div>
           </Card>

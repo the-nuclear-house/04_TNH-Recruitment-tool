@@ -1099,11 +1099,129 @@ export function TimesheetsPage() {
     );
   }
 
+  // Compute consultants with missing timesheet submissions
+  // A "complete" week means it has a submitted or approved timesheet_weeks record.
+  // We only check full weeks that have ended (i.e. before the current week's Monday).
+  const missingTimesheetData = useMemo(() => {
+    if (myConsultants.length === 0) return { missing: 0, total: 0, consultants: [] as DbConsultant[] };
+    
+    const today = new Date();
+    const currentWeekMonday = getWeekStart(today);
+    const activeConsultants = myConsultants.filter(c => c.status !== 'terminated');
+    const total = activeConsultants.length;
+    
+    const consultantsWithGaps: DbConsultant[] = [];
+    
+    for (const consultant of activeConsultants) {
+      if (!consultant.start_date) continue;
+      
+      // Start checking from the consultant's start date (aligned to its week's Monday)
+      const consultantStart = new Date(consultant.start_date);
+      const firstWeekMonday = getWeekStart(consultantStart);
+      
+      // Get all submitted/approved weeks for this consultant
+      const submittedWeekDates = new Set(
+        allWeeks
+          .filter(w => w.consultant_id === consultant.id && ['submitted', 'approved'].includes(w.status))
+          .map(w => w.week_start_date)
+      );
+      
+      // Walk through each full week from start to last completed week
+      let weekMonday = new Date(firstWeekMonday);
+      let hasMissing = false;
+      
+      while (weekMonday < currentWeekMonday) {
+        const weekKey = formatDateKey(weekMonday);
+        if (!submittedWeekDates.has(weekKey)) {
+          hasMissing = true;
+          break;
+        }
+        weekMonday.setDate(weekMonday.getDate() + 7);
+      }
+      
+      if (hasMissing) {
+        consultantsWithGaps.push(consultant);
+      }
+    }
+    
+    return { missing: consultantsWithGaps.length, total, consultants: consultantsWithGaps };
+  }, [myConsultants, allWeeks]);
+
   // Manager View - Monthly Calendar
   return (
     <div className="min-h-screen">
       <Header title="Timesheets" subtitle="Review and approve consultant timesheets" />
       <div className="p-6 space-y-6">
+        {/* Missing Timesheets KPI */}
+        {!isLoading && myConsultants.length > 0 && (
+          <Card className="p-5">
+            <div className="flex items-center gap-6">
+              {/* Donut Chart */}
+              <div className="relative flex-shrink-0" style={{ width: 96, height: 96 }}>
+                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                  {/* Background circle (total consultants) */}
+                  <circle
+                    cx="18" cy="18" r="14"
+                    fill="none"
+                    stroke="#e5e7eb"
+                    strokeWidth="3.5"
+                  />
+                  {/* Filled arc (missing / red) */}
+                  {missingTimesheetData.total > 0 && (
+                    <circle
+                      cx="18" cy="18" r="14"
+                      fill="none"
+                      stroke={missingTimesheetData.missing > 0 ? '#ef4444' : '#22c55e'}
+                      strokeWidth="3.5"
+                      strokeDasharray={`${(missingTimesheetData.missing / missingTimesheetData.total) * 87.96} 87.96`}
+                      strokeLinecap="round"
+                    />
+                  )}
+                  {/* If everyone is up to date, fill green */}
+                  {missingTimesheetData.total > 0 && missingTimesheetData.missing === 0 && (
+                    <circle
+                      cx="18" cy="18" r="14"
+                      fill="none"
+                      stroke="#22c55e"
+                      strokeWidth="3.5"
+                      strokeDasharray="87.96 87.96"
+                    />
+                  )}
+                </svg>
+                {/* Centre number */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className={`text-2xl font-bold ${missingTimesheetData.missing > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {missingTimesheetData.missing}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Label */}
+              <div>
+                <p className="font-semibold text-brand-slate-900">
+                  {missingTimesheetData.missing === 0
+                    ? 'All timesheets up to date'
+                    : `${missingTimesheetData.missing} consultant${missingTimesheetData.missing !== 1 ? 's' : ''} with missing timesheets`
+                  }
+                </p>
+                <p className="text-sm text-brand-grey-400 mt-0.5">
+                  {missingTimesheetData.total} active consultant{missingTimesheetData.total !== 1 ? 's' : ''} total
+                </p>
+                {missingTimesheetData.missing > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {missingTimesheetData.consultants.map(c => (
+                      <span key={c.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-xs font-medium text-red-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                        {c.first_name} {c.last_name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Month Navigation */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
