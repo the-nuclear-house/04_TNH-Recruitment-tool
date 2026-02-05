@@ -3209,6 +3209,17 @@ export const missionsService = {
     // Update consultant status to in_mission
     await consultantsService.update(input.consultant_id, { status: 'in_mission' });
     
+    // Update requirement status to filled
+    if (input.requirement_id) {
+      await supabase
+        .from('requirements')
+        .update({
+          status: 'filled',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', input.requirement_id);
+    }
+    
     return data;
   },
 

@@ -48,6 +48,7 @@ import {
   applicationsService,
   usersService,
   consultantsService,
+  missionsService,
   type DbCustomerMeeting,
   type DbCustomerAssessment,
   type DbContact,
@@ -156,6 +157,9 @@ export function CustomerMeetingsPage() {
   // Project creation modal (shown before mission when no project exists)
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
+  
+  // Track which requirements already have a mission created
+  const [requirementMissions, setRequirementMissions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadData();
@@ -180,6 +184,19 @@ export function CustomerMeetingsPage() {
       setCompanies(comps);
       setUsers(usrs);
       setConsultants(consults);
+      
+      // Check which GO assessments already have missions
+      const missionStatus: Record<string, boolean> = {};
+      const goAssessments = assmnts.filter(a => a.outcome === 'go' && a.requirement_id);
+      for (const assessment of goAssessments) {
+        try {
+          const mission = await missionsService.getByRequirement(assessment.requirement_id!);
+          missionStatus[assessment.requirement_id!] = !!mission;
+        } catch {
+          // Ignore errors
+        }
+      }
+      setRequirementMissions(missionStatus);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error', 'Failed to load meetings');
@@ -678,8 +695,14 @@ export function CustomerMeetingsPage() {
                 const config = outcomeConfig[outcome as keyof typeof outcomeConfig];
                 const Icon = config.icon;
                 const candidate = meeting.application?.candidate || candidates.find(c => c.id === meeting.candidate_id);
+                const assessmentConsultant = (meeting as any).consultant || (meeting as any).application?.consultant || consultants.find(c => c.id === (meeting as any).consultant_id);
+                const person = assessmentConsultant || candidate;
+                const isConsultantAssessment = !!assessmentConsultant && !candidate;
                 const contact = contacts.find(c => c.id === meeting.contact_id);
                 const company = contact?.company || companies.find(co => co.id === contact?.company_id);
+                const hasMission = meeting.requirement_id ? requirementMissions[meeting.requirement_id] : false;
+                const requirementProjectId = (meeting as any).application?.requirement?.project_id;
+                const requirementStatus = (meeting as any).application?.requirement?.status;
                 
                 return (
                   <Card 
@@ -698,18 +721,26 @@ export function CustomerMeetingsPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-4">
                         <Avatar 
-                          name={candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Unknown'}
+                          name={person ? `${person.first_name} ${person.last_name}` : 'Unknown'}
                           size="md"
                         />
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <h3 
                               className="font-semibold text-brand-slate-900 cursor-pointer hover:text-brand-cyan"
-                              onClick={() => candidate && navigate(`/candidates/${candidate.id}`)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isConsultantAssessment && assessmentConsultant) {
+                                  navigate(`/consultants/${assessmentConsultant.id}`);
+                                } else if (candidate) {
+                                  navigate(`/candidates/${candidate.id}`);
+                                }
+                              }}
                             >
-                              {candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Unknown Candidate'}
+                              {person ? `${person.first_name} ${person.last_name}` : 'Unknown'}
                             </h3>
                             <Badge variant="orange">Assessment</Badge>
+                            {isConsultantAssessment && <Badge variant="purple">Consultant</Badge>}
                             <div className="flex items-center gap-1">
                               <Icon className="h-3.5 w-3.5" style={{ color: config.colour === 'green' ? '#22c55e' : config.colour === 'red' ? '#ef4444' : '#f97316' }} />
                               <Badge variant={config.colour as any}>
@@ -774,23 +805,64 @@ export function CustomerMeetingsPage() {
                       {/* Create Project/Mission button for GO assessments */}
                       {meeting.outcome === 'go' && (
                         (() => {
-                          const requirementProjectId = (meeting as any).application?.requirement?.project_id;
+                          // If mission already exists, show status
+                          if (hasMission || requirementStatus === 'filled') {
+                            return (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate('/missions');
+                                }}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1 text-green-600" />
+                                Mission Created
+                              </Button>
+                            );
+                          }
+                          
+                          // If project exists but no mission yet
+                          if (requirementProjectId && !hasMission) {
+                            const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
+                            const consultantId = (meeting as any).consultant_id || (meeting as any).application?.consultant_id || (meeting as any).application?.consultant?.id;
+                            return (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-green-600 font-medium">Project Created</span>
+                                <Button
+                                  variant="success"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isPersonConsultant(candidateId, consultantId)) {
+                                      setAssessmentForMission(meeting as DbCustomerAssessment);
+                                      setIsCreateMissionModalOpen(true);
+                                    } else {
+                                      toast.warning(
+                                        'Cannot Create Mission Yet',
+                                        'Progress this candidate to consultant before creating a mission.'
+                                      );
+                                    }
+                                  }}
+                                >
+                                  Create Mission
+                                </Button>
+                              </div>
+                            );
+                          }
+                          
+                          // No project yet
+                          const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
+                          const consultantId = (meeting as any).consultant_id || (meeting as any).application?.consultant_id || (meeting as any).application?.consultant?.id;
                           return (
                             <Button
                               variant="success"
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const candidateId = meeting.candidate_id || (meeting as any).application?.candidate?.id;
-                                const consultantId = (meeting as any).consultant_id || (meeting as any).application?.consultant_id || (meeting as any).application?.consultant?.id;
                                 if (isPersonConsultant(candidateId, consultantId)) {
                                   setAssessmentForMission(meeting as DbCustomerAssessment);
-                                  // Check if requirement has a project
-                                  if (!requirementProjectId) {
-                                    setIsCreateProjectModalOpen(true);
-                                  } else {
-                                    setIsCreateMissionModalOpen(true);
-                                  }
+                                  setIsCreateProjectModalOpen(true);
                                 } else {
                                   toast.warning(
                                     'Cannot Create Mission Yet',
@@ -799,7 +871,7 @@ export function CustomerMeetingsPage() {
                                 }
                               }}
                             >
-                              {requirementProjectId ? 'Create Mission' : 'Create Project'}
+                              Create Project
                             </Button>
                           );
                         })()
