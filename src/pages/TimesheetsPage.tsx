@@ -144,7 +144,6 @@ export function TimesheetsPage() {
   // Manager view state
   const [myConsultants, setMyConsultants] = useState<DbConsultant[]>([]);
   const [allWeeks, setAllWeeks] = useState<DbTimesheetWeek[]>([]);
-  const [allWeeksForKpi, setAllWeeksForKpi] = useState<DbTimesheetWeek[]>([]);
   const [allEntries, setAllEntries] = useState<DbTimesheetEntry[]>([]);
   
   // Consultant monthly overview
@@ -234,10 +233,9 @@ export function TimesheetsPage() {
     try {
       setIsLoading(true);
       
-      const [allConsultants, weeks, allWeeksData, entriesData, allMissions] = await Promise.all([
+      const [allConsultants, weeks, entriesData, allMissions] = await Promise.all([
         consultantsService.getAll(),
         timesheetWeeksService.getPendingApprovals(),
-        timesheetWeeksService.getAll(),
         timesheetEntriesService.getAll(),
         missionsService.getAll(),
       ]);
@@ -251,7 +249,6 @@ export function TimesheetsPage() {
       
       setMyConsultants(consultantsForManager);
       setAllWeeks(weeks);
-      setAllWeeksForKpi(allWeeksData);
       setAllEntries(entriesData);
       setMissions(allMissions);
     } catch (error) {
@@ -1127,10 +1124,10 @@ export function TimesheetsPage() {
     );
   }
 
-  // Compute consultants with missing timesheet submissions.
-  // For each active consultant, check every completed week (Mon-Sun) from their
-  // start_date up to but not including the current week (or their end date if they left).
-  // If any week has no timesheet_weeks record at all, that consultant is behind.
+  // Compute consultants with missing timesheet entries.
+  // For each active consultant, check every completed weekday from their start_date
+  // up to (not including) the current week. If any weekday is missing an AM or PM
+  // entry, that consultant is behind. This checks actual entries, not week records.
   const missingTimesheetData = useMemo(() => {
     if (myConsultants.length === 0) return { missing: 0, total: 0, consultants: [] as DbConsultant[] };
     
@@ -1141,51 +1138,57 @@ export function TimesheetsPage() {
     
     const consultantsWithGaps: DbConsultant[] = [];
     
+    // Build a lookup: consultantId -> Set of "date|period" keys
+    const entryLookup = new Map<string, Set<string>>();
+    for (const entry of allEntries) {
+      if (!entryLookup.has(entry.consultant_id)) {
+        entryLookup.set(entry.consultant_id, new Set());
+      }
+      entryLookup.get(entry.consultant_id)!.add(`${entry.date}|${entry.period}`);
+    }
+    
     for (const consultant of activeConsultants) {
       if (!consultant.start_date) {
-        // No start date means we can't calculate, flag them
         consultantsWithGaps.push(consultant);
         continue;
       }
       
-      // Start checking from the Monday of the consultant's start week
       const consultantStart = new Date(consultant.start_date);
-      const firstWeekMonday = getWeekStart(consultantStart);
+      consultantStart.setHours(0, 0, 0, 0);
       
-      // End boundary: current week or end_date/terminated_at, whichever is earlier
-      let endBoundary = currentWeekMonday;
+      // End boundary: start of current week, or end_date/terminated_at if earlier
+      let endBoundary = new Date(currentWeekMonday);
       const consultantEnd = consultant.terminated_at 
         ? new Date(consultant.terminated_at)
         : consultant.end_date 
           ? new Date(consultant.end_date) 
           : null;
       if (consultantEnd) {
-        const endWeekMonday = getWeekStart(consultantEnd);
-        // Only check up to the week after their last day (they should have submitted that week)
-        endWeekMonday.setDate(endWeekMonday.getDate() + 7);
-        if (endWeekMonday < endBoundary) {
-          endBoundary = endWeekMonday;
+        consultantEnd.setHours(0, 0, 0, 0);
+        // If they left mid-week, we still check up to the start of current week
+        // but not beyond their departure
+        if (consultantEnd < endBoundary) {
+          endBoundary = new Date(consultantEnd);
+          endBoundary.setDate(endBoundary.getDate() + 1); // include their last day
         }
       }
       
-      // Build a set of all week_start_dates this consultant has ANY record for
-      const existingWeekDates = new Set(
-        allWeeksForKpi
-          .filter(w => w.consultant_id === consultant.id)
-          .map(w => w.week_start_date)
-      );
-      
-      // Walk through each completed week and check for gaps
-      let weekMonday = new Date(firstWeekMonday);
+      const entries = entryLookup.get(consultant.id) || new Set();
       let hasMissing = false;
       
-      while (weekMonday < endBoundary) {
-        const weekKey = formatDateKey(weekMonday);
-        if (!existingWeekDates.has(weekKey)) {
-          hasMissing = true;
-          break;
+      // Walk day by day from start_date to endBoundary
+      const day = new Date(consultantStart);
+      while (day < endBoundary) {
+        const dayOfWeek = day.getDay();
+        // Skip weekends
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          const dateKey = formatDateKey(day);
+          if (!entries.has(`${dateKey}|AM`) || !entries.has(`${dateKey}|PM`)) {
+            hasMissing = true;
+            break;
+          }
         }
-        weekMonday.setDate(weekMonday.getDate() + 7);
+        day.setDate(day.getDate() + 1);
       }
       
       if (hasMissing) {
@@ -1194,7 +1197,7 @@ export function TimesheetsPage() {
     }
     
     return { missing: consultantsWithGaps.length, total, consultants: consultantsWithGaps };
-  }, [myConsultants, allWeeksForKpi]);
+  }, [myConsultants, allEntries]);
 
   // Manager View - Monthly Calendar
   return (
