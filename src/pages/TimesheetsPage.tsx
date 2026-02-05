@@ -1156,56 +1156,59 @@ export function TimesheetsPage() {
         {!isLoading && myConsultants.length > 0 && (
           <Card className="p-5">
             <div className="flex items-center gap-6">
-              {/* Donut Chart */}
-              <div className="relative flex-shrink-0" style={{ width: 96, height: 96 }}>
-                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                  {/* Background circle (total consultants) */}
-                  <circle
-                    cx="18" cy="18" r="14"
-                    fill="none"
-                    stroke="#e5e7eb"
-                    strokeWidth="3.5"
-                  />
-                  {/* Filled arc (missing / red) */}
-                  {missingTimesheetData.total > 0 && (
-                    <circle
-                      cx="18" cy="18" r="14"
-                      fill="none"
-                      stroke={missingTimesheetData.missing > 0 ? '#ef4444' : '#22c55e'}
-                      strokeWidth="3.5"
-                      strokeDasharray={`${(missingTimesheetData.missing / missingTimesheetData.total) * 87.96} 87.96`}
-                      strokeLinecap="round"
-                    />
-                  )}
-                  {/* If everyone is up to date, fill green */}
-                  {missingTimesheetData.total > 0 && missingTimesheetData.missing === 0 && (
-                    <circle
-                      cx="18" cy="18" r="14"
-                      fill="none"
-                      stroke="#22c55e"
-                      strokeWidth="3.5"
-                      strokeDasharray="87.96 87.96"
-                    />
-                  )}
-                </svg>
-                {/* Centre number */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className={`text-2xl font-bold ${missingTimesheetData.missing > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {missingTimesheetData.missing}
-                  </span>
-                </div>
-              </div>
+              {/* Donut Chart - two colours: green (up to date) + red (missing) */}
+              {(() => {
+                const total = missingTimesheetData.total;
+                const missing = missingTimesheetData.missing;
+                const upToDate = total - missing;
+                const circumference = 2 * Math.PI * 14; // ~87.96
+                const redPortion = total > 0 ? (missing / total) * circumference : 0;
+                const greenPortion = total > 0 ? (upToDate / total) * circumference : circumference;
+                
+                return (
+                  <div className="relative flex-shrink-0" style={{ width: 100, height: 100 }}>
+                    <svg viewBox="0 0 36 36" className="w-full h-full" style={{ transform: 'rotate(-90deg)' }}>
+                      {/* Green arc (up to date) - drawn first, sits behind */}
+                      <circle
+                        cx="18" cy="18" r="14"
+                        fill="none"
+                        stroke="#22c55e"
+                        strokeWidth="4"
+                        strokeDasharray={`${greenPortion} ${circumference}`}
+                        strokeDashoffset="0"
+                      />
+                      {/* Red arc (missing) - drawn second, starts where green ends */}
+                      {missing > 0 && (
+                        <circle
+                          cx="18" cy="18" r="14"
+                          fill="none"
+                          stroke="#ef4444"
+                          strokeWidth="4"
+                          strokeDasharray={`${redPortion} ${circumference}`}
+                          strokeDashoffset={`${-greenPortion}`}
+                        />
+                      )}
+                    </svg>
+                    {/* Centre number */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className={`text-2xl font-bold leading-none ${missing > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {missing}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
               
-              {/* Label */}
+              {/* Label and names */}
               <div>
                 <p className="font-semibold text-brand-slate-900">
                   {missingTimesheetData.missing === 0
                     ? 'All timesheets up to date'
-                    : `${missingTimesheetData.missing} consultant${missingTimesheetData.missing !== 1 ? 's' : ''} with missing timesheets`
+                    : `Consultants with missing entries`
                   }
                 </p>
                 <p className="text-sm text-brand-grey-400 mt-0.5">
-                  {missingTimesheetData.total} active consultant{missingTimesheetData.total !== 1 ? 's' : ''} total
+                  {missingTimesheetData.total - missingTimesheetData.missing} of {missingTimesheetData.total} consultants up to date
                 </p>
                 {missingTimesheetData.missing > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
