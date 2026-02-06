@@ -137,6 +137,93 @@ function BigNumberCard({
   );
 }
 
+// Headline Card with forecast + sparkline (Layer 1)
+function HeadlineCard({
+  title,
+  current,
+  forecast,
+  forecastLabel,
+  forecastDirection,
+  icon: Icon,
+  iconBg,
+  barColour,
+  barForecastColour,
+  sparklineData,
+  semesterLabel,
+}: {
+  title: string;
+  current: number;
+  forecast: number;
+  forecastLabel: string;
+  forecastDirection: 'up' | 'down' | 'same';
+  icon: any;
+  iconBg: string;
+  barColour: string;
+  barForecastColour: string;
+  sparklineData: { week: string; value: number; isPast: boolean; isCurrent: boolean }[];
+  semesterLabel: string;
+}) {
+  const maxVal = Math.max(...sparklineData.map(d => d.value), 1);
+  const forecastColour = forecastDirection === 'down' && title !== 'On Bench' 
+    ? 'text-red-600' 
+    : forecastDirection === 'up' && title === 'On Bench'
+    ? 'text-red-600'
+    : forecastDirection === 'same' 
+    ? 'text-brand-grey-400'
+    : 'text-green-600';
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-brand-grey-400">{title}</p>
+          <div className="flex items-baseline gap-1 mt-1">
+            <span className="text-4xl font-bold text-brand-slate-900">{current}</span>
+            {current !== forecast && (
+              <span className={`text-base font-semibold ${forecastColour}`}>({forecast})</span>
+            )}
+          </div>
+          {forecastLabel && current !== forecast && (
+            <p className={`text-xs mt-1 ${forecastColour}`}>{forecastLabel}</p>
+          )}
+        </div>
+        <div className={`p-3 rounded-xl ${iconBg}`}>
+          <Icon className="h-6 w-6" />
+        </div>
+      </div>
+
+      {/* Sparkline */}
+      <div className="mt-4 pt-3 border-t border-brand-grey-200/50">
+        <p className="text-xs text-brand-grey-400 mb-2">{semesterLabel}</p>
+        <div className="flex items-end gap-[2px] h-9">
+          {sparklineData.map((d, i) => {
+            const height = maxVal > 0 ? (d.value / maxVal) * 100 : 0;
+            return (
+              <div
+                key={i}
+                className={`flex-1 rounded-t transition-all ${d.isCurrent ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}
+                style={{
+                  height: `${Math.max(height, 8)}%`,
+                  backgroundColor: d.isPast ? barColour : barForecastColour,
+                  minHeight: '3px',
+                }}
+                title={`${d.week}: ${d.value}`}
+              />
+            );
+          })}
+        </div>
+        <div className="flex justify-between mt-1">
+          <span className="text-[9px] text-brand-grey-400">{sparklineData[0]?.week}</span>
+          <span className="text-[9px] font-semibold text-amber-500">
+            {sparklineData.find(d => d.isCurrent)?.week || ''} ← now
+          </span>
+          <span className="text-[9px] text-brand-grey-400">{sparklineData[sparklineData.length - 1]?.week}</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // Centred Interview Funnel
 function InterviewFunnel({ data }: { 
   data: { 
@@ -412,14 +499,19 @@ export function DashboardPage() {
       const { data: intData } = await intQuery;
       setInterviews(intData || []);
       
-      // Load consultants
+      // Load consultants (filtered by account_manager for manager view)
       let consQuery = supabase.from('consultants').select('*').is('deleted_at', null);
-      // TODO: Filter by manager when we have that relationship
+      if (targetManagerId) {
+        consQuery = consQuery.eq('account_manager_id', targetManagerId);
+      }
       const { data: consData } = await consQuery;
       setConsultants(consData || []);
       
-      // Load missions
+      // Load missions (filtered to consultants the manager owns)
       let missQuery = supabase.from('missions').select('*').is('deleted_at', null);
+      if (targetManagerId && consData && consData.length > 0) {
+        missQuery = missQuery.in('consultant_id', consData.map(c => c.id));
+      }
       const { data: missData } = await missQuery;
       setMissions(missData || []);
       
@@ -564,6 +656,73 @@ export function DashboardPage() {
       totalAssessments: semesterAssessments.length,
     };
   }, [interviews, meetings, assessments, requirements, consultants, missions, currentSemester, semesterWeeks]);
+
+  // Headline stats for Layer 1 (consultants/missions/bench with forecast + sparklines)
+  const headlineStats = useMemo(() => {
+    if (!currentSemester || !consultants.length) return null;
+
+    const today = new Date();
+    const semesterEnd = currentSemester.end;
+    const activeConsultants = consultants.filter(c => c.status !== 'terminated');
+    const benchConsultants = activeConsultants.filter(c => c.status === 'bench');
+    const activeMissions = missions.filter(m => {
+      if (m.status === 'cancelled' || m.status === 'on_hold') return false;
+      if (!m.end_date) return true;
+      return new Date(m.end_date) >= today;
+    });
+
+    // Forecast: consultants serving notice (terminated status with future last_working_day, or exit records)
+    const consultantsServingNotice = consultants.filter(c => 
+      c.status === 'terminated' && c.start_date // crude check; ideally we'd have an exit date
+    ).length;
+    // Forecast: missions ending before semester end
+    const missionsEndingBeforeSemester = activeMissions.filter(m => 
+      m.end_date && new Date(m.end_date) <= semesterEnd
+    );
+    
+    const forecastConsultants = activeConsultants.length - consultantsServingNotice;
+    const forecastMissions = activeMissions.length - missionsEndingBeforeSemester.length;
+    const forecastBench = Math.max(0, benchConsultants.length + missionsEndingBeforeSemester.length);
+
+    // Sparkline data: simulate weekly counts across semester
+    // For now, use current values as the "actual" and project forward
+    const sparklineWeeks = semesterWeeks.map((w, idx) => {
+      const weekDate = w.start;
+      const isPast = weekDate <= today;
+      const isCurrent = isPast && (idx === semesterWeeks.length - 1 || semesterWeeks[idx + 1].start > today);
+
+      // Count active missions for this week
+      const weekMissions = isPast ? activeMissions.filter(m => {
+        const start = new Date(m.start_date || m.created_at);
+        const end = m.end_date ? new Date(m.end_date) : semesterEnd;
+        return start <= weekDate && end >= weekDate;
+      }).length : Math.max(0, activeMissions.length - missionsEndingBeforeSemester.filter(m => 
+        new Date(m.end_date) <= weekDate
+      ).length);
+
+      return {
+        week: w.label,
+        consultants: isPast ? activeConsultants.length : forecastConsultants,
+        missions: weekMissions,
+        bench: isPast ? benchConsultants.length : forecastBench,
+        isPast,
+        isCurrent,
+      };
+    });
+
+    return {
+      activeConsultants: activeConsultants.length,
+      forecastConsultants,
+      consultantsServingNotice,
+      activeMissions: activeMissions.length,
+      forecastMissions,
+      missionsEndingCount: missionsEndingBeforeSemester.length,
+      missionsEndingSoon: missionsEndingBeforeSemester,
+      bench: benchConsultants.length,
+      forecastBench,
+      sparklineWeeks,
+    };
+  }, [consultants, missions, currentSemester, semesterWeeks]);
 
   // Calculate recruiter stats
   const recruiterStats = useMemo(() => {
@@ -1239,27 +1398,65 @@ export function DashboardPage() {
             {/* Stats-dependent content - only show if stats available */}
             {stats && (
               <>
-                {/* Top 3 Big Numbers */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <BigNumberCard 
-                    title="Total Missions" 
-                    value={stats.totalMissions} 
-                    icon={Briefcase} 
-                    colour="cyan" 
-                  />
-                  <BigNumberCard 
-                    title="Total Consultants" 
-                    value={stats.totalConsultants} 
-                    icon={Users} 
-                    colour="green" 
-                  />
-                  <BigNumberCard 
-                    title="On Bench" 
-                    value={stats.benchConsultants} 
-                    icon={Clock} 
-                    colour="amber" 
-                  />
-                </div>
+                {/* Layer 1: Headline Cards with forecast + sparklines */}
+                {headlineStats && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <HeadlineCard
+                      title="Active Consultants"
+                      current={headlineStats.activeConsultants}
+                      forecast={headlineStats.forecastConsultants}
+                      forecastLabel={headlineStats.consultantsServingNotice > 0 ? `${headlineStats.consultantsServingNotice} serving notice` : ''}
+                      forecastDirection={headlineStats.forecastConsultants < headlineStats.activeConsultants ? 'down' : 'same'}
+                      icon={Users}
+                      iconBg="bg-cyan-50 text-cyan-600"
+                      barColour="#0891b2"
+                      barForecastColour="#b0dfef"
+                      sparklineData={headlineStats.sparklineWeeks.map(w => ({
+                        week: w.week,
+                        value: w.consultants,
+                        isPast: w.isPast,
+                        isCurrent: w.isCurrent,
+                      }))}
+                      semesterLabel={`${currentSemester?.label || ''} weekly trend`}
+                    />
+                    <HeadlineCard
+                      title="Active Missions"
+                      current={headlineStats.activeMissions}
+                      forecast={headlineStats.forecastMissions}
+                      forecastLabel={headlineStats.missionsEndingCount > 0 ? `${headlineStats.missionsEndingCount} ending before ${currentSemester?.label?.split(' ')[0] === 'H1' ? 'Jun' : 'Dec'}` : ''}
+                      forecastDirection={headlineStats.forecastMissions < headlineStats.activeMissions ? 'down' : 'same'}
+                      icon={Briefcase}
+                      iconBg="bg-green-50 text-green-600"
+                      barColour="#16a34a"
+                      barForecastColour="#b5e8c3"
+                      sparklineData={headlineStats.sparklineWeeks.map(w => ({
+                        week: w.week,
+                        value: w.missions,
+                        isPast: w.isPast,
+                        isCurrent: w.isCurrent,
+                      }))}
+                      semesterLabel={`${currentSemester?.label || ''} weekly trend`}
+                    />
+                    <HeadlineCard
+                      title="On Bench"
+                      current={headlineStats.bench}
+                      forecast={headlineStats.forecastBench}
+                      forecastLabel={headlineStats.forecastBench > headlineStats.bench ? `+${headlineStats.forecastBench - headlineStats.bench} if missions not renewed` : ''}
+                      forecastDirection={headlineStats.forecastBench > headlineStats.bench ? 'up' : 'same'}
+                      icon={Clock}
+                      iconBg="bg-amber-50 text-amber-600"
+                      barColour="#d97706"
+                      barForecastColour="#f5d9a0"
+                      sparklineData={headlineStats.sparklineWeeks.map(w => ({
+                        week: w.week,
+                        value: w.bench,
+                        isPast: w.isPast,
+                        isCurrent: w.isCurrent,
+                      }))}
+                      semesterLabel={`${currentSemester?.label || ''} weekly trend`}
+                    />
+                  </div>
+                )}
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
