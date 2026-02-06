@@ -16,6 +16,8 @@ import {
   Phone,
   Building2,
   UserCheck,
+  Calendar,
+  ClipboardList,
 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardHeader, CardTitle, Button, Badge, Avatar, Modal } from '@/components/ui';
@@ -30,6 +32,7 @@ import {
   type DbRequirement,
   type DbInterview,
   type DbConsultant,
+  type DbConsultantMeeting,
   type SalaryIncreaseData,
   type BonusPaymentData,
   type EmployeeExitData,
@@ -417,6 +420,15 @@ export function DashboardPage() {
   const [selectedOfferForApproval, setSelectedOfferForApproval] = useState<DbOffer | null>(null);
   const [isApprovalDetailOpen, setIsApprovalDetailOpen] = useState(false);
 
+  // Layer 4: Admin & People Management data
+  const [consultantMeetings, setConsultantMeetings] = useState<DbConsultantMeeting[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [timesheetWeeks, setTimesheetWeeks] = useState<any[]>([]);
+  const [allOffers, setAllOffers] = useState<DbOffer[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [customerMeetingsUpcoming, setCustomerMeetingsUpcoming] = useState<any[]>([]);
+  const [upcomingInterviews, setUpcomingInterviews] = useState<DbInterview[]>([]);
+
   // Determine if recruiter view (recruiter or recruiter_manager, not business/admin/technical roles)
   const isRecruiterView = (permissions.isRecruiter || permissions.isRecruiterManager) && 
     !permissions.isBusinessManager && 
@@ -527,6 +539,99 @@ export function DashboardPage() {
       let assessQuery = supabase.from('customer_assessments').select('*');
       const { data: assessData } = await assessQuery;
       setAssessments(assessData || []);
+
+      // === Layer 4 Data Loading ===
+      
+      // Load consultant meetings (for career management block)
+      const consultantIds = (consData || []).map((c: any) => c.id);
+      if (consultantIds.length > 0) {
+        const { data: meetingsData } = await supabase
+          .from('consultant_meetings')
+          .select('*, consultant:consultant_id(*), conductor:conducted_by(*)')
+          .in('consultant_id', consultantIds)
+          .is('deleted_at', null);
+        setConsultantMeetings(meetingsData || []);
+      } else {
+        setConsultantMeetings([]);
+      }
+
+      // Load leave requests pending approval (for admin block)
+      if (consultantIds.length > 0) {
+        const { data: leaveData } = await supabase
+          .from('leave_requests')
+          .select('*, consultant:consultant_id(*)')
+          .in('consultant_id', consultantIds)
+          .eq('status', 'pending')
+          .is('deleted_at', null);
+        setLeaveRequests(leaveData || []);
+      } else {
+        setLeaveRequests([]);
+      }
+
+      // Load timesheet weeks for current week (for admin block - missing timesheets)
+      const now = new Date();
+      const currentWeekNum = getWeekNumber(now);
+      const currentYear = now.getFullYear();
+      if (consultantIds.length > 0) {
+        const { data: tsData } = await supabase
+          .from('timesheet_weeks')
+          .select('*, consultant:consultant_id(*)')
+          .in('consultant_id', consultantIds)
+          .eq('week_number', currentWeekNum)
+          .eq('year', currentYear);
+        setTimesheetWeeks(tsData || []);
+      } else {
+        setTimesheetWeeks([]);
+      }
+
+      // Load offers for business block (pending ones for this manager's requirements)
+      const { data: offersData } = await supabase
+        .from('offers')
+        .select('*, candidate:candidate_id(*), requirement:requirement_id(*)')
+        .in('status', ['pending_approval', 'approved', 'contract_sent'])
+        .is('deleted_at', null);
+      // Filter to manager's requirements if not director
+      const managerReqIds = (reqData || []).map((r: any) => r.id);
+      setAllOffers((offersData || []).filter((o: any) => 
+        !targetManagerId || managerReqIds.includes(o.requirement_id)
+      ));
+
+      // Load projects (for business block - check if won requirements have projects)
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select('*, requirement:won_bid_requirement_id(*)')
+        .is('deleted_at', null);
+      setProjects(projectsData || []);
+
+      // Load upcoming customer meetings (next 30 days)
+      const in30Days = new Date();
+      in30Days.setDate(in30Days.getDate() + 30);
+      let upcomingMeetQuery = supabase
+        .from('customer_meetings')
+        .select('*, customer:customer_id(*)')
+        .gte('meeting_date', now.toISOString().split('T')[0])
+        .lte('meeting_date', in30Days.toISOString().split('T')[0])
+        .order('meeting_date', { ascending: true });
+      if (targetManagerId) {
+        upcomingMeetQuery = upcomingMeetQuery.eq('created_by', targetManagerId);
+      }
+      const { data: upcomingMeetData } = await upcomingMeetQuery;
+      setCustomerMeetingsUpcoming(upcomingMeetData || []);
+
+      // Load upcoming interviews (next 30 days)
+      let upcomingIntQuery = supabase
+        .from('interviews')
+        .select('*, candidate:candidate_id(*)')
+        .gte('scheduled_at', now.toISOString().split('T')[0])
+        .lte('scheduled_at', in30Days.toISOString().split('T')[0])
+        .eq('outcome', 'pending')
+        .is('deleted_at', null)
+        .order('scheduled_at', { ascending: true });
+      if (targetManagerId) {
+        upcomingIntQuery = upcomingIntQuery.eq('interviewer_id', targetManagerId);
+      }
+      const { data: upcomingIntData } = await upcomingIntQuery;
+      setUpcomingInterviews(upcomingIntData || []);
       
       // Load managers for director view
       if (isDirectorView && !selectedManagerId) {
@@ -723,6 +828,147 @@ export function DashboardPage() {
       sparklineWeeks,
     };
   }, [consultants, missions, currentSemester, semesterWeeks]);
+
+  // Layer 4: Admin & People Management computed stats
+  const layer4Stats = useMemo(() => {
+    const today = new Date();
+    const activeConsultants = consultants.filter(c => c.status !== 'terminated');
+
+    // === CAREER MANAGEMENT ===
+    
+    // Appraisals: due on start_date anniversary, warning 30 days before, overdue after
+    const appraisals: { consultant: any; dueDate: Date; daysUntil: number; status: 'overdue' | 'due_soon' }[] = [];
+    activeConsultants.forEach(c => {
+      if (!c.start_date) return;
+      const start = new Date(c.start_date);
+      // Next anniversary
+      let anniversary = new Date(start);
+      anniversary.setFullYear(today.getFullYear());
+      if (anniversary < new Date(today.getFullYear(), today.getMonth(), today.getDate() - 60)) {
+        anniversary.setFullYear(today.getFullYear() + 1);
+      }
+      
+      // Check if there's a completed appraisal within 60 days of this anniversary
+      const hasRecentAppraisal = consultantMeetings.some(m => 
+        m.consultant_id === c.id && 
+        m.meeting_type === 'annual_appraisal' && 
+        m.status === 'completed' &&
+        Math.abs(new Date(m.scheduled_date).getTime() - anniversary.getTime()) < 60 * 24 * 60 * 60 * 1000
+      );
+      if (hasRecentAppraisal) return;
+
+      const daysUntil = Math.floor((anniversary.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntil < -60) return; // Too far in the past, skip
+      if (daysUntil <= 0) {
+        appraisals.push({ consultant: c, dueDate: anniversary, daysUntil, status: 'overdue' });
+      } else if (daysUntil <= 30) {
+        appraisals.push({ consultant: c, dueDate: anniversary, daysUntil, status: 'due_soon' });
+      }
+    });
+
+    // Career meetings overdue: last quarterly_review or annual_appraisal more than 3 months ago
+    const careerMeetingsOverdue: { consultant: any; lastMeeting: Date | null; daysSince: number }[] = [];
+    activeConsultants.forEach(c => {
+      const meetings = consultantMeetings
+        .filter(m => m.consultant_id === c.id && (m.meeting_type === 'quarterly_review' || m.meeting_type === 'annual_appraisal') && m.status === 'completed')
+        .sort((a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime());
+      
+      const lastMeeting = meetings[0];
+      if (!lastMeeting) {
+        // No meetings at all, check if consultant started more than 3 months ago
+        if (c.start_date && new Date(c.start_date) < new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)) {
+          const daysSince = Math.floor((today.getTime() - new Date(c.start_date).getTime()) / (1000 * 60 * 60 * 24));
+          careerMeetingsOverdue.push({ consultant: c, lastMeeting: null, daysSince });
+        }
+      } else {
+        const daysSince = Math.floor((today.getTime() - new Date(lastMeeting.scheduled_date).getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSince > 90) {
+          careerMeetingsOverdue.push({ consultant: c, lastMeeting: new Date(lastMeeting.scheduled_date), daysSince });
+        }
+      }
+    });
+
+    // Inductions missing: consultants with no induction meeting at all
+    const inductionsMissing: { consultant: any; startDate: string }[] = [];
+    activeConsultants.forEach(c => {
+      const hasInduction = consultantMeetings.some(m => 
+        m.consultant_id === c.id && m.meeting_type === 'induction' && (m.status === 'completed' || m.status === 'scheduled')
+      );
+      if (!hasInduction) {
+        inductionsMissing.push({ consultant: c, startDate: c.start_date });
+      }
+    });
+
+    // === ADMIN ===
+    
+    // Missing timesheets: active consultants who don't have a timesheet_week entry for current week
+    const consultantsWithTimesheet = new Set(timesheetWeeks.map((tw: any) => tw.consultant_id));
+    const missingTimesheets = activeConsultants
+      .filter(c => c.status === 'in_mission' && !consultantsWithTimesheet.has(c.id))
+      .map(c => ({ consultant: c }));
+
+    // Leave requests: already loaded and filtered to pending
+
+    // === BUSINESS ===
+    
+    // Offers pending (already loaded)
+    const offersPending = allOffers;
+
+    // Projects to create: requirements with status 'won' that have no project
+    const wonReqIds = new Set(projects.map((p: any) => p.won_bid_requirement_id).filter(Boolean));
+    const projectsToCreate = requirements
+      .filter(r => r.status === 'won' && !wonReqIds.has(r.id))
+      .map(r => r);
+
+    // Missions to create: offers with status 'contract_signed' where consultant doesn't have active mission
+    const activeConsultantMissionIds = new Set(
+      missions.filter(m => m.status === 'active' || (!m.end_date || new Date(m.end_date) >= today)).map(m => m.consultant_id)
+    );
+    const signedOffers = allOffers.filter(o => o.status === 'contract_signed' as any);
+    // Also check from offers table directly
+    const missionsToCreate: any[] = [];
+
+    // Upcoming consultant meetings (scheduled, future)
+    const upcomingConsultantMeetings = consultantMeetings
+      .filter(m => m.status === 'scheduled' && new Date(m.scheduled_date) >= today)
+      .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
+      .slice(0, 5);
+
+    // Missions ending within 30 days
+    const missionsEndingSoon = missions
+      .filter(m => {
+        if (!m.end_date || m.status === 'cancelled') return false;
+        const end = new Date(m.end_date);
+        const daysUntil = Math.floor((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        return daysUntil >= 0 && daysUntil <= 30;
+      })
+      .map(m => {
+        const daysUntil = Math.floor((new Date(m.end_date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const consultant = consultants.find(c => c.id === m.consultant_id);
+        return { ...m, daysUntil, consultant };
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
+    return {
+      // Career management
+      appraisalsOverdue: appraisals.filter(a => a.status === 'overdue'),
+      appraisalsDueSoon: appraisals.filter(a => a.status === 'due_soon'),
+      careerMeetingsOverdue,
+      inductionsMissing,
+      // Admin
+      missingTimesheets,
+      leaveRequestsPending: leaveRequests,
+      // Business
+      offersPending,
+      projectsToCreate,
+      missionsToCreate,
+      // Upcoming
+      upcomingConsultantMeetings,
+      upcomingCustomerMeetings: customerMeetingsUpcoming,
+      upcomingInterviews: upcomingInterviews.slice(0, 5),
+      missionsEndingSoon,
+    };
+  }, [consultants, consultantMeetings, timesheetWeeks, leaveRequests, allOffers, requirements, projects, missions, customerMeetingsUpcoming, upcomingInterviews]);
 
   // Calculate recruiter stats
   const recruiterStats = useMemo(() => {
@@ -1458,79 +1704,13 @@ export function DashboardPage() {
                   </div>
                 )}
 
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left: Requirements Block */}
+            {/* Layer 2: Two Funnels Side by Side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left: Recruitment Funnel */}
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Requirements</CardTitle>
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/requirements')}>View All</Button>
-                  </div>
-                </CardHeader>
-                
-                {/* Stats Row */}
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-cyan-500" />
-                    <span className="text-sm text-brand-grey-600">Active: {stats.activeRequirements.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                    <span className="text-sm text-brand-grey-600">Won: {stats.wonRequirements.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-sm text-brand-grey-600">Lost: {stats.lostRequirements.length}</span>
-                  </div>
-                </div>
-                
-                {/* Requirements List */}
-                <div className="space-y-2 max-h-48 overflow-y-auto mb-4">
-                  {stats.activeRequirements.length > 0 ? (
-                    stats.activeRequirements.slice(0, 5).map(req => (
-                      <div 
-                        key={req.id} 
-                        className="p-2 border border-brand-grey-200 rounded-lg hover:bg-brand-grey-50 cursor-pointer"
-                        onClick={() => navigate(`/requirements/${req.id}`)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-brand-slate-900 truncate">{req.title || req.reference_id}</span>
-                          <Badge variant="cyan" className="text-xs">{req.status}</Badge>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-brand-grey-400 text-center py-4">No active requirements</p>
-                  )}
-                </div>
-                
-                {/* Mini Conversion Funnel */}
-                <MiniConversionFunnel 
-                  meetings={stats.totalMeetings}
-                  presentations={stats.totalAssessments}
-                  projects={stats.wonRequirements.length}
-                />
-              </Card>
-
-              {/* Centre: Interview Funnel */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-center">Interview Funnel</CardTitle>
-                </CardHeader>
-                <InterviewFunnel 
-                  data={{
-                    ...stats.interviewCounts,
-                    conversions: stats.conversions,
-                  }}
-                />
-              </Card>
-
-              {/* Right: 3 KPI Charts */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Weekly Activity</CardTitle>
+                  <div className="flex items-center justify-between w-full">
+                    <CardTitle>Recruitment Funnel</CardTitle>
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={handlePrevSemester}
@@ -1552,25 +1732,409 @@ export function DashboardPage() {
                     </div>
                   </div>
                 </CardHeader>
-                <div className="space-y-6">
+                <InterviewFunnel 
+                  data={{
+                    ...stats.interviewCounts,
+                    conversions: stats.conversions,
+                  }}
+                />
+                <div className="mt-4 space-y-4">
                   <WeeklyChart 
                     data={stats.phoneByWeek} 
-                    title="Phone Interviews" 
+                    title="Phone Interviews per week" 
                     colour="#06b6d4"
                   />
+                </div>
+              </Card>
+
+              {/* Right: Business Development Funnel */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between w-full">
+                    <CardTitle>Business Development Funnel</CardTitle>
+                    <span className="text-sm text-brand-grey-400">{currentSemester?.label}</span>
+                  </div>
+                </CardHeader>
+                {/* BD Funnel */}
+                <div className="flex flex-col items-center py-4">
+                  {(() => {
+                    const bdStages = [
+                      { label: 'Customer Meetings', value: stats.totalMeetings, colour: '#8b5cf6' },
+                      { label: 'Assessments / Presentations', value: stats.totalAssessments, colour: '#7c3aed' },
+                      { label: 'Requirements Won', value: stats.wonRequirements.length, colour: '#5b21b6' },
+                    ];
+                    const maxBd = Math.max(...bdStages.map(s => s.value), 1);
+                    const getWidth = (v: number) => Math.max((v / maxBd) * 100, 25);
+                    const meetToPresent = stats.totalMeetings > 0 ? Math.round((stats.totalAssessments / stats.totalMeetings) * 100) : 0;
+                    const presentToWon = stats.totalAssessments > 0 ? Math.round((stats.wonRequirements.length / stats.totalAssessments) * 100) : 0;
+                    const bdConversions = [meetToPresent, presentToWon];
+
+                    return bdStages.map((stage, idx) => (
+                      <div key={stage.label} className="flex flex-col items-center w-full">
+                        <div 
+                          className="flex items-center justify-center py-3 text-white font-semibold text-sm rounded-lg shadow-sm"
+                          style={{
+                            width: `${getWidth(stage.value)}%`,
+                            backgroundColor: stage.colour,
+                            minHeight: '44px',
+                          }}
+                        >
+                          {stage.label}: {stage.value}
+                        </div>
+                        {idx < bdStages.length - 1 && (
+                          <div className="text-xs text-brand-grey-500 py-1">
+                            ↓ {bdConversions[idx]}%
+                          </div>
+                        )}
+                      </div>
+                    ));
+                  })()}
+                </div>
+                <div className="mt-4 space-y-4">
                   <WeeklyChart 
                     data={stats.meetingsByWeek} 
-                    title="Customer Meetings" 
+                    title="Customer Meetings per week" 
                     colour="#8b5cf6"
                   />
                   <WeeklyChart 
                     data={stats.assessmentsByWeek} 
-                    title="Customer Assessments" 
+                    title="Assessments / Presentations per week" 
                     colour="#f59e0b"
                   />
                 </div>
               </Card>
             </div>
+
+            {/* Layer 3: Requirements Pipeline */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle>My Requirements</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/requirements')}>View All</Button>
+                </div>
+              </CardHeader>
+              
+              {/* Summary strip */}
+              <div className="flex gap-4 mb-4">
+                <div className="flex-1 bg-cyan-50 rounded-lg p-3 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
+                  <span className="text-sm text-brand-slate-700">Active</span>
+                  <span className="text-xl font-bold text-cyan-600 ml-auto">{stats.activeRequirements.length}</span>
+                </div>
+                <div className="flex-1 bg-green-50 rounded-lg p-3 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                  <span className="text-sm text-brand-slate-700">Won</span>
+                  <span className="text-xl font-bold text-green-600 ml-auto">{stats.wonRequirements.length}</span>
+                </div>
+                <div className="flex-1 bg-red-50 rounded-lg p-3 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                  <span className="text-sm text-brand-slate-700">Lost</span>
+                  <span className="text-xl font-bold text-red-600 ml-auto">{stats.lostRequirements.length}</span>
+                </div>
+              </div>
+              
+              {/* Active requirements in two-column grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto mb-4">
+                {stats.activeRequirements.length > 0 ? (
+                  stats.activeRequirements.map(req => (
+                    <div 
+                      key={req.id} 
+                      className="flex items-center gap-3 p-3 border border-brand-grey-200 rounded-lg hover:bg-brand-grey-50 cursor-pointer"
+                      onClick={() => navigate(`/requirements/${req.id}`)}
+                    >
+                      <div className="w-2 h-2 rounded-full bg-cyan-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-brand-slate-900 truncate block">{req.title || req.reference_id}</span>
+                      </div>
+                      <Badge variant="cyan" className="text-xs flex-shrink-0">{req.status}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-brand-grey-400 text-center py-4 col-span-2">No active requirements</p>
+                )}
+              </div>
+              
+              {/* Conversion funnel */}
+              <MiniConversionFunnel 
+                meetings={stats.totalMeetings}
+                presentations={stats.totalAssessments}
+                projects={stats.wonRequirements.length}
+              />
+            </Card>
+
+            {/* Layer 4: Admin & People Management - Three Blocks */}
+            {layer4Stats && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Block 1: Career Management */}
+                <Card className="border-t-[3px] border-t-purple-500">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-purple-500" />
+                      <CardTitle className="text-sm">Career Management</CardTitle>
+                    </div>
+                  </CardHeader>
+
+                  {/* Counters */}
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="bg-red-50 rounded-lg p-2.5">
+                      <p className="text-xl font-bold text-red-600">{layer4Stats.appraisalsOverdue.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Appraisals overdue</p>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-2.5">
+                      <p className="text-xl font-bold text-amber-600">{layer4Stats.appraisalsDueSoon.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Appraisals due 30d</p>
+                    </div>
+                    <div className="bg-red-50 rounded-lg p-2.5">
+                      <p className="text-xl font-bold text-red-600">{layer4Stats.careerMeetingsOverdue.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Career meetings overdue</p>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-2.5">
+                      <p className="text-xl font-bold text-amber-600">{layer4Stats.inductionsMissing.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Inductions missing</p>
+                    </div>
+                  </div>
+
+                  {/* Detail items */}
+                  <div className="max-h-72 overflow-y-auto space-y-1.5">
+                    {layer4Stats.appraisalsOverdue.map(a => (
+                      <div key={`appr-${a.consultant.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/consultants/${a.consultant.id}`)}>
+                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{a.consultant.first_name} {a.consultant.last_name}</strong> — appraisal overdue</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-red-50 text-red-600 font-semibold flex-shrink-0">{Math.abs(a.daysUntil)}d late</span>
+                      </div>
+                    ))}
+                    {layer4Stats.careerMeetingsOverdue.map(c => (
+                      <div key={`career-${c.consultant.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/consultants/${c.consultant.id}`)}>
+                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{c.consultant.first_name} {c.consultant.last_name}</strong> — no meeting for {Math.floor(c.daysSince / 30)}m</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-red-50 text-red-600 font-semibold flex-shrink-0">{c.daysSince - 90}d overdue</span>
+                      </div>
+                    ))}
+                    {layer4Stats.appraisalsDueSoon.map(a => (
+                      <div key={`appr-soon-${a.consultant.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/consultants/${a.consultant.id}`)}>
+                        <div className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{a.consultant.first_name} {a.consultant.last_name}</strong> — appraisal due {formatDate(a.dueDate.toISOString())}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold flex-shrink-0">{a.daysUntil}d</span>
+                      </div>
+                    ))}
+                    {layer4Stats.inductionsMissing.map(i => (
+                      <div key={`induct-${i.consultant.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/consultants/${i.consultant.id}`)}>
+                        <div className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{i.consultant.first_name} {i.consultant.last_name}</strong> — induction missing</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold flex-shrink-0">Since {formatDate(i.startDate)}</span>
+                      </div>
+                    ))}
+                    {layer4Stats.appraisalsOverdue.length === 0 && layer4Stats.appraisalsDueSoon.length === 0 && 
+                     layer4Stats.careerMeetingsOverdue.length === 0 && layer4Stats.inductionsMissing.length === 0 && (
+                      <p className="text-sm text-brand-grey-400 text-center py-4">All clear ✓</p>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Block 2: Admin */}
+                <Card className="border-t-[3px] border-t-amber-500">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4 text-amber-500" />
+                      <CardTitle className="text-sm">Admin</CardTitle>
+                    </div>
+                  </CardHeader>
+
+                  {/* Counters */}
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className={`${layer4Stats.missingTimesheets.length > 0 ? 'bg-red-50' : 'bg-green-50'} rounded-lg p-2.5`}>
+                      <p className={`text-xl font-bold ${layer4Stats.missingTimesheets.length > 0 ? 'text-red-600' : 'text-green-600'}`}>{layer4Stats.missingTimesheets.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Timesheets missing</p>
+                    </div>
+                    <div className={`${layer4Stats.leaveRequestsPending.length > 0 ? 'bg-amber-50' : 'bg-green-50'} rounded-lg p-2.5`}>
+                      <p className={`text-xl font-bold ${layer4Stats.leaveRequestsPending.length > 0 ? 'text-amber-600' : 'text-green-600'}`}>{layer4Stats.leaveRequestsPending.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Leave requests</p>
+                    </div>
+                  </div>
+
+                  {/* Detail items */}
+                  <div className="max-h-72 overflow-y-auto space-y-1.5">
+                    {layer4Stats.missingTimesheets.length > 0 && (
+                      <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mb-1">Timesheets</p>
+                    )}
+                    {layer4Stats.missingTimesheets.map(t => (
+                      <div key={`ts-${t.consultant.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/consultants/${t.consultant.id}`)}>
+                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{t.consultant.first_name} {t.consultant.last_name}</strong> — W{getWeekNumber(new Date())} missing</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-red-50 text-red-600 font-semibold flex-shrink-0">Late</span>
+                      </div>
+                    ))}
+                    {layer4Stats.leaveRequestsPending.length > 0 && (
+                      <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mt-3 mb-1">Leave Requests</p>
+                    )}
+                    {layer4Stats.leaveRequestsPending.map((lr: any) => (
+                      <div key={`lr-${lr.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/consultants/${lr.consultant_id}`)}>
+                        <div className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{lr.consultant?.first_name} {lr.consultant?.last_name}</strong> — {lr.leave_type?.replace(/_/g, ' ')} {lr.start_date ? formatDate(lr.start_date) : ''}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold flex-shrink-0">Approve</span>
+                      </div>
+                    ))}
+                    {layer4Stats.missingTimesheets.length === 0 && layer4Stats.leaveRequestsPending.length === 0 && (
+                      <p className="text-sm text-brand-grey-400 text-center py-4">All clear ✓</p>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Block 3: Business */}
+                <Card className="border-t-[3px] border-t-cyan-500">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-cyan-500" />
+                      <CardTitle className="text-sm">Business</CardTitle>
+                    </div>
+                  </CardHeader>
+
+                  {/* Counters */}
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className={`${layer4Stats.offersPending.length > 0 ? 'bg-cyan-50' : 'bg-green-50'} rounded-lg p-2.5`}>
+                      <p className={`text-xl font-bold ${layer4Stats.offersPending.length > 0 ? 'text-cyan-600' : 'text-green-600'}`}>{layer4Stats.offersPending.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Offers pending</p>
+                    </div>
+                    <div className={`${layer4Stats.projectsToCreate.length > 0 ? 'bg-amber-50' : 'bg-green-50'} rounded-lg p-2.5`}>
+                      <p className={`text-xl font-bold ${layer4Stats.projectsToCreate.length > 0 ? 'text-amber-600' : 'text-green-600'}`}>{layer4Stats.projectsToCreate.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Projects to create</p>
+                    </div>
+                    <div className={`${layer4Stats.missionsToCreate.length > 0 ? 'bg-amber-50' : 'bg-green-50'} rounded-lg p-2.5`}>
+                      <p className={`text-xl font-bold ${layer4Stats.missionsToCreate.length > 0 ? 'text-amber-600' : 'text-green-600'}`}>{layer4Stats.missionsToCreate.length}</p>
+                      <p className="text-[11px] text-brand-grey-400">Missions to create</p>
+                    </div>
+                  </div>
+
+                  {/* Detail items */}
+                  <div className="max-h-72 overflow-y-auto space-y-1.5">
+                    {layer4Stats.offersPending.length > 0 && (
+                      <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mb-1">Offers Pending</p>
+                    )}
+                    {layer4Stats.offersPending.map((o: any) => (
+                      <div key={`offer-${o.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/offers`)}>
+                        <div className="w-2 h-2 rounded-full bg-cyan-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{o.candidate?.first_name} {o.candidate?.last_name}</strong> — {o.job_title || 'Offer'}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-cyan-50 text-cyan-600 font-semibold flex-shrink-0">{o.status?.replace(/_/g, ' ')}</span>
+                      </div>
+                    ))}
+                    {layer4Stats.projectsToCreate.length > 0 && (
+                      <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mt-3 mb-1">Projects to Create</p>
+                    )}
+                    {layer4Stats.projectsToCreate.map((r: any) => (
+                      <div key={`proj-${r.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-brand-grey-200/50 hover:bg-brand-grey-50 cursor-pointer text-sm"
+                        onClick={() => navigate(`/requirements/${r.id}`)}>
+                        <div className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                        <span className="flex-1 truncate"><strong className="font-medium text-brand-slate-900">{r.title || r.reference_id}</strong> — won, no project</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold flex-shrink-0">Create</span>
+                      </div>
+                    ))}
+                    {layer4Stats.offersPending.length === 0 && layer4Stats.projectsToCreate.length === 0 && layer4Stats.missionsToCreate.length === 0 && (
+                      <p className="text-sm text-brand-grey-400 text-center py-4">All clear ✓</p>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Upcoming Schedule (full width) */}
+            {layer4Stats && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upcoming Schedule</CardTitle>
+                </CardHeader>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Customer Meetings */}
+                  <div>
+                    <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mb-2">Customer Meetings</p>
+                    {layer4Stats.upcomingCustomerMeetings.length > 0 ? (
+                      layer4Stats.upcomingCustomerMeetings.slice(0, 4).map((m: any) => (
+                        <div key={m.id} className="flex items-center gap-3 py-2.5 border-b border-brand-grey-200/50 last:border-b-0">
+                          <div className="w-11 text-center flex-shrink-0">
+                            <p className="text-lg font-bold text-brand-slate-900 leading-none">{new Date(m.meeting_date).getDate()}</p>
+                            <p className="text-[10px] text-brand-grey-400 uppercase">{new Date(m.meeting_date).toLocaleString('en-GB', { month: 'short' })}</p>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-brand-slate-900 truncate">{m.customer?.name || 'Customer meeting'}</p>
+                            <p className="text-xs text-brand-grey-400 truncate">{m.purpose || m.meeting_type?.replace(/_/g, ' ') || ''}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-brand-grey-400 py-3">None scheduled</p>
+                    )}
+                  </div>
+
+                  {/* Consultant Meetings */}
+                  <div>
+                    <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mb-2">Consultant Meetings</p>
+                    {layer4Stats.upcomingConsultantMeetings.length > 0 ? (
+                      layer4Stats.upcomingConsultantMeetings.map((m: any) => (
+                        <div key={m.id} className="flex items-center gap-3 py-2.5 border-b border-brand-grey-200/50 last:border-b-0"
+                          onClick={() => navigate(`/consultants/${m.consultant_id}`)} style={{ cursor: 'pointer' }}>
+                          <div className="w-11 text-center flex-shrink-0">
+                            <p className="text-lg font-bold text-brand-slate-900 leading-none">{new Date(m.scheduled_date).getDate()}</p>
+                            <p className="text-[10px] text-brand-grey-400 uppercase">{new Date(m.scheduled_date).toLocaleString('en-GB', { month: 'short' })}</p>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-brand-slate-900 truncate">{m.consultant?.first_name} {m.consultant?.last_name}</p>
+                            <p className="text-xs text-brand-grey-400 truncate">{m.meeting_type?.replace(/_/g, ' ')}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-brand-grey-400 py-3">None scheduled</p>
+                    )}
+                  </div>
+
+                  {/* Interviews + Missions Ending */}
+                  <div>
+                    <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mb-2">Interviews</p>
+                    {layer4Stats.upcomingInterviews.length > 0 ? (
+                      layer4Stats.upcomingInterviews.map((i: any) => (
+                        <div key={i.id} className="flex items-center gap-3 py-2.5 border-b border-brand-grey-200/50 last:border-b-0">
+                          <div className="w-11 text-center flex-shrink-0">
+                            <p className="text-lg font-bold text-brand-slate-900 leading-none">{new Date(i.scheduled_at).getDate()}</p>
+                            <p className="text-[10px] text-brand-grey-400 uppercase">{new Date(i.scheduled_at).toLocaleString('en-GB', { month: 'short' })}</p>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-brand-slate-900 truncate">{i.candidate?.first_name} {i.candidate?.last_name}</p>
+                            <p className="text-xs text-brand-grey-400 truncate">{i.stage?.replace(/_/g, ' ')}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-brand-grey-400 py-3">None scheduled</p>
+                    )}
+
+                    {layer4Stats.missionsEndingSoon.length > 0 && (
+                      <>
+                        <p className="text-[11px] font-semibold text-brand-slate-700 uppercase tracking-wide mt-4 mb-2">Missions Ending</p>
+                        {layer4Stats.missionsEndingSoon.map((m: any) => (
+                          <div key={m.id} className="flex items-center gap-3 py-2.5 border-b border-brand-grey-200/50 last:border-b-0">
+                            <div className="w-11 text-center flex-shrink-0">
+                              <p className="text-lg font-bold text-brand-slate-900 leading-none">{new Date(m.end_date).getDate()}</p>
+                              <p className="text-[10px] text-brand-grey-400 uppercase">{new Date(m.end_date).toLocaleString('en-GB', { month: 'short' })}</p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-brand-slate-900 truncate">{m.consultant?.first_name} {m.consultant?.last_name}</p>
+                              <p className={`text-xs ${m.daysUntil <= 14 ? 'text-red-500' : 'text-amber-500'}`}>{m.daysUntil} days remaining</p>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
               </>
             )}
           </>
