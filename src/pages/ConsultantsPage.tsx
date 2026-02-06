@@ -423,84 +423,60 @@ export function ConsultantsPage() {
 
       <div className="p-6 space-y-6">
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Active card (primary) with breakdown */}
           <Card 
-            className={`cursor-pointer transition-all ${statusFilter === 'active' ? 'ring-2 ring-brand-cyan' : ''}`}
+            className={`cursor-pointer transition-all flex-1 ${statusFilter === 'active' ? 'ring-2 ring-brand-cyan' : ''}`}
             onClick={() => setStatusFilter('active')}
           >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-brand-cyan-100 rounded-lg">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-cyan-50 rounded-lg">
                 <Users className="h-5 w-5 text-brand-cyan" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-cyan">{stats.active}</p>
-                <p className="text-sm text-brand-grey-400">Active</p>
+                <p className="text-3xl font-bold text-brand-cyan">{stats.active}</p>
+                <p className="text-sm text-brand-grey-400">Active Consultants</p>
               </div>
             </div>
-          </Card>
-          
-          <Card 
-            className={`cursor-pointer transition-all ${statusFilter === 'bench' ? 'ring-2 ring-amber-500' : ''}`}
-            onClick={() => setStatusFilter('bench')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Clock className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-amber-600">{stats.bench}</p>
-                <p className="text-sm text-brand-grey-400">On Bench</p>
-              </div>
-            </div>
-          </Card>
-          
-          <Card 
-            className={`cursor-pointer transition-all ${statusFilter === 'in_mission' ? 'ring-2 ring-green-500' : ''}`}
-            onClick={() => setStatusFilter('in_mission')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Briefcase className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-green-600">{stats.inMission}</p>
-                <p className="text-sm text-brand-grey-400">In Mission</p>
-              </div>
-            </div>
-          </Card>
-          
-          <Card 
-            className={`cursor-pointer transition-all ${statusFilter === 'on_leave' ? 'ring-2 ring-blue-500' : ''}`}
-            onClick={() => setStatusFilter('on_leave')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Calendar className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-blue-600">{stats.onLeave}</p>
-                <p className="text-sm text-brand-grey-400">On Leave</p>
-              </div>
+            <div className="border-t border-brand-grey-200/50 pt-3 flex gap-4">
+              <button
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${statusFilter === 'in_mission' ? 'bg-green-100 ring-1 ring-green-400' : 'hover:bg-green-50'}`}
+                onClick={(e) => { e.stopPropagation(); setStatusFilter('in_mission'); }}
+              >
+                <Briefcase className="h-4 w-4 text-green-600" />
+                <span className="font-semibold text-green-600">{stats.inMission}</span>
+                <span className="text-brand-grey-400">On Mission</span>
+              </button>
+              <button
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${statusFilter === 'bench' ? 'bg-amber-100 ring-1 ring-amber-400' : 'hover:bg-amber-50'}`}
+                onClick={(e) => { e.stopPropagation(); setStatusFilter('bench'); }}
+              >
+                <Clock className="h-4 w-4 text-amber-600" />
+                <span className="font-semibold text-amber-600">{stats.bench}</span>
+                <span className="text-brand-grey-400">On Bench</span>
+              </button>
             </div>
           </Card>
 
+          {/* Exited card */}
           <Card 
-            className={`cursor-pointer transition-all ${statusFilter === 'terminated' ? 'ring-2 ring-red-500' : ''}`}
+            className={`cursor-pointer transition-all w-full sm:w-44 ${statusFilter === 'terminated' ? 'ring-2 ring-red-400' : ''}`}
             onClick={() => setStatusFilter('terminated')}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-lg">
-                <XCircle className="h-5 w-5 text-red-600" />
+              <div className="p-2 bg-red-50 rounded-lg">
+                <XCircle className="h-5 w-5 text-red-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-red-600">{stats.terminated}</p>
+                <p className="text-2xl font-bold text-red-500">{stats.terminated}</p>
                 <p className="text-sm text-brand-grey-400">Exited</p>
               </div>
             </div>
           </Card>
-          
+
+          {/* All card */}
           <Card 
-            className={`cursor-pointer transition-all ${statusFilter === 'all' ? 'ring-2 ring-brand-slate-500' : ''}`}
+            className={`cursor-pointer transition-all w-full sm:w-44 ${statusFilter === 'all' ? 'ring-2 ring-brand-slate-500' : ''}`}
             onClick={() => setStatusFilter('all')}
           >
             <div className="flex items-center gap-3">
