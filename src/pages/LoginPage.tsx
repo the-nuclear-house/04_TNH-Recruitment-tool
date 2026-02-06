@@ -124,16 +124,7 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Test Credentials Info */}
-          <div className="mt-6 p-4 bg-brand-grey-100 rounded-lg">
-            <p className="text-sm text-brand-slate-700 font-medium mb-2">
-              Test Credentials:
-            </p>
-            <div className="text-sm text-brand-grey-400 space-y-1">
-              <p><strong>Email:</strong> director@recruithub.com</p>
-              <p><strong>Password:</strong> TestPassword123!</p>
-            </div>
-          </div>
+
         </div>
 
         {/* Footer */}

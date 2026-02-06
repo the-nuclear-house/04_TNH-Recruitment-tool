@@ -1,8 +1,9 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') || '*'
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': allowedOrigin,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -70,6 +71,33 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: email, password, full_name, roles' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate all roles are legitimate
+    const validRoles = [
+      'superadmin', 'admin',
+      'business_director', 'business_manager',
+      'technical_director', 'technical',
+      'recruiter_manager', 'recruiter',
+      'hr_manager', 'hr',
+      'consultant'
+    ]
+    const invalidRoles = roles.filter((r: string) => !validRoles.includes(r))
+    if (invalidRoles.length > 0) {
+      return new Response(
+        JSON.stringify({ error: `Invalid roles: ${invalidRoles.join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Only superadmin can create superadmin or admin users
+    const isSuperadmin = userData.roles?.includes('superadmin')
+    const creatingPrivileged = roles.some((r: string) => ['superadmin', 'admin'].includes(r))
+    if (creatingPrivileged && !isSuperadmin) {
+      return new Response(
+        JSON.stringify({ error: 'Only superadmins can create admin or superadmin users' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 

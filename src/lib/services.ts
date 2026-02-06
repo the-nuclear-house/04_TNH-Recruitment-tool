@@ -579,11 +579,15 @@ export const candidatesService = {
 
   // Search candidates
   async search(query: string): Promise<DbCandidate[]> {
+    // Sanitise input: remove characters that could alter PostgREST filter logic
+    const sanitised = query.replace(/[%_(),."'\\]/g, '');
+    if (!sanitised.trim()) return [];
+
     const { data, error } = await supabase
       .from('candidates')
       .select('*')
       .is('deleted_at', null)  // Exclude soft-deleted records
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
+      .or(`first_name.ilike.%${sanitised}%,last_name.ilike.%${sanitised}%,email.ilike.%${sanitised}%`)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -4055,7 +4059,7 @@ export const hrTicketsService = {
     }
 
     // Create user account via edge function
-    const tempPassword = `Welcome${new Date().getFullYear()}!`;
+    const tempPassword = crypto.randomUUID().slice(0, 12) + 'Aa1!';
     
     const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
       method: 'POST',
